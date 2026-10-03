@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package sandboxctl.v1;
+
+option go_package = "sandboxctl/internal/controlpb/sandboxctl/v1;controlv1";
+
+service ControlService {
+  // Confirms that sandboxd can serve requests.
+  rpc Ping(PingRequest) returns (PingResponse);
+
+  // Reports the daemon and runtime status.
+  rpc HostStatus(HostStatusRequest) returns (HostStatusResponse);
+}
+
+message PingRequest {}
+
+message PingResponse {
+  // Reports the ping result.
+  string status = 1;
+}
+
+message HostStatusRequest {}
+
+message HostStatusResponse {
+  // Reports the sandboxd version.
+  string daemon_version = 1;
+
+  // Reports whether the runtime backend is ready.
+  bool runtime_ready = 2;
+}

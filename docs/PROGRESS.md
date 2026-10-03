@@ -10,12 +10,10 @@ Section 18 now records this gate.
 
 ## Current phase
 
-Phase 1: prove a SquashFS lower filesystem with an ext4 OverlayFS state disk.
+Section 18, step 2: add the `sandboxd` command and versioned gRPC Unix socket protocol.
+Use a fake runtime backend. Keep the protocol limited to negotiation, peer credentials, `ping`, `host-status`, structured errors, request limits, and deadlines.
 
-The proof must boot one Firecracker VM with read-only `/dev/vda` and writable `/dev/vdb`.
-It must write a file, stop and restart the VM, and confirm that the file remains.
-It must replace the state disk and confirm that the file is gone.
-Use serial output. Do not add networking or sandboxd to this proof.
+Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writable `/dev/vdb`. A guest test file persisted across restart and disappeared after state-disk reset. The proof runner checked the SquashFS digest on each run.
 
 ## Completed
 
@@ -37,8 +35,12 @@ Use serial output. Do not add networking or sandboxd to this proof.
 - The first guest boot reached the overlay and wrote its marker, then exposed the expected initramfs handoff defect: `pivot_root` returned `EINVAL` because the kernel's initramfs root cannot be detached with `pivot_root`.
 - Replaced that handoff with the initramfs `switch_root` sequence: move the overlay mount over `/`, then `chroot` into it. The user must rebuild and rerun the VM proof to validate this change.
 - Updated the proof runner to stop Firecracker if the guest does not stop after Ctrl-C.
-- The user confirmed that the updated VM boot reaches the guest root prompt. State-disk restart and replacement checks remain.
-- The guest reports `/` as OverlayFS. The user wrote `/root/overlay-proof-test`, flushed it with `sync`, and read back the expected contents. Stop the VMM from a second host terminal because serial input sends Ctrl-C and `exit` to the guest.
+- The user confirmed that the updated VM boot reaches the guest root prompt.
+- The guest reports `/` as OverlayFS. A guest test file persisted across restart and disappeared after state-disk reset.
+- Added a Protocol Buffers schema in `proto/sandboxctl/v1/control.proto`.
+- Added Buf v2 lint and generation configuration with pinned Go and gRPC plugins.
+- `BUF_CACHE_DIR=/tmp/sandboxctl-buf-cache buf lint` passes.
+- Defined separate `Ping` and `HostStatus` RPC methods. Protocol version and request ID use gRPC metadata and interceptors. The schema has no negotiation RPC.
 
 ## Decisions
 
@@ -46,19 +48,20 @@ Use serial output. Do not add networking or sandboxd to this proof.
 - Keep Phase 1 as an isolated development experiment.
 - Do not start sandboxd, its protocol, or the host installer before the Phase 1 exit conditions pass.
 - The old `download-test-assets` flow converts the SquashFS into a writable ext4 root and selects changing remote artifacts. It does not match the Phase 1 image model. Do not use it as Phase 1 input.
+- Use gRPC over the Unix socket. Use Buf with pinned remote plugins for schema lint and code generation.
+- Use separate typed RPC methods. Do not use a generic `Call` method or a negotiation RPC.
+- Carry API versions and request IDs in gRPC metadata. Do not add these fields to messages.
 
 ## Blockers
 
-- `/dev/kvm` is absent in the current development environment.
-- The current container blocks `sudo` privilege escalation.
-- The pinned kernel and SquashFS image have not been downloaded in this workspace.
-
-The current development environment can build and test code. It cannot run the Firecracker boot proof because `/dev/kvm` is not available.
+The current development container has no `/dev/kvm` and blocks `sudo`. It cannot repeat the guest proof or validate privileged host operations. Local unit tests and builds remain available.
+The container cannot reach the Go module proxy or the Buf remote plugin service. The approved gRPC Go dependency and generated Go code are not available yet.
 
 ## Next tasks
 
-1. Write a test file in the guest and run `sync`.
-2. Stop and restart the VM. Confirm the file remains and the init marker reports retention.
-3. Replace the state disk. Confirm the guest test file is gone and the init marker is new.
-4. Confirm the SquashFS digest remains unchanged.
-5. Start the sandboxd protocol only after the Phase 1 exit conditions pass.
+1. In a network-enabled project shell, run `go get google.golang.org/grpc@v1.70.0` and `make generate`.
+2. Add `cmd/sandboxd`, `internal/client`, and `internal/daemon` using the generated schema.
+3. Implement protocol negotiation, peer credential inspection, `ping`, `host-status`, structured errors, message limits, and deadlines.
+4. Test the client against a fake daemon over a Unix socket. Do not add privileged operations or VM lifecycle commands yet.
+5. Run `gofmt`, `go vet ./...`, and `go test ./...` after each step.
+6. Continue through the section 18 migration sequence only after these checks pass.

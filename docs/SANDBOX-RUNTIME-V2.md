@@ -143,16 +143,28 @@ sandboxd must not expose the Firecracker application programming interface
 
 ### 5.3 Privileged API
 
+Use gRPC over the Unix domain socket for the control protocol.
+Define messages and services with Protocol Buffers.
+Use Buf to lint the schema and generate Go code.
+Pin Buf remote plugin versions in the generation configuration.
+
 The control protocol must be versioned.
 
-Each request must contain:
+Use a separate gRPC method for each operation. The method name identifies the
+operation. Do not add a generic `Call` method or operation-name field.
 
-- Protocol version.
-- Request identifier.
-- Operation name.
-- Operation-specific data.
+Keep protocol version and request identifier metadata out of the Protocol
+Buffers messages. Use the `sandboxctl-api-version` metadata key for the API
+version. Use the `x-request-id` metadata key for the request identifier.
 
-The protocol must have stable error codes.
+The client interceptor must set both metadata values. It must create a new
+request identifier for each call. The server interceptor must validate both
+values and add the request identifier to the response metadata. Do not add a
+version-negotiation RPC.
+
+Each request must contain operation-specific data only.
+
+Use gRPC status codes for stable structured errors.
 
 The protocol must enforce request-size limits and operation deadlines.
 

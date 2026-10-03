@@ -1,4 +1,4 @@
-.PHONY: build test check download-test-assets download-overlay-assets manual-test overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof clean
+.PHONY: build test check generate proto-lint download-test-assets download-overlay-assets manual-test overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof clean
 
 build:
 	go build -o bin/sandboxctl ./cmd/sandboxctl
@@ -10,6 +10,13 @@ check:
 	gofmt -w $$(find . -name '*.go' -type f)
 	go vet ./...
 	go test ./...
+	buf lint
+
+generate:
+	buf generate
+
+proto-lint:
+	buf lint
 
 download-test-assets:
 	REFRESH="$(REFRESH)" FIRECRACKER_CI_PREFIX="$(FIRECRACKER_CI_PREFIX)" ./scripts/download-test-assets.sh

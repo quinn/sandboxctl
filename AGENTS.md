@@ -28,6 +28,11 @@ Do not change external command names, option names, file names, protocol names, 
 
 - Support Linux hosts and Linux guests only.
 - Keep the standard library as the default choice.
+- Use gRPC over the Unix socket for sandboxctl-to-sandboxd communication.
+- Define the protocol with Protocol Buffers and use Buf for linting and code generation.
+- Pin Buf remote plugin versions. Do not edit generated code by hand.
+- Carry the API version and request ID in gRPC metadata. Set and validate them in interceptors.
+- Do not add a protocol negotiation RPC or metadata fields to Protocol Buffers messages.
 - Keep privileged host state in root-owned system directories.
 - Keep operator SSH keys and generated SSH configuration in XDG directories.
 - Do not write to `~/.ssh`.
