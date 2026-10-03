@@ -13,7 +13,7 @@ Each sandbox has a detached `sandboxctl` runner process. The runner owns the SDK
 The start command waits for Firecracker to start and then returns.
 The runner handles stop signals. It requests guest shutdown before it stops the VMM.
 
-The tool starts sandboxes only when the user requests it. The tool does not require systemd services.
+The tool starts sandboxes only when the user requests it. The privileged `sandboxd` service uses systemd socket activation. Routine sandbox commands run without `sudo`.
 
 The first working iteration uses a prepared kernel, root drive, and TAP device.
 The tool copies the root drive into the private instance directory.

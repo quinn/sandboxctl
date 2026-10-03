@@ -1,0 +1,14 @@
+[Unit]
+Description=sandboxctl privileged control socket
+
+[Socket]
+ListenStream=/run/sandboxctl/control.sock
+SocketUser=root
+SocketGroup=sandboxctl
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=yes
+Service=sandboxd.service
+
+[Install]
+WantedBy=sockets.target

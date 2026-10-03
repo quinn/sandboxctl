@@ -114,6 +114,11 @@ func ListenAndServe(ctx context.Context, socketPath string, server *grpc.Server)
 		return fmt.Errorf("set socket permissions: %w", err)
 	}
 
+	return Serve(ctx, listener, server)
+}
+
+// Serve runs the gRPC server on a listener until its context ends.
+func Serve(ctx context.Context, listener net.Listener, server *grpc.Server) error {
 	done := make(chan struct{})
 	go func() {
 		select {

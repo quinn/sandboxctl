@@ -1,0 +1,11 @@
+[Unit]
+Description=sandboxctl privileged control service
+Requires=sandboxd.socket
+After=sandboxd.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/sandboxctl/sandboxd --systemd-socket
+Restart=on-failure
+RestartSec=1s
+UMask=0077

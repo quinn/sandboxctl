@@ -10,7 +10,8 @@ Section 18 now records this gate.
 
 ## Current phase
 
-Section 18, step 3: add systemd socket and service assets for `sandboxd`.
+Section 18, step 4: add host install and doctor commands.
+Section 18, step 3 is complete. The unit files and socket activation path are implemented and validated.
 Section 18, step 2 is complete. The protocol uses a fake runtime backend and includes `Ping`, `HostStatus`, structured errors, request limits, and deadlines.
 
 Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writable `/dev/vdb`. A guest test file persisted across restart and disappeared after state-disk reset. The proof runner checked the SquashFS digest on each run.
@@ -47,6 +48,11 @@ Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writa
 - Added separate `Ping` and `HostStatus` RPCs. The schema has no negotiation RPC or versioned Go package path.
 - Added message-size limits and operation deadlines. The socket server refuses to replace an existing path and uses mode `0600` for its socket.
 - Added Unix socket client/server tests for both RPCs, request ID response metadata, invalid metadata, and socket permissions.
+- Removed the thin client RPC wrappers. `client.Dial` now returns the gRPC connection and generated service client; callers set RPC deadlines.
+- Added `sandboxd.socket` and `sandboxd.service` assets. The daemon can accept the systemd-passed Unix socket.
+- Added activation checks for the process ID, descriptor count, and Unix socket type.
+- `make check` passes after adding the systemd activation path.
+- `systemd-analyze verify` passes for both units against a temporary install tree with the daemon binary and required systemd target units.
 - `make check` passes outside the sandbox. The sandbox blocks the Unix socket setup used by the new integration tests.
 
 ## Decisions
@@ -67,6 +73,5 @@ Buf remote generation requires access to the Buf Schema Registry. `make generate
 
 ## Next tasks
 
-1. Add the systemd socket and service assets in section 18, step 3.
-2. Keep privileged operations and VM lifecycle RPCs out of the control-protocol step until the host installer and persistent-state steps.
-3. Continue through the section 18 migration sequence only after the checks pass.
+1. Add host install and doctor commands in section 18, step 4.
+2. Keep privileged operations and VM lifecycle RPCs out until the installer and persistent-state steps.
