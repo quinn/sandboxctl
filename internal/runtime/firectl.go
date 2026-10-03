@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,7 @@ import (
 
 	"sandboxctl/internal/config"
 	"sandboxctl/internal/model"
+	"sandboxctl/internal/process"
 )
 
 type Firectl struct {
@@ -63,7 +65,17 @@ func (f Firectl) Start(instance model.Instance) (int, error) {
 		return 0, fmt.Errorf("start firectl: %w", err)
 	}
 	pid := command.Process.Pid
-	if err := os.WriteFile(f.Paths.PIDFile(instance.Name), []byte(strconv.Itoa(pid)+"\n"), 0o600); err != nil {
+	record, err := process.Current(pid)
+	if err != nil {
+		_ = command.Process.Kill()
+		return 0, fmt.Errorf("inspect firectl process: %w", err)
+	}
+	data, err := json.Marshal(record)
+	if err != nil {
+		_ = command.Process.Kill()
+		return 0, fmt.Errorf("encode process record: %w", err)
+	}
+	if err := os.WriteFile(f.Paths.PIDFile(instance.Name), append(data, '\n'), 0o600); err != nil {
 		_ = command.Process.Kill()
 		return 0, fmt.Errorf("write the PID file: %w", err)
 	}

@@ -10,8 +10,8 @@ Run `sandboxctl ssh-config` to refresh the file and print the include block.
 Use `ssh sandboxctl-NAME` to connect after preparing the guest.
 Use ordinary Herdr remote attach through the same alias.
 
-This change does not complete Milestone 1.
-Complete the remaining scaffold tests before image and network work.
+Milestone 1 now includes the managed SSH configuration tests.
+Complete it before image and network work.
 
 ## Prepare the development host
 
@@ -49,23 +49,21 @@ make build
 ./bin/sandboxctl paths
 ```
 
-The original scaffold environment did not contain Go.
 The current environment passes `go vet ./...` and `go test ./...`.
-Milestone 1 still needs the path, record, and process tests.
 
 ## Milestone 1: correct the scaffold
 
 Complete these tasks first:
 
-1. Run all current tests.
-2. Correct all compile errors and test errors.
-3. Add tests for XDG path resolution.
-4. Add tests for atomic instance writes.
-5. Add a process-start test with a fake `firectl` executable.
-6. Add a process-stop test.
-7. Add a test for stale PID files.
-8. Test managed SSH configuration generation.
-9. Test the manual include with sandbox aliases and unrelated hosts.
+1. Run all current tests. **Complete.**
+2. Correct all compile errors and test errors. **Complete.**
+3. Add tests for XDG path resolution. **Complete.**
+4. Add tests for atomic instance writes. **Complete.**
+5. Add a process-start test with a fake `firectl` executable. **Complete.**
+6. Add a process-stop test. **Complete.**
+7. Add a test for stale PID files. **Complete.**
+8. Test managed SSH configuration generation. **Complete.**
+9. Test the manual include with sandbox aliases and unrelated hosts. **Complete.**
 
 Exit condition:
 
@@ -170,4 +168,3 @@ Open problems:
 Next task:
 - ...
 ```
-

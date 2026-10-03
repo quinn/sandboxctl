@@ -97,7 +97,7 @@ This command must:
 6. Wait for SSH readiness.
 7. Report the address and log path.
 
-The process record must contain more than a process identifier (PID). It must also contain process start time or another stable identity.
+The process record must contain more than a process identifier (PID). It must also contain the Linux process start time.
 
 ### 4.4 Stop
 
@@ -105,7 +105,7 @@ The process record must contain more than a process identifier (PID). It must al
 sandboxctl stop NAME
 ```
 
-The command must request a normal stop first. It must wait for a bounded time.
+The command must request a normal stop first. It must wait for a bounded time before it reports success.
 
 The command can send `SIGTERM` after the normal stop timeout. It must not send `SIGKILL` without an explicit option.
 
@@ -390,4 +390,3 @@ Resolve these items before version 1:
 - Select the normal-stop mechanism inside the guest.
 - Select the project license.
 - Decide whether version 1 must use one key or one key for each sandbox.
-

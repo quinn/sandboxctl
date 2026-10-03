@@ -202,7 +202,7 @@ func (c context) list() error {
 	fmt.Fprintln(os.Stdout, "NAME\tSTATE\tADDRESS\tCPUS\tMEMORY")
 	for _, instance := range instances {
 		state := "stopped"
-		if pid, err := processctl.ReadPID(c.paths.PIDFile(instance.Name)); err == nil && processctl.IsRunning(pid) {
+		if record, err := processctl.Read(c.paths.PIDFile(instance.Name)); err == nil && processctl.IsRunning(record) {
 			state = "running"
 		}
 		fmt.Fprintf(os.Stdout, "%s\t%s\t%s\t%d\t%d MiB\n", instance.Name, state, instance.GuestIP, instance.VCPUs, instance.MemoryMiB)
@@ -230,8 +230,8 @@ func (c context) start(arguments []string) error {
 	if err := c.paths.Ensure(); err != nil {
 		return err
 	}
-	if pid, err := processctl.ReadPID(c.paths.PIDFile(instance.Name)); err == nil && processctl.IsRunning(pid) {
-		return fmt.Errorf("sandbox %q is already running with PID %d", instance.Name, pid)
+	if record, err := processctl.Read(c.paths.PIDFile(instance.Name)); err == nil && processctl.IsRunning(record) {
+		return fmt.Errorf("sandbox %q is already running with PID %d", instance.Name, record.PID)
 	}
 	argumentsForFirectl := c.vm.Arguments(instance)
 	if *dryRun {
@@ -258,13 +258,16 @@ func (c context) stop(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	pid, err := processctl.ReadPID(c.paths.PIDFile(instance.Name))
-	if err != nil || !processctl.IsRunning(pid) {
+	record, err := processctl.Read(c.paths.PIDFile(instance.Name))
+	if err != nil || !processctl.IsRunning(record) {
 		_ = os.Remove(c.paths.PIDFile(instance.Name))
 		return fmt.Errorf("sandbox %q is not running", instance.Name)
 	}
-	if err := processctl.Stop(pid); err != nil {
+	if err := processctl.Stop(record); err != nil {
 		return err
+	}
+	if !processctl.WaitStopped(record, 5*time.Second) {
+		return fmt.Errorf("sandbox %q did not stop within 5 seconds", instance.Name)
 	}
 	_ = os.Remove(c.paths.PIDFile(instance.Name))
 	fmt.Fprintf(os.Stdout, "Stopped sandbox %s.\n", instance.Name)

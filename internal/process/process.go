@@ -1,42 +1,93 @@
 package process
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
-func ReadPID(path string) (int, error) {
+type Record struct {
+	PID       int    `json:"pid"`
+	StartTime uint64 `json:"start_time"`
+}
+
+func Read(path string) (Record, error) {
 	data, err := os.ReadFile(path)
+	if err != nil {
+		return Record{}, err
+	}
+	var record Record
+	if err := json.Unmarshal(data, &record); err != nil || record.PID < 1 || record.StartTime == 0 {
+		return Record{}, fmt.Errorf("the process record is not valid")
+	}
+	return record, nil
+}
+
+func Current(pid int) (Record, error) {
+	start, err := procStartTime(pid)
+	if err != nil {
+		return Record{}, err
+	}
+	return Record{PID: pid, StartTime: start}, nil
+}
+
+func IsRunning(record Record) bool {
+	if record.PID < 1 || record.StartTime == 0 {
+		return false
+	}
+	current, err := Current(record.PID)
+	return err == nil && current.StartTime == record.StartTime
+}
+
+func Stop(record Record) error {
+	if !IsRunning(record) {
+		return fmt.Errorf("process %d is not running", record.PID)
+	}
+	process, err := os.FindProcess(record.PID)
+	if err != nil {
+		return fmt.Errorf("find process %d: %w", record.PID, err)
+	}
+	if err := process.Signal(syscall.SIGTERM); err != nil {
+		return fmt.Errorf("stop process %d: %w", record.PID, err)
+	}
+	return nil
+}
+
+func WaitStopped(record Record, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if !IsRunning(record) {
+			return true
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return !IsRunning(record)
+}
+
+func procStartTime(pid int) (uint64, error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
 	if err != nil {
 		return 0, err
 	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil || pid < 1 {
-		return 0, fmt.Errorf("the PID file is not valid")
+	close := strings.LastIndex(string(data), ")")
+	if close < 0 {
+		return 0, errors.New("invalid process stat")
 	}
-	return pid, nil
-}
-
-func IsRunning(pid int) bool {
-	process, err := os.FindProcess(pid)
+	fields := strings.Fields(string(data)[close+1:])
+	if len(fields) == 0 || fields[0] == "Z" {
+		return 0, os.ErrProcessDone
+	}
+	if len(fields) <= 19 {
+		return 0, errors.New("invalid process stat")
+	}
+	start, err := strconv.ParseUint(fields[19], 10, 64)
 	if err != nil {
-		return false
+		return 0, err
 	}
-	err = process.Signal(syscall.Signal(0))
-	return err == nil || errors.Is(err, os.ErrPermission)
-}
-
-func Stop(pid int) error {
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return fmt.Errorf("find process %d: %w", pid, err)
-	}
-	if err := process.Signal(syscall.SIGTERM); err != nil {
-		return fmt.Errorf("stop process %d: %w", pid, err)
-	}
-	return nil
+	return start, nil
 }
