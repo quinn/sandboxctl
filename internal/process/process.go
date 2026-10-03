@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -34,6 +35,45 @@ func Current(pid int) (Record, error) {
 		return Record{}, err
 	}
 	return Record{PID: pid, StartTime: start}, nil
+}
+
+func Write(path string, record Record) error {
+	data, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".process-*.tmp")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(append(data, '\n')); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, path)
+}
+
+func RemoveIfCurrent(path string, record Record) error {
+	current, err := Read(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if current != record {
+		return nil
+	}
+	return os.Remove(path)
 }
 
 func IsRunning(record Record) bool {

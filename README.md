@@ -26,8 +26,8 @@ The scaffold can do these operations:
 - Create a tool-owned SSH configuration and known-hosts file.
 - Make a private sparse copy of a prepared root drive for each sandbox.
 - Save sandbox records as JSON files.
-- Build and start a `firectl` process when the TAP device exists.
-- Stop the saved `firectl` process.
+- Start Firecracker through the Firecracker Go software development kit (SDK) when the TAP device exists.
+- Stop the SDK runner and its Firecracker process.
 - Open an SSH connection to a recorded sandbox.
 
 The scaffold cannot yet do these operations:
@@ -130,7 +130,7 @@ Remove the TAP device after the VM stops:
 
     sudo ip tuntap del dev fc-dev1 mode tap
 
-The test needs firectl, Firecracker, and read/write access to /dev/kvm.
+The test needs Firecracker and read/write access to /dev/kvm.
 It does not configure NAT, DNS, guest Internet access, or an image builder.
 
 ## Private SSH environment
@@ -196,7 +196,7 @@ ssh -G sandboxctl-dev1
 ## Primary references
 
 - [Firecracker documentation](https://github.com/firecracker-microvm/firecracker/tree/main/docs)
-- [firectl documentation](https://github.com/firecracker-microvm/firectl)
+- [Firecracker Go SDK](https://github.com/firecracker-microvm/firecracker-go-sdk)
 - [Herdr remote access](https://herdr.dev/docs/persistence-remote/)
 - [Herdr machine connections](https://herdr.dev/docs/connecting-machines/)
 - [ASD-STE100](https://www.asd-ste100.org/)

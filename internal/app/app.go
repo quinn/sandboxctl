@@ -28,7 +28,7 @@ type context struct {
 	paths config.Paths
 	store store.Store
 	ssh   ssh.Manager
-	vm    runtime.Firectl
+	vm    runtime.SDK
 }
 
 func Run(arguments []string) error {
@@ -40,7 +40,21 @@ func Run(arguments []string) error {
 		paths: paths,
 		store: store.Store{Paths: paths},
 		ssh:   ssh.Manager{Paths: paths},
-		vm:    runtime.Firectl{Paths: paths},
+		vm:    runtime.SDK{Paths: paths},
+	}
+	if len(arguments) > 0 && arguments[0] == "--internal-vm-run" {
+		if len(arguments) != 2 {
+			return errors.New("invalid internal VM runner arguments")
+		}
+		instance, err := ctx.store.Load(arguments[1])
+		if err != nil {
+			return err
+		}
+		ready := os.NewFile(uintptr(3), "runner-ready")
+		if ready == nil {
+			return errors.New("runner readiness channel is unavailable")
+		}
+		return ctx.vm.Run(instance, ready)
 	}
 
 	if len(arguments) == 0 {
@@ -244,7 +258,7 @@ func (c context) list() error {
 func (c context) start(arguments []string) error {
 	flags := flag.NewFlagSet("start", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	dryRun := flags.Bool("dry-run", false, "Print the firectl command and do not start it.")
+	dryRun := flags.Bool("dry-run", false, "Print the Firecracker SDK configuration and do not start the VM.")
 	if len(arguments) > 0 && !strings.HasPrefix(arguments[0], "-") {
 		arguments = append(append([]string{}, arguments[1:]...), arguments[0])
 	}
@@ -264,20 +278,26 @@ func (c context) start(arguments []string) error {
 	if record, err := processctl.Read(c.paths.PIDFile(instance.Name)); err == nil && processctl.IsRunning(record) {
 		return fmt.Errorf("sandbox %q is already running with PID %d", instance.Name, record.PID)
 	}
-	argumentsForFirectl := c.vm.Arguments(instance)
 	if *dryRun {
-		fmt.Fprintln(os.Stdout, "firectl", joinForDisplay(argumentsForFirectl))
+		cfg := runtime.Configuration(instance, c.paths.SocketFile(instance.Name), c.paths.FirecrackerLogFile(instance.Name))
+		fmt.Fprintf(os.Stdout, "Firecracker SDK configuration for %s:\n", instance.Name)
+		fmt.Fprintf(os.Stdout, "  kernel: %s\n  root drive: %s (read/write)\n  TAP: %s\n  CPUs: %d\n  memory: %d MiB\n  socket: %s\n", cfg.KernelImagePath, instance.RootDrive, instance.TapDevice, instance.VCPUs, instance.MemoryMiB, cfg.SocketPath)
 		return nil
 	}
 	if _, err := net.InterfaceByName(instance.TapDevice); err != nil {
 		return fmt.Errorf("TAP device %q is not ready: %w", instance.TapDevice, err)
 	}
-	pid, err := c.vm.Start(instance)
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("find sandboxctl executable: %w", err)
+	}
+	pid, err := c.vm.Start(instance, executable)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "Started sandbox %s with PID %d.\n", instance.Name, pid)
 	fmt.Fprintln(os.Stdout, "Log:", c.paths.LogFile(instance.Name))
+	fmt.Fprintln(os.Stdout, "Firecracker log:", c.paths.FirecrackerLogFile(instance.Name))
 	return nil
 }
 
@@ -297,8 +317,8 @@ func (c context) stop(arguments []string) error {
 	if err := processctl.Stop(record); err != nil {
 		return err
 	}
-	if !processctl.WaitStopped(record, 5*time.Second) {
-		return fmt.Errorf("sandbox %q did not stop within 5 seconds", instance.Name)
+	if !processctl.WaitStopped(record, 20*time.Second) {
+		return fmt.Errorf("sandbox %q did not stop within 20 seconds", instance.Name)
 	}
 	_ = os.Remove(c.paths.PIDFile(instance.Name))
 	fmt.Fprintf(os.Stdout, "Stopped sandbox %s.\n", instance.Name)

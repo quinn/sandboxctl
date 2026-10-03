@@ -21,15 +21,8 @@ Install these packages on Arch Linux:
 sudo pacman -S --needed go firecracker openssh nftables iproute2 e2fsprogs
 ```
 
-Build `firectl` from its source until an Arch package is selected:
-
-```sh
-git clone https://github.com/firecracker-microvm/firectl.git
-cd firectl
-go build ./...
-```
-
-Put the `firectl` executable in a directory in `PATH`.
+The Go module includes Firecracker SDK v1.0.0.
+Install Firecracker and OpenSSH through the host package manager.
 
 Confirm KVM access:
 
@@ -59,7 +52,7 @@ Complete these tasks first:
 2. Correct all compile errors and test errors. **Complete.**
 3. Add tests for XDG path resolution. **Complete.**
 4. Add tests for atomic instance writes. **Complete.**
-5. Add a process-start test with a fake `firectl` executable. **Complete.**
+5. Add a process-start test with a fake runner. **Complete.**
 6. Add a process-stop test. **Complete.**
 7. Add a test for stale PID files. **Complete.**
 8. Test managed SSH configuration generation. **Complete.**
@@ -86,7 +79,7 @@ Confirm that SSH works through the managed alias.
 Write a file in the guest, run sync, stop the VM, and start it again.
 Confirm that the file remains.
 
-This host does not have Firecracker, firectl, or KVM access.
+This host does not have Firecracker or KVM access.
 The manual boot test must run on a prepared Linux host.
 
 Exit condition:

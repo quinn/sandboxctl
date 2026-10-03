@@ -92,7 +92,7 @@ This command must:
 1. Load the instance record.
 2. Refuse a second start when the sandbox runs.
 3. Prepare the TAP device.
-4. Start `firectl`.
+4. Start a runner that owns the Firecracker SDK machine.
 5. Save the process identity.
 6. Wait for SSH readiness.
 7. Report the address and log path.
@@ -235,22 +235,25 @@ Do not use the presence of a PID file as proof of a running sandbox.
 
 ## 8. Firecracker contract
 
-The first runtime uses these `firectl` options:
+The runtime uses the Firecracker Go SDK. A per-sandbox runner process owns the SDK machine until the guest exits.
+The `start` command must wait for the runner to report successful machine startup.
+The runner must keep the SDK start context active while the guest runs.
+The runner must handle termination signals, request guest shutdown, and stop the VMM if shutdown times out.
+It must save the runner PID and Linux process start time after startup.
+The Firecracker API socket must stay under the private runtime directory.
+
+The SDK configuration must map these instance fields:
 
 ```text
---firecracker-binary=PATH
---kernel=PATH
---kernel-opts=TEXT
---root-drive=PATH:rw
---tap-device=DEVICE/MAC
---ncpus=N
---memory=MiB
---metadata=JSON
+KernelImagePath: kernel_image
+KernelArgs: kernel_options
+Drives: root_drive as a writable root device
+NetworkInterfaces: tap_device and guest_mac
+MachineCfg: vcpus and memory_mib
+SocketPath: private runtime socket path
 ```
 
-The runtime must log the final argument list. It must not log private-key data.
-
-The runtime interface must permit a later SDK implementation.
+The runtime must not log private-key data.
 
 ## 9. Guest metadata contract
 
@@ -346,7 +349,7 @@ Unit tests must cover:
 - JSON schema handling.
 - Atomic record writes.
 - PID reuse detection.
-- `firectl` argument construction.
+- Firecracker SDK configuration construction.
 - Managed SSH configuration generation.
 - Manual SSH include behavior.
 - Managed-path deletion checks.
@@ -385,7 +388,7 @@ Resolve these items before version 1:
 
 - Select the base Linux distribution.
 - Select the kernel source and update policy.
-- Select the Firecracker and firectl version policy.
+- Select the Firecracker version policy.
 - Select the privilege-helper installation method.
 - Select the normal-stop mechanism inside the guest.
 - Select the project license.

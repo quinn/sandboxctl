@@ -8,9 +8,10 @@ The tool uses Kernel-based Virtual Machine (KVM) through Firecracker. It does no
 
 ## Runtime
 
-The first runtime starts `firectl` as an external process. The runtime package isolates this choice.
-
-A later version can use the Firecracker Go Software Development Kit (SDK). This change must not change the command interface.
+The runtime uses the Firecracker Go Software Development Kit (SDK) v1.0.0.
+Each sandbox has a detached `sandboxctl` runner process. The runner owns the SDK machine until it exits.
+The start command waits for Firecracker to start and then returns.
+The runner handles stop signals. It requests guest shutdown before it stops the VMM.
 
 The tool starts sandboxes only when the user requests it. The tool does not require systemd services.
 

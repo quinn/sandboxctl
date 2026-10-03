@@ -16,6 +16,7 @@ type Paths struct {
 	Keys       string
 	KnownHosts string
 	SSHConfig  string
+	Sockets    string
 }
 
 func Resolve() (Paths, error) {
@@ -47,11 +48,12 @@ func Resolve() (Paths, error) {
 		Keys:       filepath.Join(dataDir, "keys"),
 		KnownHosts: filepath.Join(stateDir, "known_hosts"),
 		SSHConfig:  filepath.Join(configDir, "ssh_config"),
+		Sockets:    filepath.Join(runtimeDir, "sockets"),
 	}, nil
 }
 
 func (p Paths) Ensure() error {
-	for _, path := range []string{
+	paths := []string{
 		p.ConfigDir,
 		p.DataDir,
 		p.StateDir,
@@ -59,7 +61,11 @@ func (p Paths) Ensure() error {
 		p.Instances,
 		p.Images,
 		p.Keys,
-	} {
+	}
+	if p.Sockets != "" {
+		paths = append(paths, p.Sockets)
+	}
+	for _, path := range paths {
 		if err := os.MkdirAll(path, 0o700); err != nil {
 			return fmt.Errorf("create directory %s: %w", path, err)
 		}
@@ -87,8 +93,14 @@ func (p Paths) PIDFile(name string) string {
 	return filepath.Join(p.RuntimeDir, name+".pid.json")
 }
 
+func (p Paths) SocketFile(name string) string { return filepath.Join(p.Sockets, name+".sock") }
+
 func (p Paths) LogFile(name string) string {
 	return filepath.Join(p.StateDir, name+".log")
+}
+
+func (p Paths) FirecrackerLogFile(name string) string {
+	return filepath.Join(p.StateDir, name+"-firecracker.log")
 }
 
 func envOr(name, fallback string) string {

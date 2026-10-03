@@ -39,6 +39,48 @@ func TestReadRejectsLegacyPID(t *testing.T) {
 	}
 }
 
+func TestWriteAndRemoveIfCurrent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "process.json")
+	command := exec.Command("sleep", "10")
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = command.Process.Kill(); _ = command.Wait() }()
+	record, err := Current(command.Process.Pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Write(path, record); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %o, want 600", info.Mode().Perm())
+	}
+	got, err := Read(path)
+	if err != nil || got != record {
+		t.Fatalf("Read() = %#v, %v; want %#v", got, err, record)
+	}
+	other := record
+	other.PID++
+	if err := RemoveIfCurrent(path, other); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("mismatched record removed file: %v", err)
+	}
+	if err := RemoveIfCurrent(path, record); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("record remains after removal: %v", err)
+	}
+}
+
 func TestStopAndWait(t *testing.T) {
 	command := exec.Command("sleep", "10")
 	if err := command.Start(); err != nil {
