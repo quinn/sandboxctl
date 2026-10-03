@@ -130,9 +130,11 @@ The socket must have these access properties:
 | Group | sandboxctl |
 | Mode | 0660 |
 
-sandboxd must verify the peer credentials with SO_PEERCRED.
-
-sandboxd must reject a peer that is not root and is not an authorized operator.
+The socket owner, group, and mode control which local users can connect.
+Use the socket permissions as the only client authorization check.
+Do not add a second user or group authorization check in sandboxd.
+Membership in the `sandboxctl` group grants access to the full sandboxd API.
+Treat this group as a trusted host-operator group.
 
 sandboxd must use a restrictive umask.
 

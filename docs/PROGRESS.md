@@ -10,8 +10,8 @@ Section 18 now records this gate.
 
 ## Current phase
 
-Section 18, step 2: add the `sandboxd` command and versioned gRPC Unix socket protocol.
-Use a fake runtime backend. Keep the protocol limited to negotiation, peer credentials, `ping`, `host-status`, structured errors, request limits, and deadlines.
+Section 18, step 3: add systemd socket and service assets for `sandboxd`.
+Section 18, step 2 is complete. The protocol uses a fake runtime backend and includes `Ping`, `HostStatus`, structured errors, request limits, and deadlines.
 
 Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writable `/dev/vdb`. A guest test file persisted across restart and disappeared after state-disk reset. The proof runner checked the SquashFS digest on each run.
 
@@ -37,10 +37,17 @@ Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writa
 - Updated the proof runner to stop Firecracker if the guest does not stop after Ctrl-C.
 - The user confirmed that the updated VM boot reaches the guest root prompt.
 - The guest reports `/` as OverlayFS. A guest test file persisted across restart and disappeared after state-disk reset.
-- Added a Protocol Buffers schema in `proto/sandboxctl/v1/control.proto`.
+- Added a Protocol Buffers schema in `proto/control.proto`. Its protobuf package and generated Go package do not include `v1`.
 - Added Buf v2 lint and generation configuration with pinned Go and gRPC plugins.
-- `BUF_CACHE_DIR=/tmp/sandboxctl-buf-cache buf lint` passes.
-- Defined separate `Ping` and `HostStatus` RPC methods. Protocol version and request ID use gRPC metadata and interceptors. The schema has no negotiation RPC.
+- Set Go 1.27 as the minimum version in `go.mod` and the README build instructions.
+- Pinned gRPC v1.70.0 and compatible protobuf dependencies. Kept the Go module requirement at 1.27.0.
+- Buf lint passes with explicit exceptions for the unversioned protobuf package and its root-level schema file.
+- Added `cmd/sandboxd`, a Unix socket gRPC server, and a client package.
+- Added API-version and request-ID metadata interceptors. The client creates a request ID for each call. The server validates the metadata and returns the request ID in response metadata.
+- Added separate `Ping` and `HostStatus` RPCs. The schema has no negotiation RPC or versioned Go package path.
+- Added message-size limits and operation deadlines. The socket server refuses to replace an existing path and uses mode `0600` for its socket.
+- Added Unix socket client/server tests for both RPCs, request ID response metadata, invalid metadata, and socket permissions.
+- `make check` passes outside the sandbox. The sandbox blocks the Unix socket setup used by the new integration tests.
 
 ## Decisions
 
@@ -49,19 +56,17 @@ Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writa
 - Do not start sandboxd, its protocol, or the host installer before the Phase 1 exit conditions pass.
 - The old `download-test-assets` flow converts the SquashFS into a writable ext4 root and selects changing remote artifacts. It does not match the Phase 1 image model. Do not use it as Phase 1 input.
 - Use gRPC over the Unix socket. Use Buf with pinned remote plugins for schema lint and code generation.
+- Use the Unix socket's owner, group, and mode as the only client authorization check. Membership in the `sandboxctl` group grants access to the full daemon API.
 - Use separate typed RPC methods. Do not use a generic `Call` method or a negotiation RPC.
 - Carry API versions and request IDs in gRPC metadata. Do not add these fields to messages.
 
 ## Blockers
 
-The current development container has no `/dev/kvm` and blocks `sudo`. It cannot repeat the guest proof or validate privileged host operations. Local unit tests and builds remain available.
-The container cannot reach the Go module proxy or the Buf remote plugin service. The approved gRPC Go dependency and generated Go code are not available yet.
+The current development container has no `/dev/kvm` and blocks `sudo`. It cannot repeat the guest proof or validate privileged host operations.
+Buf remote generation requires access to the Buf Schema Registry. `make generate` fails inside the sandbox because that network call is blocked. The generated files are present from a network-enabled run.
 
 ## Next tasks
 
-1. In a network-enabled project shell, run `go get google.golang.org/grpc@v1.70.0` and `make generate`.
-2. Add `cmd/sandboxd`, `internal/client`, and `internal/daemon` using the generated schema.
-3. Implement protocol negotiation, peer credential inspection, `ping`, `host-status`, structured errors, message limits, and deadlines.
-4. Test the client against a fake daemon over a Unix socket. Do not add privileged operations or VM lifecycle commands yet.
-5. Run `gofmt`, `go vet ./...`, and `go test ./...` after each step.
-6. Continue through the section 18 migration sequence only after these checks pass.
+1. Add the systemd socket and service assets in section 18, step 3.
+2. Keep privileged operations and VM lifecycle RPCs out of the control-protocol step until the host installer and persistent-state steps.
+3. Continue through the section 18 migration sequence only after the checks pass.

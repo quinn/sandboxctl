@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package sandboxctl.v1;
+package sandboxctl;
 
-option go_package = "sandboxctl/internal/controlpb/sandboxctl/v1;controlv1";
+option go_package = "sandboxctl/internal/controlpb;controlpb";
 
 service ControlService {
   // Confirms that sandboxd can serve requests.

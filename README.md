@@ -41,7 +41,7 @@ The scaffold cannot yet do these operations:
 
 ## Build
 
-Install Go 1.23 or a later compatible version. Then run:
+Install Go 1.27 or a later compatible version. Then run:
 
 ```sh
 make check
