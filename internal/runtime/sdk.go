@@ -20,6 +20,8 @@ import (
 
 type SDK struct{ Paths config.Paths }
 
+var _ Backend = SDK{}
+
 type ReadyMessage struct {
 	PID   int    `json:"pid"`
 	Error string `json:"error,omitempty"`

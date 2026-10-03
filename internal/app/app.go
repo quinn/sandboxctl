@@ -28,7 +28,7 @@ type context struct {
 	paths config.Paths
 	store store.Store
 	ssh   ssh.Manager
-	vm    runtime.SDK
+	vm    runtime.Backend
 }
 
 func Run(arguments []string) error {

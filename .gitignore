@@ -1,5 +1,5 @@
 /bin/
 /dist/
+/tmp/
 *.test
 *.out
-

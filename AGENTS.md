@@ -2,10 +2,13 @@
 
 Read these files before you change code:
 
-1. `README.md`
-2. `docs/SPEC.md`
-3. `docs/DECISIONS.md`
-4. `docs/CONTINUE.md`
+1. `docs/SANDBOX-RUNTIME-V2.md`
+2. `README.md`
+3. `docs/SPEC.md`
+4. `docs/DECISIONS.md`
+5. `docs/CONTINUE.md`
+
+`docs/SANDBOX-RUNTIME-V2.md` is authoritative. It replaces conflicting requirements in older documents and the current scaffold.
 
 ## Text rules
 
@@ -25,25 +28,38 @@ Do not change external command names, option names, file names, protocol names, 
 
 - Support Linux hosts and Linux guests only.
 - Keep the standard library as the default choice.
-- Keep host state in the XDG base directories.
+- Keep privileged host state in root-owned system directories.
+- Keep operator SSH keys and generated SSH configuration in XDG directories.
 - Do not write to `~/.ssh`.
-- Do not change the user's existing SSH configuration.
-- Do not change the user's Herdr configuration.
-- Manage the tool-owned SSH configuration.
-- Let the user install the include in the main SSH configuration.
-- Keep application-specific SSH management outside the active scope.
+- Do not change the user's existing SSH configuration automatically.
+- Generate one SSH fragment for the user to include with OpenSSH Include.
+- Do not add direct Herdr integration or generate `ssh` or `scp` wrappers.
 - Keep destructive commands explicit.
 - Refuse to delete a running sandbox.
 - Do not delete a source image.
 - Treat guest images, SSH keys, and known-hosts data as private.
-- Use `0600` for private files.
-- Use `0700` for private directories.
+- Use mode `0600` for private files.
+- Use mode `0700` for private directories.
 - Add tests for each parser and state transition.
-- Do not require systemd for normal sandbox use.
+- Use the socket-activated `sandboxd` system service for privileged operations.
+- Do not require `sudo` for routine sandbox operations.
+- Do not run Firecracker as root or as the operator in the final design.
+- Use `sudo` only for an isolated development proof when needed.
+- Keep the build green after each migration step.
+
+## Progress tracking
+
+Keep `docs/PROGRESS.md` current.
+Record the active phase, completed work, checks, blockers, decisions, and next task.
+Update it when a phase or decision changes.
+
+Complete the risk-first Phase 1 storage proof before you start the daemon, installer, or other control-plane phases.
+The Phase 1 proof may use a temporary direct Firecracker runner.
+Do not treat that runner as production architecture.
 
 ## Required checks
 
-Run these commands before you finish a change:
+Run these commands before you finish a code change:
 
 ```sh
 gofmt -w $(find . -name '*.go' -type f)
@@ -53,7 +69,8 @@ go test ./...
 
 If a check cannot run, state the reason in the handoff.
 
-## Current first task
+## Current task
 
-Implement Milestone 1 in `docs/CONTINUE.md`. Do not start Milestone 2 until all Milestone 1 tests pass.
-
+Start the migration in section 18 of `docs/SANDBOX-RUNTIME-V2.md`.
+First prove the Phase 1 SquashFS and OverlayFS boot path.
+Do not start the sandboxd protocol until the Phase 1 exit conditions pass.

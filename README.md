@@ -60,7 +60,70 @@ Run these commands first:
 ./bin/sandboxctl list
 ```
 
-## Manual one-VM test
+## Phase 1 storage proof
+
+The proof uses the x86-64 kernel and Ubuntu 24.04 SquashFS artifacts from
+Firecracker CI v1.15. The asset target uses fixed source URLs. It records
+SHA-256 checksums for the downloaded files.
+
+Download the assets with:
+
+    make download-overlay-assets
+
+The files go to these paths:
+
+    tmp/config/images/default/vmlinux
+    tmp/config/images/default/ubuntu.squashfs
+
+The target verifies the checksums on later runs. Move the files and checksum
+manifest out of the way if you want to download a fresh copy.
+
+Do not use the old `download-test-assets` flow for this proof.
+That flow selects changing upstream artifacts and creates an ext4 root image.
+The v2 design requires pinned image digests and a read-only SquashFS base.
+
+Build the initramfs and create a state disk:
+
+    make overlay-initramfs
+    make overlay-state-disk
+
+Run the proof on a Linux host with Firecracker and read/write access to `/dev/kvm`:
+
+    make overlay-proof
+
+This target also downloads the pinned assets when they are missing.
+
+The serial output reports whether the overlay created or retained its test marker.
+Stop the VM after the first run.
+Run `make overlay-proof` again and confirm that the output reports a retained marker.
+Stop the VM again.
+Run `make overlay-state-reset` and type `RESET` at the prompt.
+Run `make overlay-proof` and confirm that the output reports a new marker.
+
+The proof checks the SquashFS digest after each VM run.
+Do not start the sandboxd migration until these checks pass.
+
+## Legacy single-root VM test
+
+This section describes the old single-ext4-root scaffold.
+The runtime v2 plan replaces this workflow.
+
+Download the upstream test kernel and Ubuntu filesystem:
+
+    make download-test-assets
+
+The files go under `tmp/config/images/default/`.
+The target records the exact upstream artifact URLs and local SHA-256 checksums.
+It keeps valid existing files on later runs.
+Run `make download-test-assets REFRESH=1` to select the latest upstream artifacts again.
+Install `curl`, `python3`, `squashfs-tools`, and `e2fsprogs` first.
+The target uses `sudo` to preserve guest filesystem ownership while it extracts and converts the image.
+It keeps the resulting image owned by your user with mode `0600`.
+
+The kernel is ready to use as a Firecracker kernel.
+The ext4 image is a converted copy of Firecracker's Ubuntu example filesystem.
+It may need guest account, SSH, key, and network setup before it meets the requirements below.
+The manifest records the selected artifact version and source URLs.
 
 Prepare a Linux guest image before you create a sandbox. It must have:
 
@@ -93,44 +156,28 @@ The tool copies the source drive to a private instance drive.
 The tool never starts the source drive.
 
 Check that 172.30.0.0/24 is free on the host.
-This test uses one TAP device as the host connection.
-It does not set up guest Internet access.
-
-Create and configure the TAP device. Replace dev1 with your sandbox name.
-
-    sudo ip tuntap add dev fc-dev1 mode tap user "$(id -un)"
-    sudo ip address add 172.30.0.1/24 dev fc-dev1
-    sudo ip link set dev fc-dev1 up
-
-Create the sandbox with your prepared kernel and root drive:
-
-    ./bin/sandboxctl create dev1 --guest-ip 172.30.0.10 --kernel /path/to/vmlinux --root-drive /path/to/base.ext4
-
-The command reports the TAP name, guest address, MAC address, and public key path.
-Use the same guest address when you prepare the guest's network settings.
-The command prints the path to the writable disk.
-
-Inspect the runtime command first:
-
-    ./bin/sandboxctl start dev1 --dry-run
-
-Then start the VM and connect:
-
-    ./bin/sandboxctl start dev1
-    ssh sandboxctl-dev1
-
-Run sync in the guest before you stop the VM:
-
-    ssh sandboxctl-dev1 sync
-    ./bin/sandboxctl stop dev1
-
-Start the VM again to check that files on its private disk remain.
 Use a disposable root drive for this test.
-Remove the TAP device after the VM stops:
+The script creates one TAP device and removes it after the VM stops.
+The script creates a private sandbox disk and keeps it after the test.
+The script does not set up guest Internet access.
 
-    sudo ip tuntap del dev fc-dev1 mode tap
+Run the test with the downloaded or prepared kernel and root drive:
 
-The test needs Firecracker and read/write access to /dev/kvm.
+    make download-test-assets
+    make manual-test NAME=dev1
+
+The script checks Firecracker and KVM access.
+It creates the TAP device and sandbox.
+It prints the SSH include block when you need to add it to your main SSH configuration.
+It waits for you to add the block and accept the guest host key.
+It writes a test file, stops and restarts the VM, and checks that the file remains.
+It stops the VM and removes the TAP device when the test ends.
+The private sandbox disk remains so you can inspect or remove it later.
+
+If the script stops after it creates the sandbox, fix the reported issue and run the same command again.
+The script reuses an existing sandbox with the same name.
+
+The test needs Firecracker, sudo access for TAP setup, and read/write access to /dev/kvm.
 It does not configure NAT, DNS, guest Internet access, or an image builder.
 
 ## Private SSH environment
@@ -189,6 +236,8 @@ ssh -G sandboxctl-dev1
 ## Documents
 
 - [Implementation specification](docs/SPEC.md)
+- [Authoritative runtime v2 design](docs/SANDBOX-RUNTIME-V2.md)
+- [Migration progress](docs/PROGRESS.md)
 - [Continuation instructions](docs/CONTINUE.md)
 - [Design decisions](docs/DECISIONS.md)
 - [Instructions for coding agents](AGENTS.md)
