@@ -73,7 +73,29 @@ make check
 
 This command must complete without an error.
 
-## Milestone 2: base image
+## Iteration 1: manual one-VM test
+
+Use a prepared Linux kernel and guest root drive.
+The guest must have a dev user, OpenSSH server, and the sandboxctl public key.
+The guest must accept the static network settings in the kernel command line.
+Create one TAP device and assign 172.30.0.1/24 to it.
+Use a guest address from the 172.30.0.0/24 subnet.
+
+Run the manual test in README.md.
+Confirm that SSH works through the managed alias.
+Write a file in the guest, run sync, stop the VM, and start it again.
+Confirm that the file remains.
+
+This host does not have Firecracker, firectl, or KVM access.
+The manual boot test must run on a prepared Linux host.
+
+Exit condition:
+
+- One prepared VM boots from its private disk copy.
+- SSH works through the user's manual SSH include.
+- The private disk keeps guest file changes after stop and restart.
+
+## Iteration 2: base image
 
 Create a reproducible base-image builder.
 
@@ -99,7 +121,7 @@ Exit condition:
 - The `dev` user accepts only the supplied key.
 - Password authentication is off.
 
-## Milestone 3: network helper
+## Iteration 3: network helper
 
 Create the bridge, TAP devices, routes, and nftables rules.
 
@@ -115,7 +137,7 @@ Exit condition:
 - Each sandbox can reach the Internet.
 - One sandbox cannot use the other sandbox's root drive.
 
-## Milestone 4: image and key provisioning
+## Iteration 4: image and key provisioning
 
 Change `sandboxctl create` to accept a base image name. Do not require raw kernel and root-drive paths for normal use.
 
@@ -133,7 +155,7 @@ sandboxctl ssh dev1 -- uname -a
 
 All commands must work without changes to `~/.ssh`.
 
-## Milestone 5: safe deletion
+## Iteration 5: safe deletion
 
 Add:
 
@@ -145,7 +167,7 @@ The command must refuse to delete a running sandbox. It must require confirmatio
 
 Delete only files inside the selected managed instance directory. Never delete the base image, kernel, SSH key, or unrelated log files.
 
-## Milestone 6: packaging
+## Iteration 6: packaging
 
 Create an Arch `PKGBUILD`. Add shell completion for Bash, Zsh, and Fish.
 

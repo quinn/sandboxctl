@@ -2,7 +2,7 @@
 
 `sandboxctl` manages local Firecracker development sandboxes. It owns the SSH configuration for those sandboxes.
 
-This repository is a scaffold. Do not use it with important data.
+This repository supports a manual one-VM test. Do not use it with important data.
 
 ## Intended result
 
@@ -24,6 +24,7 @@ The scaffold can do these operations:
 - Create the private application directories.
 - Create a tool-owned Ed25519 SSH key.
 - Create a tool-owned SSH configuration and known-hosts file.
+- Make a private sparse copy of a prepared root drive for each sandbox.
 - Save sandbox records as JSON files.
 - Build and start a `firectl` process when the TAP device exists.
 - Stop the saved `firectl` process.
@@ -35,7 +36,6 @@ The scaffold cannot yet do these operations:
 - Build the base root file system.
 - Put the SSH public key in a guest.
 - Create the host bridge, TAP devices, or NAT rules.
-- Detect all stale processes safely.
 - Remove a sandbox.
 - Prevent network-address collisions.
 
@@ -50,7 +50,7 @@ make build
 
 The binary will be at `bin/sandboxctl`.
 
-## Try the safe parts
+## Initialize and inspect
 
 Run these commands first:
 
@@ -60,19 +60,78 @@ Run these commands first:
 ./bin/sandboxctl list
 ```
 
-You can create a record if you already have a kernel and a prepared root drive:
+## Manual one-VM test
 
-```sh
-./bin/sandboxctl create dev1 \
-  --kernel /path/to/vmlinux \
-  --root-drive /path/to/dev1.ext4
-```
+Prepare a Linux guest image before you create a sandbox. It must have:
 
-Inspect the `firectl` command without starting a VM:
+- A root file system on /dev/vda.
+- A dev user.
+- An OpenSSH server.
+- The virtio_net driver and an eth0 network interface.
+- The sandboxctl public key in dev's authorized_keys.
+- Public key authentication enabled.
 
-```sh
-./bin/sandboxctl start dev1 --dry-run
-```
+Run sandboxctl init.
+Run sandboxctl ssh-config and add its printed block to your main SSH configuration.
+Mount the prepared guest drive and install the printed public key.
+The example assumes the guest account and group are both named dev.
+It also assumes that dev has user ID and group ID 1000.
+Use the numeric values from your guest image if they differ.
+
+    sudo mkdir -p /mnt/sandboxctl-guest
+    sudo mount -o loop /path/to/base.ext4 /mnt/sandboxctl-guest
+    sudo install -d -m 0700 /mnt/sandboxctl-guest/home/dev/.ssh
+    sudo install -m 0600 \
+      "${XDG_DATA_HOME:-$HOME/.local/share}/sandboxctl/keys/client_ed25519.pub" \
+      /mnt/sandboxctl-guest/home/dev/.ssh/authorized_keys
+    sudo chown -R 1000:1000 /mnt/sandboxctl-guest/home/dev/.ssh
+    sudo umount /mnt/sandboxctl-guest
+
+Enable the guest SSH server in the image.
+Do not mount or modify the source drive while the VM runs.
+The tool copies the source drive to a private instance drive.
+The tool never starts the source drive.
+
+Check that 172.30.0.0/24 is free on the host.
+This test uses one TAP device as the host connection.
+It does not set up guest Internet access.
+
+Create and configure the TAP device. Replace dev1 with your sandbox name.
+
+    sudo ip tuntap add dev fc-dev1 mode tap user "$(id -un)"
+    sudo ip address add 172.30.0.1/24 dev fc-dev1
+    sudo ip link set dev fc-dev1 up
+
+Create the sandbox with your prepared kernel and root drive:
+
+    ./bin/sandboxctl create dev1 --guest-ip 172.30.0.10 --kernel /path/to/vmlinux --root-drive /path/to/base.ext4
+
+The command reports the TAP name, guest address, MAC address, and public key path.
+Use the same guest address when you prepare the guest's network settings.
+The command prints the path to the writable disk.
+
+Inspect the runtime command first:
+
+    ./bin/sandboxctl start dev1 --dry-run
+
+Then start the VM and connect:
+
+    ./bin/sandboxctl start dev1
+    ssh sandboxctl-dev1
+
+Run sync in the guest before you stop the VM:
+
+    ssh sandboxctl-dev1 sync
+    ./bin/sandboxctl stop dev1
+
+Start the VM again to check that files on its private disk remain.
+Use a disposable root drive for this test.
+Remove the TAP device after the VM stops:
+
+    sudo ip tuntap del dev fc-dev1 mode tap
+
+The test needs firectl, Firecracker, and read/write access to /dev/kvm.
+It does not configure NAT, DNS, guest Internet access, or an image builder.
 
 ## Private SSH environment
 

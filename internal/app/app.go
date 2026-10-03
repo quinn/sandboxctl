@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"sandboxctl/internal/config"
+	"sandboxctl/internal/disk"
 	"sandboxctl/internal/model"
 	"sandboxctl/internal/names"
 	processctl "sandboxctl/internal/process"
@@ -92,6 +93,7 @@ func (c context) init() error {
 	}
 	fmt.Fprintln(os.Stdout, "Sandboxctl is initialized.")
 	fmt.Fprintln(os.Stdout, "SSH key:", c.paths.PrivateKey())
+	fmt.Fprintln(os.Stdout, "SSH public key:", c.paths.PublicKey())
 	fmt.Fprintln(os.Stdout, "SSH configuration:", c.paths.SSHConfig)
 	return nil
 }
@@ -142,17 +144,32 @@ func (c context) create(arguments []string) error {
 	if err != nil {
 		return fmt.Errorf("kernel: %w", err)
 	}
-	rootPath, err := existingAbsolutePath(*rootDrive)
+	kernelInfo, err := os.Stat(kernelPath)
+	if err != nil || !kernelInfo.Mode().IsRegular() {
+		return errors.New("kernel must be a regular file")
+	}
+	baseDrivePath, err := existingAbsolutePath(*rootDrive)
 	if err != nil {
-		return fmt.Errorf("root drive: %w", err)
+		return fmt.Errorf("base root drive: %w", err)
 	}
 
 	tap, mac, hostPart := names.NetworkIdentity(name)
 	if *guestIP == "" {
 		*guestIP = fmt.Sprintf("172.30.0.%d", hostPart)
 	}
-	if parsed := net.ParseIP(*guestIP); parsed == nil || parsed.To4() == nil {
+	parsed := net.ParseIP(*guestIP)
+	if parsed == nil || parsed.To4() == nil {
 		return errors.New("guest-ip must be an IPv4 address")
+	}
+	if !parsed.To4().IsPrivate() || parsed.To4().String() != *guestIP || !strings.HasPrefix(*guestIP, "172.30.0.") {
+		return errors.New("guest-ip must be in 172.30.0.0/24 for this manual test")
+	}
+	lastOctet, err := strconv.Atoi(strings.TrimPrefix(*guestIP, "172.30.0."))
+	if err != nil {
+		return errors.New("guest-ip must be a valid address in 172.30.0.0/24")
+	}
+	if lastOctet < 2 || lastOctet > 254 {
+		return errors.New("guest-ip must be a usable address in 172.30.0.0/24")
 	}
 
 	instance := model.Instance{
@@ -162,8 +179,8 @@ func (c context) create(arguments []string) error {
 		VCPUs:         *cpus,
 		MemoryMiB:     *memory,
 		KernelImage:   kernelPath,
-		RootDrive:     rootPath,
-		KernelOptions: fmt.Sprintf("ro console=ttyS0 noapic reboot=k panic=1 pci=off nomodules ip=%s::172.30.0.1:255.255.255.0::eth0:off", *guestIP),
+		RootDrive:     filepath.Join(c.paths.InstanceDir(name), "root.ext4"),
+		KernelOptions: fmt.Sprintf("console=ttyS0 root=/dev/vda rw reboot=k panic=1 pci=off nomodules ip=%s::172.30.0.1:255.255.255.0::eth0:off", *guestIP),
 		TapDevice:     tap,
 		GuestMAC:      mac,
 		GuestIP:       *guestIP,
@@ -175,15 +192,29 @@ func (c context) create(arguments []string) error {
 	if err := c.paths.Ensure(); err != nil {
 		return err
 	}
-	if err := c.store.Save(instance); err != nil {
+	if err := c.ssh.Initialize(); err != nil {
 		return err
 	}
-	if err := c.ssh.Initialize(); err != nil {
-		return fmt.Errorf("sandbox %q was saved, but SSH setup failed; run sandboxctl ssh-config: %w", name, err)
+	if err := disk.CloneSparse(baseDrivePath, instance.RootDrive); err != nil {
+		return err
+	}
+	if err := c.store.Save(instance); err != nil {
+		_ = os.Remove(instance.RootDrive)
+		return err
+	}
+	if err := c.ssh.WriteConfig(); err != nil {
+		_ = os.Remove(c.paths.InstanceFile(name))
+		_ = os.Remove(instance.RootDrive)
+		return fmt.Errorf("write the managed SSH configuration: %w", err)
 	}
 	fmt.Fprintf(os.Stdout, "Created sandbox %s.\n", name)
-	fmt.Fprintln(os.Stdout, "The root drive was not copied or changed.")
-	fmt.Fprintln(os.Stdout, "Prepare the TAP device and guest SSH key before you start this sandbox.")
+	fmt.Fprintln(os.Stdout, "Private root drive:", instance.RootDrive)
+	fmt.Fprintln(os.Stdout, "Base root drive was not changed:", baseDrivePath)
+	fmt.Fprintln(os.Stdout, "TAP device:", instance.TapDevice)
+	fmt.Fprintln(os.Stdout, "Guest MAC:", instance.GuestMAC)
+	fmt.Fprintln(os.Stdout, "Guest address:", instance.GuestIP)
+	fmt.Fprintln(os.Stdout, "Install this public key in the guest:", c.paths.PublicKey())
+	fmt.Fprintln(os.Stdout, "Prepare the TAP device before you start this sandbox.")
 	return nil
 }
 

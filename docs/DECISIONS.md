@@ -14,9 +14,14 @@ A later version can use the Firecracker Go Software Development Kit (SDK). This 
 
 The tool starts sandboxes only when the user requests it. The tool does not require systemd services.
 
+The first working iteration uses a prepared kernel, root drive, and TAP device.
+The tool copies the root drive into the private instance directory.
+Host networking and guest image construction remain manual for this iteration.
+
 ## Guest images
 
 Each sandbox must have its own writable root drive. The tool must never start two sandboxes with the same writable root drive.
+The create command makes a sparse copy of the supplied source drive.
 
 The planned image process uses a read-only base image. The tool makes a copy-on-write copy when the file system supports it. It uses a sparse copy as the fallback.
 
@@ -37,6 +42,7 @@ The first network uses bridge `fcbr0` and subnet `172.30.0.0/24`.
 The host address is `172.30.0.1`. Each guest gets a stable address from the instance registry.
 
 Each guest uses one TAP device. Firecracker connects its network device to this TAP device.
+The first manual test assigns the host address directly to its TAP device.
 
 The host uses network address translation (NAT) for guest Internet access. The tool must use nftables on Arch Linux.
 
@@ -98,4 +104,3 @@ Normal list, SSH, Herdr, and state operations do not require root privileges.
 Bridge, TAP, and nftables operations require additional privileges. A small privilege helper will own those operations.
 
 The main process must not run as root. The privilege helper must accept only validated, structured operations.
-

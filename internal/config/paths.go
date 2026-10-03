@@ -84,7 +84,7 @@ func (p Paths) InstanceFile(name string) string {
 }
 
 func (p Paths) PIDFile(name string) string {
-	return filepath.Join(p.RuntimeDir, name+".pid")
+	return filepath.Join(p.RuntimeDir, name+".pid.json")
 }
 
 func (p Paths) LogFile(name string) string {

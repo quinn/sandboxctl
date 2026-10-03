@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sandboxctl/internal/config"
+	"sandboxctl/internal/store"
 	"strings"
 	"testing"
 )
@@ -38,7 +39,8 @@ func TestCreateRefreshesSSHConfig(t *testing.T) {
 			kernel := filepath.Join(root, "kernel")
 			drive := filepath.Join(root, "root.ext4")
 			for _, path := range []string{kernel, drive} {
-				if err := os.WriteFile(path, nil, 0600); err != nil {
+				data := []byte("prepared base image")
+				if err := os.WriteFile(path, data, 0600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -57,6 +59,24 @@ func TestCreateRefreshesSSHConfig(t *testing.T) {
 			}
 			if !strings.Contains(string(data), "Host sandboxctl-dev1 172.30.0.10") {
 				t.Fatal(string(data))
+			}
+			instance, err := (store.Store{Paths: paths}).Load("dev1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if instance.RootDrive == drive || instance.RootDrive != filepath.Join(paths.InstanceDir("dev1"), "root.ext4") {
+				t.Fatalf("root drive was not copied into the instance directory: %s", instance.RootDrive)
+			}
+			copied, err := os.ReadFile(instance.RootDrive)
+			if err != nil {
+				t.Fatal(err)
+			}
+			original, err := os.ReadFile(drive)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(copied) != string(original) || string(original) != "prepared base image" {
+				t.Fatal("private drive differs from or changed the base image")
 			}
 			if err := Run([]string{"start", "dev1", "--dry-run"}); err != nil {
 				t.Fatal(err)
