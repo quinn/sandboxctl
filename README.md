@@ -48,16 +48,21 @@ make check
 make build
 ```
 
-The binary will be at `bin/sandboxctl`.
+The build creates `bin/sandboxctl`, `bin/sandboxd`, and one `bin/sandboxctl-*`
+executable for each CLI command. Use the Make target to run the local CLI:
+
+```sh
+make sandboxctl ARGS="help"
+```
 
 ## Initialize and inspect
 
 Run these commands first:
 
 ```sh
-./bin/sandboxctl init
-./bin/sandboxctl paths
-./bin/sandboxctl list
+make sandboxctl ARGS="init"
+make sandboxctl ARGS="paths"
+make sandboxctl ARGS="list"
 ```
 
 ## Phase 1 storage proof

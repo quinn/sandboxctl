@@ -6,6 +6,19 @@ The host and all guests use Linux. The first supported host is Arch Linux on x86
 
 The tool uses Kernel-based Virtual Machine (KVM) through Firecracker. It does not support CPU emulation.
 
+## Command input boundary
+
+Each CLI command owns argument parsing and user-input validation under
+`cmd/sandboxctl/<command>`. Shared command parsing and validation belongs in
+`internal/cmdutil`. Internal operation packages receive normalized, typed
+inputs instead of raw command-line arguments. They can still validate stored
+state and host invariants before they act.
+
+The `sandboxctl` front end uses generic external-subcommand dispatch. It finds
+`sandboxctl-<command>` on `PATH` and replaces itself with that executable.
+Subcommand executables own their command behavior. The `sandboxd` executable
+does not use this dispatcher.
+
 ## Runtime
 
 The runtime uses the Firecracker Go Software Development Kit (SDK) v1.0.0.
@@ -14,6 +27,7 @@ The start command waits for Firecracker to start and then returns.
 The runner handles stop signals. It requests guest shutdown before it stops the VMM.
 
 The tool starts sandboxes only when the user requests it. The privileged `sandboxd` service uses systemd socket activation. Routine sandbox commands run without `sudo`.
+The Arch package owns the CLI, its command executables, the daemon, and systemd unit files. The explicit host-install command owns per-host configuration, operator group membership, network policy, and socket activation.
 
 The first working iteration uses a prepared kernel, root drive, and TAP device.
 The tool copies the root drive into the private instance directory.

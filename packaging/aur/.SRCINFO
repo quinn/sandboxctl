@@ -1,0 +1,19 @@
+pkgbase = sandboxctl-git
+	pkgdesc = Manage local Firecracker development sandboxes
+	pkgver = 0.1.0.r0.g0000000
+	pkgrel = 1
+	url = https://github.com/quinn/sandboxctl
+	arch = x86_64
+	makedepends = git
+	makedepends = go>=1.27
+	depends = firecracker
+	depends = e2fsprogs
+	depends = iproute2
+	depends = nftables
+	depends = openssh
+	provides = sandboxctl
+	conflicts = sandboxctl
+	source = sandboxctl::git+https://github.com/quinn/sandboxctl.git#branch=main
+	sha256sums = SKIP
+
+pkgname = sandboxctl-git

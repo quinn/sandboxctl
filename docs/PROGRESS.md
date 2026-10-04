@@ -11,6 +11,7 @@ Section 18 now records this gate.
 ## Current phase
 
 Section 18, step 4: add host install and doctor commands.
+The commands and host-specific setup are implemented. The AUR package draft owns the CLI binaries and systemd units. Step 4 still needs final integration checks and a testable package source.
 Section 18, step 3 is complete. The unit files and socket activation path are implemented and validated.
 Section 18, step 2 is complete. The protocol uses a fake runtime backend and includes `Ping`, `HostStatus`, structured errors, request limits, and deadlines.
 
@@ -53,7 +54,25 @@ Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writa
 - Added activation checks for the process ID, descriptor count, and Unix socket type.
 - `make check` passes after adding the systemd activation path.
 - `systemd-analyze verify` passes for both units against a temporary install tree with the daemon binary and required systemd target units.
+- Added `sandboxctl host install --operator USER` and `sandboxctl doctor` entry points.
+- Moved command dispatch into `cmd/sandboxctl` and gave each CLI subcommand a package under `cmd/sandboxctl/<command>`.
+- Kept reusable sandbox operations in `internal/app`; top-level dispatch and simple command validation live in the command packages.
+- Moved CLI argument parsing and user-input validation into the matching `cmd/sandboxctl/<command>` package. Shared parsers and validators live in `internal/cmdutil`.
+- Changed internal application and host-install APIs to accept typed options instead of command-line argument slices and raw range/address strings.
+- Replaced the `sandboxctl` command switch with generic PATH-based dispatch to `sandboxctl-<command>` executables. Each command directory builds as a standalone `main` package. Nested `host install` dispatch uses `sandboxctl-host` and `sandboxctl-host-install`.
+- Changed the detached runner to start the `sandboxctl-vmrun` executable through `PATH`. The `sandboxd` binary remains independent.
+- Updated `make build` and the AUR package to build and install every `sandboxctl-*` helper.
+- The external-dispatch tests confirm PATH discovery, unchanged command arguments, environment and working-directory inheritance, standard input/output/error, and child exit status.
+- `make check`, `make build`, command dispatch smoke tests, shell syntax checks, and `git diff --check` pass.
+- The host-install command validates the operator, identifier ranges, and address pool before calling the host installer.
+- The host installer checks the Arch host, host-file range conflicts, route conflicts, package files, and matching Firecracker/jailer versions before it changes host state.
+- The host installer creates the trusted group, root-owned state directories, host configuration, dedicated nftables table, IPv4 forwarding configuration, and enables the systemd socket.
+- The host installer does not copy package-owned binaries or unit files.
+- Added an initial `sandboxctl-git` AUR package draft. It builds and installs the CLI, daemon, and socket/service units. It depends on the Arch `firecracker` package, which includes both Firecracker and jailer.
+- `makepkg --printsrcinfo`, `bash -n packaging/aur/PKGBUILD`, `make check`, and `make build` pass.
+- `systemd-analyze verify` passes against a temporary package install tree.
 - `make check` passes outside the sandbox. The sandbox blocks the Unix socket setup used by the new integration tests.
+- `make check`, `make build`, and `git diff --check` pass after moving CLI parsing and validation to command packages.
 
 ## Decisions
 
@@ -70,8 +89,10 @@ Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writa
 
 The current development container has no `/dev/kvm` and blocks `sudo`. It cannot repeat the guest proof or validate privileged host operations.
 Buf remote generation requires access to the Buf Schema Registry. `make generate` fails inside the sandbox because that network call is blocked. The generated files are present from a network-enabled run.
+The repository has no configured Git remote or license file. The AUR draft uses the GitHub URL inferred from the workspace path. Confirm the public source URL and select a license before publication.
 
 ## Next tasks
 
-1. Add host install and doctor commands in section 18, step 4.
-2. Keep privileged operations and VM lifecycle RPCs out until the installer and persistent-state steps.
+1. Review and test the host installer and doctor on a disposable Arch host.
+2. Confirm a public Git source URL and project license before publishing the AUR package.
+3. Keep VM lifecycle operations out until the persistent-state and runtime steps.

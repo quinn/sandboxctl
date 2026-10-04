@@ -37,9 +37,9 @@ Run:
 ```sh
 make check
 make build
-./bin/sandboxctl help
-./bin/sandboxctl init
-./bin/sandboxctl paths
+make sandboxctl ARGS="help"
+make sandboxctl ARGS="init"
+make sandboxctl ARGS="paths"
 ```
 
 The current environment passes `go vet ./...` and `go test ./...`.

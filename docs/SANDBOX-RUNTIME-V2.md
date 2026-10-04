@@ -93,20 +93,26 @@ The host-install command is the only interactive privilege escalation required f
 
 Host upgrade and host removal can require a later explicit sudo command. Routine VM operations must not require sudo.
 
+The Arch package must install `sandboxctl`, its `sandboxctl-<command>` helper
+executables, `sandboxd`, `sandboxd.socket`, and `sandboxd.service`. The
+`sandboxctl` front end must find command helpers through `PATH` and replace
+itself with the selected helper. The `sandboxd` executable must remain separate.
+The package must depend on the Arch `firecracker` package, which provides both
+Firecracker and jailer. The package must not enable the socket.
+
 The host-install command must:
 
 1. Verify that it runs as root.
 2. Resolve the selected operator before it changes any files.
-3. Install root-owned sandboxd, Firecracker, and jailer executables.
+3. Verify that the package-installed `sandboxd` executable and unit files exist.
 4. Verify that Firecracker and jailer have the same release version.
 5. Create the sandboxctl system group.
 6. Add the selected operator to the sandboxctl group.
 7. Create root-owned configuration and state directories.
-8. Install sandboxd.socket and sandboxd.service.
-9. Configure the dedicated sandboxctl nftables table.
-10. Configure IPv4 forwarding through a dedicated sysctl file.
-11. Enable sandboxd.socket.
-12. Tell the operator when a new login session is necessary.
+8. Configure the dedicated sandboxctl nftables table.
+9. Configure IPv4 forwarding through a dedicated sysctl file.
+10. Enable sandboxd.socket.
+11. Tell the operator when a new login session is necessary.
 
 The installer must be idempotent.
 
@@ -780,6 +786,12 @@ This command must:
 ### 13.2 Host installation
 
     sudo sandboxctl host install --operator USER
+
+Optional host-install settings are:
+
+- `--uid-range START:COUNT`, with default `200000:65536`.
+- `--gid-range START:COUNT`, with default `200000:65536`.
+- `--address-pool CIDR`, with default `172.30.0.0/16`.
 
 This command installs the privileged host components.
 

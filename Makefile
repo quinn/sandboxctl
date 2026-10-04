@@ -1,7 +1,18 @@
-.PHONY: build test check generate proto-lint download-test-assets download-overlay-assets manual-test overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof clean
+.PHONY: build sandboxctl test check generate proto-lint download-test-assets download-overlay-assets manual-test overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof clean
+
+SANDBOXCTL_COMMANDS = create doctor help host host/install init list paths ssh ssh-config start stop version vmrun
 
 build:
+	mkdir -p bin
 	go build -o bin/sandboxctl ./cmd/sandboxctl
+	go build -o bin/sandboxd ./cmd/sandboxd
+	for command in $(SANDBOXCTL_COMMANDS); do \
+		binary_name=$$(printf '%s' "$$command" | tr '/' '-'); \
+		go build -o "bin/sandboxctl-$$binary_name" "./cmd/sandboxctl/$$command" || exit $$?; \
+	done
+
+sandboxctl: build
+	PATH="$(CURDIR)/bin:$$PATH" "$(CURDIR)/bin/sandboxctl" $(ARGS)
 
 test:
 	go test ./...
