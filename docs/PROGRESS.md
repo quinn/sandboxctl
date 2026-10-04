@@ -1,6 +1,6 @@
 # Migration progress
 
-Last updated: 2026-10-03
+Last updated: 2026-10-04
 
 ## Authority and order
 
@@ -73,6 +73,7 @@ Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writa
 - `systemd-analyze verify` passes against a temporary package install tree.
 - `make check` passes outside the sandbox. The sandbox blocks the Unix socket setup used by the new integration tests.
 - `make check`, `make build`, and `git diff --check` pass after moving CLI parsing and validation to command packages.
+- Added Go-style documentation comments to exported APIs across the internal packages. `go vet ./...` and `go test ./...` pass.
 
 ## Decisions
 

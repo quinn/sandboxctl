@@ -4,8 +4,10 @@ import (
 	"time"
 )
 
+// SchemaVersion is the current version of the persisted instance format.
 const SchemaVersion = 1
 
+// Instance stores the configuration needed to manage one sandbox.
 type Instance struct {
 	SchemaVersion int       `json:"schema_version"`
 	Name          string    `json:"name"`

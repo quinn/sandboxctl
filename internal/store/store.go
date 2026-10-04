@@ -9,19 +9,22 @@ import (
 	"path/filepath"
 	"sort"
 
+	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/config"
 	"sandboxctl/internal/model"
-	"sandboxctl/internal/names"
 )
 
+// ErrNotFound indicates that the requested sandbox record does not exist.
 var ErrNotFound = errors.New("sandbox does not exist")
 
+// Store reads and writes sandbox instance records.
 type Store struct {
 	Paths config.Paths
 }
 
+// Save atomically writes instance to its private record file.
 func (s Store) Save(instance model.Instance) error {
-	if err := names.Validate(instance.Name); err != nil {
+	if err := cmdutil.ValidateSandboxName(instance.Name); err != nil {
 		return err
 	}
 	dir := s.Paths.InstanceDir(instance.Name)
@@ -45,8 +48,9 @@ func (s Store) Save(instance model.Instance) error {
 	return nil
 }
 
+// Load reads and validates the instance record for name.
 func (s Store) Load(name string) (model.Instance, error) {
-	if err := names.Validate(name); err != nil {
+	if err := cmdutil.ValidateSandboxName(name); err != nil {
 		return model.Instance{}, err
 	}
 	data, err := os.ReadFile(s.Paths.InstanceFile(name))
@@ -67,6 +71,7 @@ func (s Store) Load(name string) (model.Instance, error) {
 	return instance, nil
 }
 
+// List returns all saved instances in name order.
 func (s Store) List() ([]model.Instance, error) {
 	entries, err := os.ReadDir(s.Paths.Instances)
 	if errors.Is(err, fs.ErrNotExist) {

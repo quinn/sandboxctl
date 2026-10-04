@@ -7,6 +7,7 @@ import (
 	models "github.com/firecracker-microvm/firecracker-go-sdk/client/models"
 )
 
+// KernelArgs contains the command-line arguments for the overlay proof guest.
 const KernelArgs = "console=ttyS0 panic=1 reboot=k rdinit=/init"
 
 // Configuration describes the isolated Phase 1 storage proof.

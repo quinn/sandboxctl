@@ -12,6 +12,7 @@ import (
 const persistenceMarker = ".sandboxctl-phase1-overlay-proof"
 const persistenceValue = "overlay-state-was-retained-v1\n"
 
+// Mount describes one filesystem mount used during the overlay boot.
 type Mount struct {
 	Source string
 	Target string
@@ -20,6 +21,7 @@ type Mount struct {
 	Data   string
 }
 
+// OverlayMounts returns the base, state, and overlay mount definitions.
 func OverlayMounts() []Mount {
 	return []Mount{
 		{Source: "/dev/vda", Target: "/lower", Type: "squashfs", Flags: syscall.MS_RDONLY},
@@ -28,6 +30,7 @@ func OverlayMounts() []Mount {
 	}
 }
 
+// Run mounts the guest filesystems and transfers control to the guest init.
 func Run() error {
 	if os.Getpid() != 1 {
 		return errors.New("overlay init must run as process 1")
@@ -175,6 +178,7 @@ func waitForDevices(timeout time.Duration) error {
 	return fmt.Errorf("Firecracker block devices /dev/vda and /dev/vdb did not appear within %s", timeout)
 }
 
+// Main runs the overlay init program and reports boot errors to the console.
 func Main() {
 	if os.Getpid() != 1 {
 		_, _ = fmt.Fprintln(os.Stderr, "overlay-init: must run as process 1")

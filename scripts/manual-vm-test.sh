@@ -7,6 +7,7 @@ if [[ $# -gt 1 ]]; then
 fi
 
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+export PATH="$repo_dir/bin:$PATH"
 asset_dir="$repo_dir/tmp/config/images/default"
 kernel="$asset_dir/vmlinux"
 root_drive="$asset_dir/root.ext4"

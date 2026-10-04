@@ -12,11 +12,13 @@ import (
 	"time"
 )
 
+// Record identifies a process by its process ID and kernel start time.
 type Record struct {
 	PID       int    `json:"pid"`
 	StartTime uint64 `json:"start_time"`
 }
 
+// Read loads and validates a process record from path.
 func Read(path string) (Record, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -29,6 +31,7 @@ func Read(path string) (Record, error) {
 	return record, nil
 }
 
+// Current returns the process record for the process with pid.
 func Current(pid int) (Record, error) {
 	start, err := procStartTime(pid)
 	if err != nil {
@@ -37,6 +40,7 @@ func Current(pid int) (Record, error) {
 	return Record{PID: pid, StartTime: start}, nil
 }
 
+// Write atomically stores record at path with private file permissions.
 func Write(path string, record Record) error {
 	data, err := json.Marshal(record)
 	if err != nil {
@@ -62,6 +66,7 @@ func Write(path string, record Record) error {
 	return os.Rename(name, path)
 }
 
+// RemoveIfCurrent removes path only when it still contains record.
 func RemoveIfCurrent(path string, record Record) error {
 	current, err := Read(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -76,6 +81,7 @@ func RemoveIfCurrent(path string, record Record) error {
 	return os.Remove(path)
 }
 
+// IsRunning reports whether record still identifies the same live process.
 func IsRunning(record Record) bool {
 	if record.PID < 1 || record.StartTime == 0 {
 		return false
@@ -84,6 +90,7 @@ func IsRunning(record Record) bool {
 	return err == nil && current.StartTime == record.StartTime
 }
 
+// Stop sends SIGTERM to the process identified by record.
 func Stop(record Record) error {
 	if !IsRunning(record) {
 		return fmt.Errorf("process %d is not running", record.PID)
@@ -98,6 +105,7 @@ func Stop(record Record) error {
 	return nil
 }
 
+// WaitStopped waits up to timeout for the process identified by record to exit.
 func WaitStopped(record Record, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {

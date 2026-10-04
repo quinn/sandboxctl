@@ -18,16 +18,19 @@ import (
 	"sandboxctl/internal/process"
 )
 
+// SDK implements the Firecracker runtime using the Go SDK.
 type SDK struct{ Paths config.Paths }
 
 var _ Backend = SDK{}
 
+// ReadyMessage reports that the runtime process has started its virtual machine.
 type ReadyMessage struct {
 	PID   int    `json:"pid"`
 	Error string `json:"error,omitempty"`
 }
 
-func (s SDK) Start(instance model.Instance, executable string) (int, error) {
+// Start launches a detached runner for instance and returns its process ID.
+func (s SDK) Start(instance model.Instance) (int, error) {
 	reader, writer, err := os.Pipe()
 	if err != nil {
 		return 0, err
@@ -39,7 +42,7 @@ func (s SDK) Start(instance model.Instance, executable string) (int, error) {
 		return 0, fmt.Errorf("open sandbox log: %w", err)
 	}
 	defer logFile.Close()
-	cmd := exec.Command(executable, "--internal-vm-run", instance.Name)
+	cmd := exec.Command("sandboxctl-vmrun", instance.Name)
 	cmd.ExtraFiles = []*os.File{writer}
 	cmd.Stdout, cmd.Stderr = logFile, logFile
 	cmd.Stdin = nil
@@ -71,6 +74,7 @@ func (s SDK) Start(instance model.Instance, executable string) (int, error) {
 	}
 }
 
+// Configuration builds the Firecracker SDK settings for instance.
 func Configuration(instance model.Instance, socket, log string) firecracker.Config {
 	return firecracker.Config{
 		SocketPath: socket, LogPath: log, KernelImagePath: instance.KernelImage,
@@ -81,6 +85,7 @@ func Configuration(instance model.Instance, socket, log string) firecracker.Conf
 	}
 }
 
+// Run starts instance in the current process and reports readiness on ready.
 func (s SDK) Run(instance model.Instance, ready *os.File) error {
 	msg := ReadyMessage{}
 	defer func() {

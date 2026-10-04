@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 )
 
+// Paths contains the XDG paths used to store sandboxctl data.
 type Paths struct {
 	ConfigDir  string
 	DataDir    string
@@ -19,6 +20,7 @@ type Paths struct {
 	Sockets    string
 }
 
+// Resolve returns sandboxctl paths from the current user's XDG environment.
 func Resolve() (Paths, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -52,6 +54,7 @@ func Resolve() (Paths, error) {
 	}, nil
 }
 
+// Ensure creates the private directories used by p.
 func (p Paths) Ensure() error {
 	paths := []string{
 		p.ConfigDir,
@@ -73,32 +76,40 @@ func (p Paths) Ensure() error {
 	return nil
 }
 
+// PrivateKey returns the path to the managed SSH private key.
 func (p Paths) PrivateKey() string {
 	return filepath.Join(p.Keys, "client_ed25519")
 }
 
+// PublicKey returns the path to the managed SSH public key.
 func (p Paths) PublicKey() string {
 	return p.PrivateKey() + ".pub"
 }
 
+// InstanceDir returns the directory for name's instance data.
 func (p Paths) InstanceDir(name string) string {
 	return filepath.Join(p.Instances, name)
 }
 
+// InstanceFile returns the path to name's instance record.
 func (p Paths) InstanceFile(name string) string {
 	return filepath.Join(p.InstanceDir(name), "instance.json")
 }
 
+// PIDFile returns the path to name's process record.
 func (p Paths) PIDFile(name string) string {
 	return filepath.Join(p.RuntimeDir, name+".pid.json")
 }
 
+// SocketFile returns the path to name's runtime socket.
 func (p Paths) SocketFile(name string) string { return filepath.Join(p.Sockets, name+".sock") }
 
+// LogFile returns the path to name's sandbox log.
 func (p Paths) LogFile(name string) string {
 	return filepath.Join(p.StateDir, name+".log")
 }
 
+// FirecrackerLogFile returns the path to name's Firecracker log.
 func (p Paths) FirecrackerLogFile(name string) string {
 	return filepath.Join(p.StateDir, name+"-firecracker.log")
 }

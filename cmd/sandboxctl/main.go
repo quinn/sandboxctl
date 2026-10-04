@@ -1,15 +1,7 @@
 package main
 
-import (
-	"fmt"
-	"os"
-
-	"sandboxctl/internal/app"
-)
+import "sandboxctl/internal/cmdutil"
 
 func main() {
-	if err := app.Run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
+	cmdutil.MainDispatch("sandboxctl-")
 }

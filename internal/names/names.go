@@ -1,20 +1,10 @@
 package names
 
 import (
-	"errors"
 	"hash/fnv"
-	"regexp"
 )
 
-var validName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
-
-func Validate(name string) error {
-	if !validName.MatchString(name) {
-		return errors.New("the name must start with a lower-case letter and contain only lower-case letters, digits, or hyphens")
-	}
-	return nil
-}
-
+// NetworkIdentity returns stable TAP, MAC, and host-address values for name.
 func NetworkIdentity(name string) (tap string, mac string, hostPart byte) {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(name))
