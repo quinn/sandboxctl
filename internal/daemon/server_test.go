@@ -11,6 +11,7 @@ import (
 
 	"sandboxctl/internal/controlpb"
 	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/hoststate"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -72,6 +73,66 @@ func TestServerRejectsInvalidMetadata(t *testing.T) {
 	}
 }
 
+func TestServerListsAndInspectsSavedInstances(t *testing.T) {
+	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
+	store := hoststate.Store{Paths: paths}
+	for _, name := range []string{"dev2", "dev1"} {
+		id, err := hoststate.NewID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		instance := daemonTestInstance(id, name)
+		if err := store.Save(instance); err != nil {
+			t.Fatalf("save %s: %v", name, err)
+		}
+	}
+	connection := startServerWithInstances(t, store)
+	service := controlpb.NewControlServiceClient(connection)
+
+	listContext, cancel := callContext(daemon.APIVersion, "11111111111111111111111111111111")
+	listed, err := service.ListInstances(listContext, &controlpb.ListInstancesRequest{})
+	cancel()
+	if err != nil {
+		t.Fatalf("ListInstances(): %v", err)
+	}
+	if len(listed.GetInstances()) != 2 || listed.GetInstances()[0].GetName() != "dev1" || listed.GetInstances()[1].GetName() != "dev2" {
+		t.Fatalf("ListInstances() = %v, want instances ordered dev1, dev2", listed.GetInstances())
+	}
+	if listed.GetInstances()[0].GetHostUid() != 300001 || listed.GetInstances()[0].GetStateDiskBytes() == 0 {
+		t.Fatalf("ListInstances() omitted instance fields: %v", listed.GetInstances()[0])
+	}
+
+	inspectContext, cancel := callContext(daemon.APIVersion, "22222222222222222222222222222222")
+	inspected, err := service.InspectInstance(inspectContext, &controlpb.InspectInstanceRequest{Name: "dev1"})
+	cancel()
+	if err != nil {
+		t.Fatalf("InspectInstance(): %v", err)
+	}
+	if inspected.GetInstance().GetName() != "dev1" || inspected.GetInstance().GetSshAlias() != "sandbox-dev1" {
+		t.Fatalf("InspectInstance() = %v", inspected.GetInstance())
+	}
+}
+
+func TestInspectInstanceReportsInvalidAndMissingNames(t *testing.T) {
+	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
+	connection := startServerWithInstances(t, hoststate.Store{Paths: paths})
+	service := controlpb.NewControlServiceClient(connection)
+	for _, test := range []struct {
+		name string
+		code codes.Code
+	}{
+		{name: "../etc", code: codes.InvalidArgument},
+		{name: "missing", code: codes.NotFound},
+	} {
+		ctx, cancel := callContext(daemon.APIVersion, "33333333333333333333333333333333")
+		_, err := service.InspectInstance(ctx, &controlpb.InspectInstanceRequest{Name: test.name})
+		cancel()
+		if got := status.Code(err); got != test.code {
+			t.Errorf("InspectInstance(%q) code = %s, want %s (%v)", test.name, got, test.code, err)
+		}
+	}
+}
+
 func TestListenAndServeUsesSocketPermissions(t *testing.T) {
 	socketDir := filepath.Join(t.TempDir(), "runtime", "sandboxctl")
 	socketPath := filepath.Join(socketDir, "control.sock")
@@ -117,13 +178,17 @@ func TestListenAndServeUsesSocketPermissions(t *testing.T) {
 }
 
 func startServer(t *testing.T) *grpc.ClientConn {
+	return startServerWithInstances(t, nil)
+}
+
+func startServerWithInstances(t *testing.T, instances daemon.InstanceStore) *grpc.ClientConn {
 	t.Helper()
 	socketPath := filepath.Join(t.TempDir(), "control.sock")
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := daemon.NewServer("test-version", nil)
+	server := daemon.NewServerWithInstanceStore("test-version", nil, instances)
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(func() {
 		server.Stop()
@@ -153,6 +218,29 @@ func startServer(t *testing.T) *grpc.ClientConn {
 	}
 	t.Cleanup(func() { _ = connection.Close() })
 	return connection
+}
+
+func daemonTestInstance(id, name string) hoststate.Instance {
+	return hoststate.Instance{
+		SchemaVersion:  hoststate.InstanceSchemaVersion,
+		ID:             id,
+		Name:           name,
+		CreatedAt:      time.Date(2026, time.October, 7, 12, 0, 0, 0, time.UTC),
+		VCPUs:          2,
+		MemoryMiB:      4096,
+		StateDiskBytes: 20 * 1024 * 1024 * 1024,
+		Image:          "default",
+		ImageVersion:   "sha256:abc",
+		HostUID:        300001,
+		HostGID:        300001,
+		Subnet:         "172.30.0.0/30",
+		HostIP:         "172.30.0.1",
+		GuestIP:        "172.30.0.2",
+		TapDevice:      "sc000001",
+		GuestMAC:       "06:00:ac:10:00:02",
+		SSHUser:        "dev",
+		SSHAlias:       "sandbox-" + name,
+	}
 }
 
 func callContext(apiVersion, requestID string) (context.Context, context.CancelFunc) {

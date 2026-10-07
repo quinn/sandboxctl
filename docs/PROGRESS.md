@@ -12,7 +12,7 @@ Section 18 now records this gate.
 
 The Phase 1 storage proof passed. Section 18 steps 1 through 3 are complete. Step 4 host installation and doctor support are implemented and still need final integration checks on a disposable Arch host.
 
-Current migration work is section 18, step 5: move privileged state to `/var/lib/sandboxctl`. A daemon-owned state package now defines that layout and saves version-2 instance records atomically. The host installer creates the state directories as root-owned mode `0700`. The legacy CLI still reads instance records from XDG paths. The move is not complete until instance operations use sandboxd and the host-state store.
+Current migration work is section 18, step 5: move privileged state to `/var/lib/sandboxctl`. A daemon-owned state package now defines that layout and saves version-2 instance records atomically. The host installer creates the state directories as root-owned mode `0700`. sandboxd now exposes read-only list and inspect RPCs over the Unix socket and reads records from this store. The legacy CLI still reads instance records from XDG paths. The move is not complete until CLI instance operations use sandboxd and old records receive an explicit migration or rejection path.
 
 The E2B runtime checkout is retained in ignored `tmp/e2b-runtime` at commit `47096f195aca4a545a9079b706efb3a18f51cf3f`. The license, extraction record, and first Debian/Ubuntu provisioning profile are in place. There is no build command, BuildKit VM orchestration, image manifest, or SquashFS finalizer yet.
 
@@ -94,6 +94,9 @@ Next: test the new provisioning renderer and finish the image-builder foundation
 - Added `internal/hoststate` with the `/var/lib/sandboxctl` directory layout, version-2 privileged instance records, random stable IDs, unknown-field preservation, validation, and atomic writes with file and directory sync.
 - Updated host installation to create the image, instance, allocation, and jail directories as root-owned mode `0700`. This keeps privileged image and instance data outside operator-writable XDG directories.
 - Added tests for private directory modes, symlink rejection, atomic instance record permissions, unknown-field preservation, schema rejection, and invalid names.
+- Added separate `ListInstances` and `InspectInstance` RPCs. The daemon reads from the root-owned host-state store and maps invalid names and missing records to structured gRPC errors.
+- Updated `cmd/sandboxd` to use `/var/lib/sandboxctl` for instance reads. Added Unix-socket integration tests for sorted listing, record fields, inspection, invalid names, and missing records.
+- Regenerated Protocol Buffer Go files with the pinned Buf plugins.
 - The host-side image builder, OCI reference checks, BuildKit VM orchestration, image manifest, SquashFS finalizer, and integration boot are still open.
 - `make check` and `git diff --check` pass after the host-state changes. The generated Debian and Ubuntu scripts pass POSIX shell syntax validation in the tests.
 
@@ -116,8 +119,8 @@ The repository has no configured Git remote or license file. The AUR draft uses 
 
 ## Next tasks
 
-1. Finish section 18 step 5 by adding sandboxd instance RPCs and routing privileged instance state through `internal/hoststate`. Keep XDG state limited to operator-owned SSH and client data.
-2. Implement the UID, GID, address, and TAP registries in step 6.
+1. Finish section 18 step 5 by routing CLI instance reads through sandboxd and defining how legacy schema-version-1 records are handled. Keep XDG state limited to operator-owned SSH and client data.
+2. Implement the UID, GID, address, and TAP registries in step 6. Add instance creation after these allocators can produce complete records.
 3. Finish the SDK and jailer runtime in step 7 before the builder VM depends on it.
 4. Add image manifest validation and cold-boot SquashFS finalization. Keep OCI pulls and extraction inside the builder VM through BuildKit.
 5. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.

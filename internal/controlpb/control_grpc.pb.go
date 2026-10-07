@@ -19,8 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ControlService_Ping_FullMethodName       = "/sandboxctl.ControlService/Ping"
-	ControlService_HostStatus_FullMethodName = "/sandboxctl.ControlService/HostStatus"
+	ControlService_Ping_FullMethodName            = "/sandboxctl.ControlService/Ping"
+	ControlService_HostStatus_FullMethodName      = "/sandboxctl.ControlService/HostStatus"
+	ControlService_ListInstances_FullMethodName   = "/sandboxctl.ControlService/ListInstances"
+	ControlService_InspectInstance_FullMethodName = "/sandboxctl.ControlService/InspectInstance"
 )
 
 // ControlServiceClient is the client API for ControlService service.
@@ -31,6 +33,10 @@ type ControlServiceClient interface {
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	// Reports the daemon and runtime status.
 	HostStatus(ctx context.Context, in *HostStatusRequest, opts ...grpc.CallOption) (*HostStatusResponse, error)
+	// Lists the saved sandbox instances.
+	ListInstances(ctx context.Context, in *ListInstancesRequest, opts ...grpc.CallOption) (*ListInstancesResponse, error)
+	// Reports the saved state for one sandbox instance.
+	InspectInstance(ctx context.Context, in *InspectInstanceRequest, opts ...grpc.CallOption) (*InspectInstanceResponse, error)
 }
 
 type controlServiceClient struct {
@@ -61,6 +67,26 @@ func (c *controlServiceClient) HostStatus(ctx context.Context, in *HostStatusReq
 	return out, nil
 }
 
+func (c *controlServiceClient) ListInstances(ctx context.Context, in *ListInstancesRequest, opts ...grpc.CallOption) (*ListInstancesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInstancesResponse)
+	err := c.cc.Invoke(ctx, ControlService_ListInstances_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlServiceClient) InspectInstance(ctx context.Context, in *InspectInstanceRequest, opts ...grpc.CallOption) (*InspectInstanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InspectInstanceResponse)
+	err := c.cc.Invoke(ctx, ControlService_InspectInstance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControlServiceServer is the server API for ControlService service.
 // All implementations must embed UnimplementedControlServiceServer
 // for forward compatibility.
@@ -69,6 +95,10 @@ type ControlServiceServer interface {
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	// Reports the daemon and runtime status.
 	HostStatus(context.Context, *HostStatusRequest) (*HostStatusResponse, error)
+	// Lists the saved sandbox instances.
+	ListInstances(context.Context, *ListInstancesRequest) (*ListInstancesResponse, error)
+	// Reports the saved state for one sandbox instance.
+	InspectInstance(context.Context, *InspectInstanceRequest) (*InspectInstanceResponse, error)
 	mustEmbedUnimplementedControlServiceServer()
 }
 
@@ -84,6 +114,12 @@ func (UnimplementedControlServiceServer) Ping(context.Context, *PingRequest) (*P
 }
 func (UnimplementedControlServiceServer) HostStatus(context.Context, *HostStatusRequest) (*HostStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method HostStatus not implemented")
+}
+func (UnimplementedControlServiceServer) ListInstances(context.Context, *ListInstancesRequest) (*ListInstancesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListInstances not implemented")
+}
+func (UnimplementedControlServiceServer) InspectInstance(context.Context, *InspectInstanceRequest) (*InspectInstanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InspectInstance not implemented")
 }
 func (UnimplementedControlServiceServer) mustEmbedUnimplementedControlServiceServer() {}
 func (UnimplementedControlServiceServer) testEmbeddedByValue()                        {}
@@ -142,6 +178,42 @@ func _ControlService_HostStatus_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlService_ListInstances_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInstancesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServiceServer).ListInstances(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlService_ListInstances_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServiceServer).ListInstances(ctx, req.(*ListInstancesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlService_InspectInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InspectInstanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServiceServer).InspectInstance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlService_InspectInstance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServiceServer).InspectInstance(ctx, req.(*InspectInstanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ControlService_ServiceDesc is the grpc.ServiceDesc for ControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -156,6 +228,14 @@ var ControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "HostStatus",
 			Handler:    _ControlService_HostStatus_Handler,
+		},
+		{
+			MethodName: "ListInstances",
+			Handler:    _ControlService_ListInstances_Handler,
+		},
+		{
+			MethodName: "InspectInstance",
+			Handler:    _ControlService_InspectInstance_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

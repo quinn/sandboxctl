@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	controlpb "sandboxctl/internal/controlpb"
+	"sandboxctl/internal/hoststate"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -37,12 +39,17 @@ type RuntimeStatus interface {
 
 // NewServer creates a gRPC server for the initial control API.
 func NewServer(version string, runtime RuntimeStatus) *grpc.Server {
+	return NewServerWithInstanceStore(version, runtime, nil)
+}
+
+// NewServerWithInstanceStore creates a gRPC server with read-only instance access.
+func NewServerWithInstanceStore(version string, runtime RuntimeStatus, instances InstanceStore) *grpc.Server {
 	server := grpc.NewServer(
 		grpc.MaxRecvMsgSize(MaxMessageSize),
 		grpc.MaxSendMsgSize(MaxMessageSize),
 		grpc.UnaryInterceptor(unaryInterceptor),
 	)
-	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime})
+	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, instances: instances})
 	return server
 }
 
@@ -72,8 +79,15 @@ func unaryInterceptor(ctx context.Context, request any, _ *grpc.UnaryServerInfo,
 
 type service struct {
 	controlpb.UnimplementedControlServiceServer
-	version string
-	runtime RuntimeStatus
+	version   string
+	runtime   RuntimeStatus
+	instances InstanceStore
+}
+
+// InstanceStore provides saved instance records to the control service.
+type InstanceStore interface {
+	List() ([]hoststate.Instance, error)
+	Load(string) (hoststate.Instance, error)
 }
 
 func (s *service) Ping(context.Context, *controlpb.PingRequest) (*controlpb.PingResponse, error) {
@@ -82,6 +96,65 @@ func (s *service) Ping(context.Context, *controlpb.PingRequest) (*controlpb.Ping
 
 func (s *service) HostStatus(context.Context, *controlpb.HostStatusRequest) (*controlpb.HostStatusResponse, error) {
 	return &controlpb.HostStatusResponse{DaemonVersion: s.version, RuntimeReady: s.runtime != nil && s.runtime.Ready()}, nil
+}
+
+func (s *service) ListInstances(context.Context, *controlpb.ListInstancesRequest) (*controlpb.ListInstancesResponse, error) {
+	if s.instances == nil {
+		return nil, status.Error(codes.FailedPrecondition, "instance state is unavailable")
+	}
+	instances, err := s.instances.List()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "cannot read instance state")
+	}
+	response := &controlpb.ListInstancesResponse{Instances: make([]*controlpb.Instance, 0, len(instances))}
+	for _, instance := range instances {
+		response.Instances = append(response.Instances, toProtocolInstance(instance))
+	}
+	return response, nil
+}
+
+func (s *service) InspectInstance(_ context.Context, request *controlpb.InspectInstanceRequest) (*controlpb.InspectInstanceResponse, error) {
+	if s.instances == nil {
+		return nil, status.Error(codes.FailedPrecondition, "instance state is unavailable")
+	}
+	instance, err := s.instances.Load(request.GetName())
+	if errors.Is(err, hoststate.ErrInvalidName) {
+		return nil, status.Error(codes.InvalidArgument, "invalid sandbox name")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, status.Error(codes.NotFound, "sandbox does not exist")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "cannot read instance state")
+	}
+	return &controlpb.InspectInstanceResponse{Instance: toProtocolInstance(instance)}, nil
+}
+
+func toProtocolInstance(instance hoststate.Instance) *controlpb.Instance {
+	createdAt := ""
+	if !instance.CreatedAt.IsZero() {
+		createdAt = instance.CreatedAt.Format(time.RFC3339Nano)
+	}
+	return &controlpb.Instance{
+		SchemaVersion:  int32(instance.SchemaVersion),
+		Id:             instance.ID,
+		Name:           instance.Name,
+		CreatedAt:      createdAt,
+		Vcpus:          int32(instance.VCPUs),
+		MemoryMib:      int32(instance.MemoryMiB),
+		StateDiskBytes: instance.StateDiskBytes,
+		Image:          instance.Image,
+		ImageVersion:   instance.ImageVersion,
+		HostUid:        uint32(instance.HostUID),
+		HostGid:        uint32(instance.HostGID),
+		Subnet:         instance.Subnet,
+		HostIp:         instance.HostIP,
+		GuestIp:        instance.GuestIP,
+		TapDevice:      instance.TapDevice,
+		GuestMac:       instance.GuestMAC,
+		SshUser:        instance.SSHUser,
+		SshAlias:       instance.SSHAlias,
+	}
 }
 
 // ListenAndServe runs the daemon on a private Unix socket until its context ends.

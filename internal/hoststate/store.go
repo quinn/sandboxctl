@@ -24,6 +24,9 @@ const (
 
 var safeName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
+// ErrInvalidName indicates that a sandbox name is outside the supported format.
+var ErrInvalidName = errors.New("invalid sandbox name")
+
 // Paths identifies the root-owned state directories used by sandboxd.
 type Paths struct {
 	Root        string
@@ -161,7 +164,7 @@ func (s Store) Save(instance Instance) error {
 // Load reads and validates the version-2 instance record for name.
 func (s Store) Load(name string) (Instance, error) {
 	if !safeName.MatchString(name) {
-		return Instance{}, errors.New("invalid sandbox name")
+		return Instance{}, ErrInvalidName
 	}
 	path := filepath.Join(s.Paths.Instances, name, "instance.json")
 	data, err := os.ReadFile(path)
@@ -196,6 +199,29 @@ func (s Store) Load(name string) (Instance, error) {
 		return Instance{}, err
 	}
 	return instance, nil
+}
+
+// List returns all saved version-2 instances in name order.
+func (s Store) List() ([]Instance, error) {
+	entries, err := os.ReadDir(s.Paths.Instances)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read instance directory: %w", err)
+	}
+	instances := make([]Instance, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		instance, err := s.Load(entry.Name())
+		if err != nil {
+			return nil, fmt.Errorf("load instance %s: %w", entry.Name(), err)
+		}
+		instances = append(instances, instance)
+	}
+	return instances, nil
 }
 
 func validate(instance Instance) error {

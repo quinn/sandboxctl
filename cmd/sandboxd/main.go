@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/hoststate"
 )
 
 type runtimeStatus struct{}
@@ -33,7 +34,8 @@ func run(arguments []string) error {
 		return fmt.Errorf("usage: sandboxd [--socket PATH] [--systemd-socket]")
 	}
 	syscall.Umask(0o077)
-	server := daemon.NewServer("0.1.0-dev", runtimeStatus{})
+	state := hoststate.Store{Paths: hoststate.DefaultPaths()}
+	server := daemon.NewServerWithInstanceStore("0.1.0-dev", runtimeStatus{}, state)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if *systemdSocket {

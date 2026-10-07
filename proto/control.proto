@@ -10,6 +10,12 @@ service ControlService {
 
   // Reports the daemon and runtime status.
   rpc HostStatus(HostStatusRequest) returns (HostStatusResponse);
+
+  // Lists the saved sandbox instances.
+  rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse);
+
+  // Reports the saved state for one sandbox instance.
+  rpc InspectInstance(InspectInstanceRequest) returns (InspectInstanceResponse);
 }
 
 message PingRequest {}
@@ -27,4 +33,60 @@ message HostStatusResponse {
 
   // Reports whether the runtime backend is ready.
   bool runtime_ready = 2;
+}
+
+message ListInstancesRequest {}
+
+message ListInstancesResponse {
+  // Contains the saved instances in name order.
+  repeated Instance instances = 1;
+}
+
+message InspectInstanceRequest {
+  // Names the sandbox to inspect.
+  string name = 1;
+}
+
+message InspectInstanceResponse {
+  // Contains the saved state for the requested sandbox.
+  Instance instance = 1;
+}
+
+message Instance {
+  // Identifies the instance record schema.
+  int32 schema_version = 1;
+  // Identifies this instance with a random stable value.
+  string id = 2;
+  // Names the sandbox.
+  string name = 3;
+  // Gives the instance creation time in RFC 3339 format.
+  string created_at = 4;
+  // Gives the number of virtual CPUs.
+  int32 vcpus = 5;
+  // Gives the guest memory size in MiB.
+  int32 memory_mib = 6;
+  // Gives the virtual size of the writable state disk in bytes.
+  int64 state_disk_bytes = 7;
+  // Names the installed base image.
+  string image = 8;
+  // Identifies the installed image version.
+  string image_version = 9;
+  // Gives the host UID assigned to Firecracker.
+  uint32 host_uid = 10;
+  // Gives the host GID assigned to Firecracker.
+  uint32 host_gid = 11;
+  // Gives the allocated sandbox subnet in CIDR notation.
+  string subnet = 12;
+  // Gives the host address on the sandbox subnet.
+  string host_ip = 13;
+  // Gives the guest address on the sandbox subnet.
+  string guest_ip = 14;
+  // Gives the TAP device name assigned to the sandbox.
+  string tap_device = 15;
+  // Gives the guest network interface MAC address.
+  string guest_mac = 16;
+  // Gives the guest SSH account name.
+  string ssh_user = 17;
+  // Gives the OpenSSH alias for the sandbox.
+  string ssh_alias = 18;
 }
