@@ -20,11 +20,12 @@ import (
 	"time"
 
 	"sandboxctl/internal/cmdutil"
+	"sandboxctl/internal/hoststate"
 )
 
 const (
 	configRoot        = "/etc/sandboxctl"
-	stateRoot         = "/var/lib/sandboxctl"
+	stateRoot         = hoststate.DefaultRoot
 	groupName         = "sandboxctl"
 	firecrackerBinary = "/usr/bin/firecracker"
 	jailerBinary      = "/usr/bin/jailer"
@@ -52,20 +53,25 @@ func Install(ctx context.Context, options InstallOptions) error {
 	if os.Geteuid() != 0 {
 		return errors.New("host install must run as root; use sudo sandboxctl host install")
 	}
+
 	if err := requireArchLinux(); err != nil {
 		return err
 	}
+
 	if err := validateRanges(options.UIDRange, options.GIDRange, "/etc/passwd", "/etc/group", "/etc/subuid", "/etc/subgid"); err != nil {
 		return err
 	}
+
 	if err := checkRouteConflict(ctx, options.AddressPool); err != nil {
 		return err
 	}
+
 	paths := binaries{firecracker: firecrackerBinary, jailer: jailerBinary}
 	fcVersion, err := commandVersion(ctx, paths.firecracker, "Firecracker")
 	if err != nil {
 		return err
 	}
+
 	jailerVersion, err := commandVersion(ctx, paths.jailer, "Jailer")
 	if err != nil {
 		return err
@@ -73,19 +79,23 @@ func Install(ctx context.Context, options InstallOptions) error {
 	if fcVersion != jailerVersion {
 		return fmt.Errorf("Firecracker and jailer versions do not match: %s and %s", fcVersion, jailerVersion)
 	}
+
 	if err := requireRegularExecutable("/usr/bin/sandboxd"); err != nil {
 		return fmt.Errorf("sandboxd was not found; install the sandboxctl package first: %w", err)
 	}
+
 	for _, unit := range []string{"sandboxd.socket", "sandboxd.service"} {
 		if _, err := os.Stat(filepath.Join("/usr/lib/systemd/system", unit)); err != nil {
 			return fmt.Errorf("systemd unit %s was not found; install the sandboxctl package first", unit)
 		}
 	}
+
 	for _, command := range []string{"/usr/bin/groupadd", "/usr/bin/usermod", "/usr/bin/nft", "/usr/bin/sysctl", "/usr/bin/systemctl", "/usr/bin/ip"} {
 		if err := requireRegularExecutable(command); err != nil {
 			return fmt.Errorf("required host command %q was not found", command)
 		}
 	}
+
 	for _, path := range []string{paths.firecracker, paths.jailer} {
 		if err := requireRegularExecutable(path); err != nil {
 			return err
@@ -168,24 +178,16 @@ func apply(ctx context.Context, config HostConfig, operator string) error {
 	if err := run(ctx, "/usr/bin/usermod", "--append", "--groups", groupName, "--", operator); err != nil {
 		return fmt.Errorf("add operator to sandboxctl group: %w", err)
 	}
-	sandboxGroup, err := user.LookupGroup(groupName)
-	if err != nil {
-		return fmt.Errorf("look up sandboxctl group: %w", err)
-	}
-	groupID, err := strconv.Atoi(sandboxGroup.Gid)
-	if err != nil {
-		return fmt.Errorf("read sandboxctl group ID: %w", err)
-	}
+	state := hoststate.DefaultPaths()
 	for _, directory := range []struct {
 		path string
 		mode os.FileMode
 		gid  int
 	}{
 		{configRoot, 0o755, 0},
-		{stateRoot, 0o750, groupID}, {filepath.Join(stateRoot, "images"), 0o750, groupID},
-		{filepath.Join(stateRoot, "instances"), 0o700, 0},
-		{filepath.Join(stateRoot, "allocations"), 0o700, 0},
-		{filepath.Join(stateRoot, "jails"), 0o700, 0},
+		{state.Root, 0o700, 0}, {state.Images, 0o700, 0},
+		{state.Instances, 0o700, 0}, {state.Allocations, 0o700, 0},
+		{state.Jails, 0o700, 0},
 	} {
 		if err := ensureRootDirectory(directory.path, directory.mode, directory.gid); err != nil {
 			return err

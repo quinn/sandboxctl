@@ -1,4 +1,4 @@
-.PHONY: build sandboxctl test check generate proto-lint download-test-assets download-overlay-assets manual-test overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof clean
+.PHONY: build sandboxctl test check generate proto-lint download-test-assets download-overlay-assets manual-test manual-test-prepare overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof clean
 
 SANDBOXCTL_COMMANDS = create doctor help host host/install init list paths ssh ssh-config start stop version vmrun
 
@@ -37,6 +37,9 @@ download-overlay-assets:
 
 manual-test: build
 	./scripts/manual-vm-test.sh "$(if $(NAME),$(NAME),manualtest)"
+
+manual-test-prepare: build
+	./scripts/prepare-manual-test-guest.sh "$(if $(NAME),$(NAME),manualtest)"
 
 overlay-initramfs:
 	./scripts/build-overlay-initramfs.sh

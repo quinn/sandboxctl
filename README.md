@@ -120,6 +120,7 @@ Download the upstream test kernel and Ubuntu filesystem:
 The files go under `tmp/config/images/default/`.
 The target records the exact upstream artifact URLs and local SHA-256 checksums.
 It keeps valid existing files on later runs.
+If the directory contains a valid kernel and SquashFS but no `root.ext4`, the target builds the ext4 root drive from the cached SquashFS. It does not download or replace the source files in this case.
 Run `make download-test-assets REFRESH=1` to select the latest upstream artifacts again.
 Install `curl`, `python3`, `squashfs-tools`, and `e2fsprogs` first.
 The target uses `sudo` to preserve guest filesystem ownership while it extracts and converts the image.
@@ -133,27 +134,14 @@ The manifest records the selected artifact version and source URLs.
 Prepare a Linux guest image before you create a sandbox. It must have:
 
 - A root file system on /dev/vda.
-- A dev user.
+- The `ubuntu` user from the downloaded test image.
 - An OpenSSH server.
 - The virtio_net driver and an eth0 network interface.
-- The sandboxctl public key in dev's authorized_keys.
+- The sandboxctl public key in `ubuntu`'s authorized_keys.
 - Public key authentication enabled.
 
-Run sandboxctl init.
-Run sandboxctl ssh-config and add its printed block to your main SSH configuration.
-Mount the prepared guest drive and install the printed public key.
-The example assumes the guest account and group are both named dev.
-It also assumes that dev has user ID and group ID 1000.
-Use the numeric values from your guest image if they differ.
-
-    sudo mkdir -p /mnt/sandboxctl-guest
-    sudo mount -o loop /path/to/base.ext4 /mnt/sandboxctl-guest
-    sudo install -d -m 0700 /mnt/sandboxctl-guest/home/dev/.ssh
-    sudo install -m 0600 \
-      "${XDG_DATA_HOME:-$HOME/.local/share}/sandboxctl/keys/client_ed25519.pub" \
-      /mnt/sandboxctl-guest/home/dev/.ssh/authorized_keys
-    sudo chown -R 1000:1000 /mnt/sandboxctl-guest/home/dev/.ssh
-    sudo umount /mnt/sandboxctl-guest
+The downloaded Ubuntu test image uses UID and GID 1000 for `ubuntu`.
+The test command prepares the sandbox's private disk before it starts the VM. It assigns the locked account an unknown random password hash so Pluggable Authentication Modules (PAM) can accept public-key logins. It disables password and keyboard-interactive login in the guest. It adds the tool-owned public key without removing other authorized keys, then validates the OpenSSH server configuration. This step uses `sudo` to mount the private disk and bind-mount `/dev` for guest tools. It does not change the base image.
 
 Enable the guest SSH server in the image.
 Do not mount or modify the source drive while the VM runs.
@@ -169,10 +157,14 @@ The script does not set up guest Internet access.
 Run the test with the downloaded or prepared kernel and root drive:
 
     make download-test-assets
-    make manual-test NAME=dev1
+    make manual-test
+
+The default sandbox name is `manualtest`. Pass `NAME=dev1` to use another name.
+The command saves the complete test output to `tmp/logs/manual-test.log` with mode `0600`.
+The log includes the final pass or failure message.
 
 The script checks Firecracker and KVM access.
-It creates the TAP device and sandbox.
+It creates the TAP device and sandbox with SSH user `ubuntu`.
 It prints the SSH include block when you need to add it to your main SSH configuration.
 It waits for you to add the block and accept the guest host key.
 It writes a test file, stops and restarts the VM, and checks that the file remains.
@@ -180,7 +172,7 @@ It stops the VM and removes the TAP device when the test ends.
 The private sandbox disk remains so you can inspect or remove it later.
 
 If the script stops after it creates the sandbox, fix the reported issue and run the same command again.
-The script reuses an existing sandbox with the same name.
+The script reuses an existing sandbox with the same name. It does not replace that sandbox's private disk when you change the base image. Use a new name to copy the updated base image.
 
 The test needs Firecracker, sudo access for TAP setup, and read/write access to /dev/kvm.
 It does not configure NAT, DNS, guest Internet access, or an image builder.

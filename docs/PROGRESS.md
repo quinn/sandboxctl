@@ -1,6 +1,6 @@
 # Migration progress
 
-Last updated: 2026-10-04
+Last updated: 2026-10-07
 
 ## Authority and order
 
@@ -10,12 +10,23 @@ Section 18 now records this gate.
 
 ## Current phase
 
-Section 18, step 4: add host install and doctor commands.
-The commands and host-specific setup are implemented. The AUR package draft owns the CLI binaries and systemd units. Step 4 still needs final integration checks and a testable package source.
-Section 18, step 3 is complete. The unit files and socket activation path are implemented and validated.
-Section 18, step 2 is complete. The protocol uses a fake runtime backend and includes `Ping`, `HostStatus`, structured errors, request limits, and deadlines.
+The Phase 1 storage proof passed. Section 18 steps 1 through 3 are complete. Step 4 host installation and doctor support are implemented and still need final integration checks on a disposable Arch host.
+
+Current migration work is section 18, step 5: move privileged state to `/var/lib/sandboxctl`. A daemon-owned state package now defines that layout and saves version-2 instance records atomically. The host installer creates the state directories as root-owned mode `0700`. The legacy CLI still reads instance records from XDG paths. The move is not complete until instance operations use sandboxd and the host-state store.
+
+The E2B runtime checkout is retained in ignored `tmp/e2b-runtime` at commit `47096f195aca4a545a9079b706efb3a18f51cf3f`. The license, extraction record, and first Debian/Ubuntu provisioning profile are in place. There is no build command, BuildKit VM orchestration, image manifest, or SquashFS finalizer yet.
 
 Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writable `/dev/vdb`. A guest test file persisted across restart and disappeared after state-disk reset. The proof runner checked the SquashFS digest on each run.
+
+## Current manual test report
+
+Iteration 1, the manual one-VM test, passed on 2026-10-05.
+The `manualtest` guest booted, accepted the managed SSH key as `ubuntu`, and retained a marker under `/home/ubuntu` after a stop and restart.
+The complete output is in the ignored file `tmp/logs/manual-test.log`.
+
+The manual test command prepares the private disk before boot. It fixes guest home ownership, installs the public key, disables password and keyboard-interactive SSH, and validates the SSH server configuration. It waits for SSH on both boots. It checks persistence outside `/tmp`, which is cleared at boot.
+
+Next: test the new provisioning renderer and finish the image-builder foundation. Then add BuildKit orchestration and finalization. Keep the manual one-VM test as a regression check.
 
 ## Completed
 
@@ -74,6 +85,17 @@ Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writa
 - `make check` passes outside the sandbox. The sandbox blocks the Unix socket setup used by the new integration tests.
 - `make check`, `make build`, and `git diff --check` pass after moving CLI parsing and validation to command packages.
 - Added Go-style documentation comments to exported APIs across the internal packages. `go vet ./...` and `go test ./...` pass.
+- Fixed the manual-test asset target so it creates a missing ext4 root drive from verified cached SquashFS assets instead of reporting an incomplete asset set as complete.
+- Updated the manual VM test to use the downloaded Ubuntu image's existing `ubuntu` account. The test now requests public-key authentication so it does not fall back to a password prompt.
+- Retained the E2B upstream checkout in ignored `tmp/e2b-runtime` and recorded commit `47096f195aca4a545a9079b706efb3a18f51cf3f` in `docs/E2B-SOURCE.md`.
+- Copied the E2B Apache-2.0 license text to `third_party/licenses/e2b-apache-2.0.txt`.
+- Added `internal/imagebuild/distro` with declared `os-release` parsing and Debian/Ubuntu package and init profiles. The profile omits E2B-only packages and boot services.
+- Added `internal/imagebuild/provision` with a deterministic renderer and guest script. The script creates the `dev` account, configures passwordless sudo inside the guest, enforces key-only SSH, installs a metadata bootstrap service, validates early network values, and removes machine identity and host keys for per-VM regeneration.
+- Added `internal/hoststate` with the `/var/lib/sandboxctl` directory layout, version-2 privileged instance records, random stable IDs, unknown-field preservation, validation, and atomic writes with file and directory sync.
+- Updated host installation to create the image, instance, allocation, and jail directories as root-owned mode `0700`. This keeps privileged image and instance data outside operator-writable XDG directories.
+- Added tests for private directory modes, symlink rejection, atomic instance record permissions, unknown-field preservation, schema rejection, and invalid names.
+- The host-side image builder, OCI reference checks, BuildKit VM orchestration, image manifest, SquashFS finalizer, and integration boot are still open.
+- `make check` and `git diff --check` pass after the host-state changes. The generated Debian and Ubuntu scripts pass POSIX shell syntax validation in the tests.
 
 ## Decisions
 
@@ -94,6 +116,8 @@ The repository has no configured Git remote or license file. The AUR draft uses 
 
 ## Next tasks
 
-1. Review and test the host installer and doctor on a disposable Arch host.
-2. Confirm a public Git source URL and project license before publishing the AUR package.
-3. Keep VM lifecycle operations out until the persistent-state and runtime steps.
+1. Finish section 18 step 5 by adding sandboxd instance RPCs and routing privileged instance state through `internal/hoststate`. Keep XDG state limited to operator-owned SSH and client data.
+2. Implement the UID, GID, address, and TAP registries in step 6.
+3. Finish the SDK and jailer runtime in step 7 before the builder VM depends on it.
+4. Add image manifest validation and cold-boot SquashFS finalization. Keep OCI pulls and extraction inside the builder VM through BuildKit.
+5. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.

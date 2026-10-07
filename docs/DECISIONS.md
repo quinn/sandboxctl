@@ -35,6 +35,12 @@ Host networking and guest image construction remain manual for this iteration.
 
 ## Guest images
 
+The first image profile supports Debian and Ubuntu systemd images. The image
+creates a `dev` account and grants it passwordless sudo inside the guest. This
+policy applies only to the isolated guest. The image keeps `authorized_keys`
+empty until guest bootstrap installs the per-sandbox key. It disables SSH
+password login and generates each VM's SSH host keys during bootstrap.
+
 Each sandbox must have its own writable root drive. The tool must never start two sandboxes with the same writable root drive.
 The create command makes a sparse copy of the supplied source drive.
 

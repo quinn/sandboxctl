@@ -20,7 +20,11 @@ esac
 
 if [[ -d $output_dir && $refresh != 1 ]]; then
   if [[ -f $output_dir/SHA256SUMS ]] && (cd "$output_dir" && sha256sum --check --status SHA256SUMS); then
-    printf 'Test assets already exist and match their checksums: %s\n' "$output_dir"
+    if [[ ! -f $output_dir/root.ext4 ]]; then
+      printf 'Kernel and SquashFS assets match their checksums. Building the missing ext4 root drive from the existing SquashFS.\n'
+      "$repo_dir/scripts/create-test-root-drive.sh"
+    fi
+    printf 'Test assets exist and match their checksums: %s\n' "$output_dir"
     printf 'Set REFRESH=1 to fetch new upstream artifacts.\n'
     exit 0
   fi

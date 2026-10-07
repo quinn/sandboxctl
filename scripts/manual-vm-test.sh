@@ -8,11 +8,20 @@ fi
 
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 export PATH="$repo_dir/bin:$PATH"
+umask 077
+log_dir="$repo_dir/tmp/logs"
+install -d -m 0700 "$log_dir"
+log_file="$log_dir/manual-test.log"
+install -m 0600 /dev/null "$log_file"
+exec > >(tee "$log_file") 2>&1
+printf 'Full test log: %s\n' "$log_file"
+printf 'Manual VM test started at %s\n' "$(date --iso-8601=seconds)"
 asset_dir="$repo_dir/tmp/config/images/default"
 kernel="$asset_dir/vmlinux"
 root_drive="$asset_dir/root.ext4"
 name=${1:-manualtest}
 binary="$repo_dir/bin/sandboxctl"
+guest_user=ubuntu
 guest_ip=172.30.0.10
 tap="fc-${name:0:12}"
 alias="sandboxctl-${name}"
@@ -67,10 +76,12 @@ sudo ip address add 172.30.0.1/24 dev "$tap"
 sudo ip link set dev "$tap" up
 
 if "$binary" list | awk -v name="$name" '$1 == name { found=1 } END { exit !found }'; then
-  printf 'Using existing sandbox %s.\n' "$name"
+  printf 'Using existing sandbox %s. Its private disk is unchanged if you prepared the base image again.\n' "$name"
 else
-  "$binary" create "$name" --guest-ip "$guest_ip" --kernel "$kernel" --root-drive "$root_drive"
+  "$binary" create "$name" --guest-ip "$guest_ip" --ssh-user "$guest_user" --kernel "$kernel" --root-drive "$root_drive"
 fi
+
+"$repo_dir/scripts/prepare-manual-test-guest.sh" "$name"
 
 effective_host=$(ssh -G "$alias" 2>/dev/null | awk '$1 == "hostname" { print $2; exit }')
 if [[ $effective_host != "$guest_ip" ]]; then
@@ -82,16 +93,26 @@ if [[ $effective_host != "$guest_ip" ]]; then
     exit 1
   fi
 fi
+effective_user=$(ssh -G "$alias" 2>/dev/null | awk '$1 == "user" { print $2; exit }')
+if [[ $effective_user != $guest_user ]]; then
+  printf 'SSH alias %s uses user %s. This test needs %s. Use a new sandbox name or prepare its saved instance for %s.\n' \
+    "$alias" "${effective_user:-unknown}" "$guest_user" "$guest_user" >&2
+  exit 1
+fi
 
 "$binary" start "$name" --dry-run
 "$binary" start "$name"
 started=1
 
-marker="/tmp/sandboxctl-persistence-${name}-$$"
+marker="/home/ubuntu/.sandboxctl-persistence-${name}-$$"
 token="sandboxctl-${name}-$$"
 deadline=$((SECONDS + 180))
 printf 'Waiting for SSH at %s. Accept the guest host key when SSH asks.\n' "$alias"
-until ssh -o ConnectTimeout=3 "$alias" "printf '%s\\n' '$token' > '$marker' && sync"; do
+until ssh -o ConnectTimeout=3 \
+  -o PreferredAuthentications=publickey \
+  -o PasswordAuthentication=no \
+  -o KbdInteractiveAuthentication=no \
+  "$alias" "printf '%s\\n' '$token' > '$marker' && sync"; do
   if (( SECONDS >= deadline )); then
     printf 'SSH did not become ready within 180 seconds. Check the sandbox log.\n' >&2
     exit 1
@@ -103,7 +124,23 @@ done
 started=0
 "$binary" start "$name"
 started=1
-actual=$(ssh -o ConnectTimeout=10 "$alias" "cat '$marker'")
+deadline=$((SECONDS + 180))
+until ssh -o ConnectTimeout=3 \
+  -o PreferredAuthentications=publickey \
+  -o PasswordAuthentication=no \
+  -o KbdInteractiveAuthentication=no \
+  "$alias" true; do
+  if (( SECONDS >= deadline )); then
+    printf 'SSH did not become ready after restart within 180 seconds. Check the sandbox log.\n' >&2
+    exit 1
+  fi
+  sleep 3
+done
+actual=$(ssh -o ConnectTimeout=3 \
+  -o PreferredAuthentications=publickey \
+  -o PasswordAuthentication=no \
+  -o KbdInteractiveAuthentication=no \
+  "$alias" "cat '$marker'")
 if [[ $actual != "$token" ]]; then
   printf 'Persistence check failed. Expected %s, received %s.\n' "$token" "$actual" >&2
   exit 1

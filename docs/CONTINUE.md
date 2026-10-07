@@ -68,8 +68,12 @@ This command must complete without an error.
 
 ## Iteration 1: manual one-VM test
 
+Status: complete. The `manualtest` guest accepted SSH key login and kept a
+marker under `/home/ubuntu` after stop and restart. See `docs/PROGRESS.md`.
+
 Use a prepared Linux kernel and guest root drive.
-The guest must have a dev user, OpenSSH server, and the sandboxctl public key.
+The guest must have an SSH user, OpenSSH server, and the sandboxctl public key.
+The manual test script uses the `ubuntu` user from the downloaded test image.
 The guest must accept the static network settings in the kernel command line.
 Create one TAP device and assign 172.30.0.1/24 to it.
 Use a guest address from the 172.30.0.0/24 subnet.
