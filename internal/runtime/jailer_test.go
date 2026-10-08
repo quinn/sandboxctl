@@ -59,8 +59,8 @@ func TestJailedConfigurationUsesOverlayBootAndAllocatedIdentity(t *testing.T) {
 		t.Fatal("jailer chroot strategy or jailed API socket is missing")
 	}
 	wantLogFIFO := filepath.Join(paths.JailRoot, ".sandboxctl-"+instance.ID+".firecracker.log.fifo")
-	if cfg.LogFifo != wantLogFIFO || cfg.FifoLogWriter != os.Stderr {
-		t.Fatalf("Firecracker log output = %q to %v, want %q to stderr", cfg.LogFifo, cfg.FifoLogWriter, wantLogFIFO)
+	if cfg.LogFifo != wantLogFIFO || cfg.LogLevel != "Debug" || cfg.FifoLogWriter != os.Stderr {
+		t.Fatalf("Firecracker log output = %q at %q to %v, want %q at Debug to stderr", cfg.LogFifo, cfg.LogLevel, cfg.FifoLogWriter, wantLogFIFO)
 	}
 }
 

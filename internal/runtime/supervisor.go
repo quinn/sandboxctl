@@ -12,6 +12,7 @@ import (
 	"time"
 
 	firecracker "github.com/firecracker-microvm/firecracker-go-sdk"
+	"github.com/sirupsen/logrus"
 	"sandboxctl/internal/hoststate"
 	"sandboxctl/internal/process"
 )
@@ -219,7 +220,12 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) (st
 	factory := s.Factory
 	if factory == nil {
 		factory = func(ctx context.Context, cfg firecracker.Config) (ManagedMachine, error) {
-			return firecracker.NewMachine(ctx, cfg)
+			machine, err := firecracker.NewMachine(ctx, cfg)
+			if err != nil {
+				return nil, err
+			}
+			machine.Logger().Logger.SetLevel(logrus.DebugLevel)
+			return machine, nil
 		}
 	}
 	runContext, cancel := context.WithCancel(context.Background())
