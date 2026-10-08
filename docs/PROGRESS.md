@@ -170,11 +170,13 @@ The repository has no license file. The AUR draft uses the GitHub URL inferred f
 
 The user installed the package, imported the default image, and created `pkgtest`. Structured logging found and resolved the TAP parser issue: `ip tuntap show` returned the unrelated `tailscale0` line before the requested TAP. SDK debug output identified the Firecracker startup failure: the jailer reports `Failed to exec into Firecracker: No such file or directory`. The host's `/usr/bin/firecracker` is dynamically linked and requires `/lib64/ld-linux-x86-64.so.2`, which is absent from the jail. The official Firecracker jailer documentation requires a statically linked Firecracker binary paired with the same-version jailer. The package now bundles the official static v1.17.0 x86-64 pair. Host install and doctor now reject a dynamic Firecracker binary. The daemon now uses the package-installed paths under `/usr/lib/sandboxctl`.
 
+The current image-build iteration has started. Added `internal/imagebuild/buildkit` to render a deterministic BuildKit Dockerfile from a digest-pinned base image and to create a bounded build context with the existing provisioning script. This keeps package installation and guest filesystem changes in the BuildKit build environment. The code does not start or manage a builder VM yet. The current `stage-overlay-image` target still packages the upstream SquashFS without provisioning, so do not expect the new image to fix guest SSH key login yet.
+
 ## Next tasks
 
-1. Connect the existing provisioning renderer to a repeatable image build so the installed image has the bootstrap service and the `dev` account.
-2. Reinstall the updated daemon and image. Restart `pkgtest` and confirm that the bootstrap marker appears and `sandboxctl ssh pkgtest` logs in without a password.
-3. Add routed guest Internet access and firewall rules.
-4. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
-5. Add cold-boot SquashFS finalization. Keep OCI pulls and extraction inside the builder VM through BuildKit.
+1. Add a builder-VM runner that executes the BuildKit context with a fixed build service and bounded input/output. Keep arbitrary builder commands out of the privileged daemon API.
+2. Add a cold-boot SquashFS finalizer inside the builder VM. Reuse the BuildKit output, apply the rendered provisioning script, and export a validated image bundle.
+3. Build and install the resulting image. Restart `pkgtest` and confirm that the bootstrap marker appears and `sandboxctl ssh pkgtest` logs in without a password.
+4. Add routed guest Internet access and firewall rules if the builder or guest cannot reach required network resources.
+5. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
 6. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.
