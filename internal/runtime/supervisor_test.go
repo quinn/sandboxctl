@@ -180,9 +180,11 @@ func TestSupervisorReportsStartFailureAndDoesNotMarkRunning(t *testing.T) {
 		t.Fatal(err)
 	}
 	machine := &testManagedMachine{stop: make(chan struct{}), startError: errors.New("start failed")}
+	networkManager := &testNetworkManager{}
 	supervisor := &Supervisor{
 		StatePaths: paths,
 		Images:     testImageResolver{},
+		Network:    networkManager,
 		Paths: JailedRuntimePaths{
 			FirecrackerBinary: "/usr/bin/firecracker", JailerBinary: "/usr/bin/jailer",
 			JailRoot: paths.Jails, APISocket: "firecracker.socket",
@@ -194,6 +196,9 @@ func TestSupervisorReportsStartFailureAndDoesNotMarkRunning(t *testing.T) {
 	}
 	if supervisor.Running("dev1") {
 		t.Fatal("supervisor marked a failed start as running")
+	}
+	if networkManager.removed != 1 {
+		t.Fatalf("TAP remove calls after failed start = %d, want 1", networkManager.removed)
 	}
 }
 

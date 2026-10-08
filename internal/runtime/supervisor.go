@@ -559,7 +559,12 @@ func failedStartStopped(machine ManagedMachine) error {
 	}
 	pid, err := pidSource.PID()
 	if err != nil {
-		return fmt.Errorf("cannot prove failed Firecracker process stopped: %w", err)
+		waitCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if waitErr := machine.Wait(waitCtx); errors.Is(waitErr, context.DeadlineExceeded) || errors.Is(waitErr, context.Canceled) {
+			return fmt.Errorf("cannot prove failed Firecracker process stopped after PID lookup failed (%v): %w", err, waitErr)
+		}
+		return nil
 	}
 	record, err := process.Current(pid)
 	if err != nil {
