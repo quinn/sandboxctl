@@ -32,7 +32,7 @@ The complete output is in the ignored file `tmp/logs/manual-test.log`.
 
 The manual test command prepares the private disk before boot. It fixes guest home ownership, installs the public key, disables password and keyboard-interactive SSH, and validates the SSH server configuration. It waits for SSH on both boots. It checks persistence outside `/tmp`, which is cleared at boot.
 
-Next: install the current checkout with `make install`, run the one-time host setup, and test a jailed serial boot from the user's host terminal. Add routed guest networking after serial boot works. Build and provision a guest image before testing SSH. Keep the manual one-VM test as a regression check.
+Next: run the one-time host setup, then test a jailed serial boot from the user's host terminal. Add routed guest networking after serial boot works. Build and provision a guest image before testing SSH. Keep the manual one-VM test as a regression check.
 
 ## Completed
 
@@ -145,6 +145,7 @@ Next: install the current checkout with `make install`, run the one-time host se
 - `go test ./internal/network ./internal/runtime ./cmd/sandboxd` passed for this change.
 - The Codex command environment does not expose `/dev/kvm`; the user's earlier serial and SSH VM tests confirm that the host can run VMs. The jailed runtime still needs a live boot test. Guest routing, forwarding, and firewall rules are still open.
 - Added `make install` with a local `sandboxctl-local` package recipe. It uses `yay` to build this working tree. The local package test uses a bare Git remote beside the checkout. It does not use GitHub.
+- Created `../sandboxctl-remote.git` as the local `local` remote and pushed `main` to it. `yay` installed `sandboxctl-local 0.1.0.r21.g983e9b0-1`; the installed CLI and daemon are available in `/usr/bin`.
 
 ## Decisions
 
@@ -161,7 +162,7 @@ Next: install the current checkout with `make install`, run the one-time host se
 
 The Codex command environment does not expose `/dev/kvm` and blocks `sudo`. The user's host terminal can run VMs and privileged commands. Do not infer host KVM availability from the Codex command environment.
 Buf remote generation requires access to the Buf Schema Registry. `make generate` fails inside the sandbox because that network call is blocked. The generated files are present from a network-enabled run.
-The repository has no configured Git remote or license file. The AUR draft uses the GitHub URL inferred from the workspace path. Confirm the public source URL and select a license before publication.
+The repository has no license file. The AUR draft uses the GitHub URL inferred from the workspace path. Confirm the public source URL and select a license before publication.
 
 ## Next tasks
 

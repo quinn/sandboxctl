@@ -65,8 +65,9 @@ make install
 ```
 
 This target uses `yay` to build and install the current checkout. The checkout
-must have a Git remote. For local development, use the bare remote described
-in the development notes. This target does not use GitHub. The AUR draft in
+must have a Git remote. The local development remote is the bare repository
+`../sandboxctl-remote.git`, configured as `local`. Push commits to it before
+running this target. This target does not use GitHub. The AUR draft in
 `packaging/aur` uses the configured GitHub `main` branch.
 
 ## Initialize and inspect
