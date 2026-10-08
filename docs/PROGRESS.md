@@ -164,11 +164,11 @@ The Codex command environment does not expose `/dev/kvm` and blocks `sudo`. The 
 Buf remote generation requires access to the Buf Schema Registry. `make generate` fails inside the sandbox because that network call is blocked. The generated files are present from a network-enabled run.
 The repository has no license file. The AUR draft uses the GitHub URL inferred from the workspace path. Confirm the public source URL and select a license before publication.
 
-The user installed the package, imported the default image, and created `pkgtest`. Structured logging found and resolved the TAP parser issue: `ip tuntap show` returned the unrelated `tailscale0` line before the requested TAP. After that fix, sandboxd reaches Firecracker startup, but Firecracker exits with status 1 before creating its API socket. Failed-start cleanup then reports that the SDK process has exited when `PID()` is queried. The SDK's `Wait` contract can confirm that exit; cleanup now uses it when PID lookup reports an exited process. The current failed jail may contain more startup evidence. The user should inspect it before installing the cleanup change.
+The user installed the package, imported the default image, and created `pkgtest`. Structured logging found and resolved the TAP parser issue: `ip tuntap show` returned the unrelated `tailscale0` line before the requested TAP. Firecracker now starts but exits with status 1 before creating its API socket. Failed-start cleanup previously rejected the SDK's exited-process result from `PID()`. Cleanup now uses the SDK's `Wait` contract to confirm process exit. The inspected jail contains the Firecracker binary and devices, but no Firecracker log file. The jailed SDK configuration now sends Firecracker logs to the system journal through a log FIFO.
 
 ## Next tasks
 
-1. Inspect the current failed jail for Firecracker diagnostics. Then install the cleanup change and retry `pkgtest` to identify why Firecracker exits.
+1. Install the process cleanup and Firecracker logging changes. Retry `pkgtest` and inspect the journal for the Firecracker startup error.
 2. Add routed guest networking after serial boot works.
 3. Build and provision a guest image before testing SSH. Keep the manual test path until the jailed runtime passes.
 4. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.

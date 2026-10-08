@@ -86,6 +86,8 @@ func JailedConfiguration(instance hoststate.Instance, image JailedImage, paths J
 	uid, gid := instance.HostUID, instance.HostGID
 	cfg := firecracker.Config{
 		SocketPath:      paths.APISocket,
+		LogFifo:         filepath.Join(paths.JailRoot, ".sandboxctl-"+instance.ID+".firecracker.log.fifo"),
+		FifoLogWriter:   os.Stderr,
 		KernelImagePath: image.KernelPath,
 		InitrdPath:      image.InitramfsPath,
 		KernelArgs:      strings.Join(image.KernelArgs, " "),
