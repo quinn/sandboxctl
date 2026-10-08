@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -289,6 +290,7 @@ func (s *service) StartInstance(ctx context.Context, request *controlpb.StartIns
 		if errors.Is(err, hoststate.ErrAlreadyRunning) {
 			return nil, status.Error(codes.FailedPrecondition, "sandbox is already running")
 		}
+		slog.Error("start sandbox failed", "name", instance.Name, "error", err)
 		return nil, status.Error(codes.FailedPrecondition, "cannot start sandbox")
 	}
 	return &controlpb.StartInstanceResponse{Instance: s.protocolInstance(instance)}, nil

@@ -1,16 +1,19 @@
 package daemon_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -324,10 +327,44 @@ func TestServerRejectsStartAndStopForMissingInstance(t *testing.T) {
 	}
 }
 
+func TestServerLogsRuntimeStartFailure(t *testing.T) {
+	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
+	store := hoststate.Store{Paths: paths}
+	id, err := hoststate.NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(daemonTestInstance(id, "dev1")); err != nil {
+		t.Fatal(err)
+	}
+	runtime := &testRuntimeController{
+		running:  make(map[string]bool),
+		startErr: fmt.Errorf("jailer failed: permission denied"),
+	}
+	connection := startServerWithRuntime(t, store, runtime)
+	service := controlpb.NewControlServiceClient(connection)
+
+	var output bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	ctx, cancel := callContext(daemon.APIVersion, "abababababababababababababababab")
+	_, err = service.StartInstance(ctx, &controlpb.StartInstanceRequest{Name: "dev1"})
+	cancel()
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("StartInstance() error = %v, want FailedPrecondition", err)
+	}
+	if got := output.String(); !strings.Contains(got, `msg="start sandbox failed" name=dev1 error="jailer failed: permission denied"`) {
+		t.Fatalf("start failure log = %q", got)
+	}
+}
+
 type testRuntimeController struct {
-	mu      sync.Mutex
-	running map[string]bool
-	force   bool
+	mu       sync.Mutex
+	running  map[string]bool
+	force    bool
+	startErr error
 }
 
 func (r *testRuntimeController) Ready() bool { return true }
@@ -341,6 +378,9 @@ func (r *testRuntimeController) Running(name string) bool {
 func (r *testRuntimeController) Start(_ context.Context, instance hoststate.Instance) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.startErr != nil {
+		return r.startErr
+	}
 	r.running[instance.Name] = true
 	return nil
 }

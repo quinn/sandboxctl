@@ -164,9 +164,11 @@ The Codex command environment does not expose `/dev/kvm` and blocks `sudo`. The 
 Buf remote generation requires access to the Buf Schema Registry. `make generate` fails inside the sandbox because that network call is blocked. The generated files are present from a network-enabled run.
 The repository has no license file. The AUR draft uses the GitHub URL inferred from the workspace path. Confirm the public source URL and select a license before publication.
 
+The user installed the package, imported the default image, and created `pkgtest`. Starting it returns a generic `FailedPrecondition` error. The TAP device exists as `sc000001`, belongs to UID/GID `200000:200000`, and has host address `172.30.0.1/30`. The first failed attempt reached Firecracker startup and exited with status 1. A later retry left no jail directory and did not add new journal details. The daemon previously hid runtime errors from both the client and journal.
+
 ## Next tasks
 
-1. Run the jailed serial boot and TAP setup from the user's host terminal.
+1. Install the logging update and retry the existing `pkgtest` instance. Read the detailed start error from the system journal before changing runtime behavior.
 2. Add routed guest networking after serial boot works.
 3. Build and provision a guest image before testing SSH. Keep the manual test path until the jailed runtime passes.
 4. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.

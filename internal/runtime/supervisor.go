@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -135,7 +136,15 @@ func (s *Supervisor) RuntimeState(name string) string {
 }
 
 // Start launches a jailed VM. A repeated start is successful while the VM runs.
-func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) error {
+func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) (startErr error) {
+	slog.Info("starting sandbox", "name", instance.Name, "instance_id", instance.ID, "host_uid", instance.HostUID, "host_gid", instance.HostGID, "tap", instance.TapDevice, "image", instance.Image, "image_version", instance.ImageVersion)
+	defer func() {
+		if startErr != nil {
+			slog.Error("sandbox start failed", "name", instance.Name, "instance_id", instance.ID, "error", startErr)
+			return
+		}
+		slog.Info("sandbox started", "name", instance.Name, "instance_id", instance.ID)
+	}()
 	if s.Images == nil {
 		return errors.New("installed image resolver is unavailable")
 	}
@@ -306,7 +315,15 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) err
 }
 
 // Stop requests a guest shutdown or sends SIGKILL when force is true.
-func (s *Supervisor) Stop(ctx context.Context, name string, force bool) error {
+func (s *Supervisor) Stop(ctx context.Context, name string, force bool) (stopErr error) {
+	slog.Info("stopping sandbox", "name", name, "force", force)
+	defer func() {
+		if stopErr != nil {
+			slog.Error("sandbox stop failed", "name", name, "force", force, "error", stopErr)
+			return
+		}
+		slog.Info("sandbox stopped", "name", name, "force", force)
+	}()
 	s.mu.Lock()
 	if s.starting[name] || s.stopping[name] {
 		s.mu.Unlock()
