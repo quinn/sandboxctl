@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"testing"
+
+	"github.com/vishvananda/netlink"
 )
 
 func TestOverlayMountsUseReadOnlySquashFSAndWritableExt4(t *testing.T) {
@@ -23,6 +25,16 @@ func TestOverlayMountsUseReadOnlySquashFSAndWritableExt4(t *testing.T) {
 	overlay := mounts[2]
 	if overlay.Source != "overlay" || overlay.Target != "/newroot" || overlay.Type != "overlay" || overlay.Data != "lowerdir=/lower,upperdir=/state/upper,workdir=/state/work" {
 		t.Fatalf("invalid overlay mount: %#v", overlay)
+	}
+}
+
+func TestMMDSRouteTargetsLinkLocalAddressOnGuestInterface(t *testing.T) {
+	route := mmdsRoute(7)
+	if route.LinkIndex != 7 || route.Scope != netlink.SCOPE_LINK {
+		t.Fatalf("route link and scope = %d, %d", route.LinkIndex, route.Scope)
+	}
+	if route.Dst == nil || route.Dst.String() != "169.254.169.254/32" {
+		t.Fatalf("route destination = %v", route.Dst)
 	}
 }
 

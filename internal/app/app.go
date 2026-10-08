@@ -235,18 +235,6 @@ func (c *Context) Stop(name string) error {
 	return nil
 }
 
-// ConnectSSH replaces the current process with an SSH session to name.
-func (c *Context) ConnectSSH(name string, remoteCommand []string) error {
-	instance, err := c.store.Load(name)
-	if err != nil {
-		return err
-	}
-	if err := c.ssh.Initialize(); err != nil {
-		return err
-	}
-	return c.ssh.Exec(instance, remoteCommand)
-}
-
 // SSHConfig writes the Include directive for the managed SSH configuration.
 func (c *Context) SSHConfig() error {
 	if err := c.ssh.Initialize(); err != nil {

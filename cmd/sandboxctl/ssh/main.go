@@ -1,10 +1,16 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"fmt"
 
-	"sandboxctl/internal/app"
+	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
+	"sandboxctl/internal/config"
+	"sandboxctl/internal/controlpb"
+	"sandboxctl/internal/daemon"
+	sshconfig "sandboxctl/internal/ssh"
 )
 
 func main() {
@@ -18,9 +24,26 @@ func run(arguments []string) error {
 	if err := cmdutil.ValidateSandboxName(arguments[0]); err != nil {
 		return err
 	}
-	command, err := app.New()
+	paths, err := config.Resolve()
 	if err != nil {
 		return err
 	}
-	return command.ConnectSSH(arguments[0], arguments[1:])
+	manager := sshconfig.Manager{Paths: paths}
+	if err := manager.PrepareKey(); err != nil {
+		return err
+	}
+	connection, service, err := client.Dial(context.Background(), client.DefaultSocketPath)
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxOperationDuration)
+	defer cancel()
+	if _, err := service.InspectInstance(ctx, &controlpb.InspectInstanceRequest{Name: arguments[0]}); err != nil {
+		return fmt.Errorf("inspect sandbox %s: %w", arguments[0], err)
+	}
+	if err := manager.RefreshConfig(ctx, service); err != nil {
+		return err
+	}
+	return manager.ExecAlias(arguments[0], arguments[1:])
 }

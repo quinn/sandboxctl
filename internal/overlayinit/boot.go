@@ -3,10 +3,13 @@ package overlayinit
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/vishvananda/netlink"
 )
 
 const persistenceMarker = ".sandboxctl-phase1-overlay-proof"
@@ -75,6 +78,9 @@ func Run() error {
 	if err := mountFS(mounts[2]); err != nil {
 		return fmt.Errorf("mount overlay: %w", err)
 	}
+	if err := addMMDSRoute(); err != nil {
+		return fmt.Errorf("add the MMDS route: %w", err)
+	}
 	retained, err := VerifyPersistence("/newroot")
 	if err != nil {
 		return fmt.Errorf("verify overlay state: %w", err)
@@ -116,6 +122,30 @@ func Run() error {
 		return fmt.Errorf("start guest init: %w", err)
 	}
 	return nil
+}
+
+func addMMDSRoute() error {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return err
+	}
+	for _, iface := range interfaces {
+		if iface.Name == "eth0" {
+			return netlink.RouteReplace(mmdsRoute(iface.Index))
+		}
+	}
+	return nil
+}
+
+func mmdsRoute(interfaceIndex int) *netlink.Route {
+	return &netlink.Route{
+		LinkIndex: interfaceIndex,
+		Scope:     netlink.SCOPE_LINK,
+		Dst: &net.IPNet{
+			IP:   net.ParseIP("169.254.169.254").To4(),
+			Mask: net.CIDRMask(32, 32),
+		},
+	}
 }
 
 func mountFS(mount Mount) error {

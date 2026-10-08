@@ -15,7 +15,6 @@ import (
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/config"
 	"sandboxctl/internal/controlpb"
-	"sandboxctl/internal/model"
 	"sandboxctl/internal/store"
 )
 
@@ -231,14 +230,12 @@ func (m Manager) IncludeBlock() (string, error) {
 	return "Host *\n    Include " + quoteConfigValue(m.Paths.SSHConfig) + "\n", nil
 }
 
-// Exec replaces the current process with an SSH session to instance.
-func (m Manager) Exec(instance model.Instance, remoteCommand []string) error {
-	arguments := []string{
-		"ssh",
-		"-F", m.Paths.SSHConfig,
-		"-p", fmt.Sprintf("%d", instance.SSHPort),
-		instance.SSHUser + "@" + instance.GuestIP,
+// ExecAlias replaces the current process with SSH to the managed alias for name.
+func (m Manager) ExecAlias(name string, remoteCommand []string) error {
+	if err := cmdutil.ValidateSandboxName(name); err != nil {
+		return err
 	}
+	arguments := []string{"ssh", "sandbox-" + name}
 	arguments = append(arguments, remoteCommand...)
 	return syscall.Exec("/usr/bin/ssh", arguments, os.Environ())
 }

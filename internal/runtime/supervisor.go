@@ -32,8 +32,23 @@ type ManagedMachine interface {
 	StopVMM() error
 }
 
+// GuestMetadata contains the per-instance data exposed to the guest through MMDS.
+type GuestMetadata struct {
+	Sandboxctl struct {
+		SchemaVersion    int    `json:"schema_version"`
+		Hostname         string `json:"hostname"`
+		SSHUser          string `json:"ssh_user"`
+		SSHAuthorizedKey string `json:"ssh_authorized_key"`
+		Network          struct {
+			Address   string `json:"address"`
+			Gateway   string `json:"gateway"`
+			Interface string `json:"interface"`
+		} `json:"network"`
+	} `json:"sandboxctl"`
+}
+
 // MachineFactory creates an SDK machine from a validated jailed configuration.
-type MachineFactory func(context.Context, firecracker.Config) (ManagedMachine, error)
+type MachineFactory func(context.Context, firecracker.Config, GuestMetadata) (ManagedMachine, error)
 
 // BootImageResolver finds the immutable boot artifacts for a pinned image.
 type BootImageResolver interface {
@@ -205,6 +220,14 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) (st
 	if err != nil {
 		return err
 	}
+	publicKey, err := store.LoadPublicKey(instance.Name)
+	if err != nil {
+		return fmt.Errorf("load guest SSH public key: %w", err)
+	}
+	metadata, err := BuildGuestMetadata(instance, publicKey)
+	if err != nil {
+		return fmt.Errorf("build guest metadata: %w", err)
+	}
 	if info, err := os.Lstat(jailPath); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 			return errors.New("jail path exists and is not a real directory")
@@ -219,17 +242,20 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) (st
 
 	factory := s.Factory
 	if factory == nil {
-		factory = func(ctx context.Context, cfg firecracker.Config) (ManagedMachine, error) {
+		factory = func(ctx context.Context, cfg firecracker.Config, metadata GuestMetadata) (ManagedMachine, error) {
 			machine, err := firecracker.NewMachine(ctx, cfg)
 			if err != nil {
 				return nil, err
 			}
 			machine.Logger().Logger.SetLevel(logrus.DebugLevel)
+			if err := addGuestMetadataHandler(machine, metadata); err != nil {
+				return nil, err
+			}
 			return machine, nil
 		}
 	}
 	runContext, cancel := context.WithCancel(context.Background())
-	machine, err := factory(runContext, config)
+	machine, err := factory(runContext, config, metadata)
 	if err != nil {
 		cancel()
 		return errors.Join(fmt.Errorf("create Firecracker SDK machine: %w", err), s.removeTap(instance))
@@ -465,11 +491,11 @@ func (s *Supervisor) stopRecorded(ctx context.Context, name string, force bool) 
 		}
 		factory := s.Factory
 		if factory == nil {
-			factory = func(ctx context.Context, cfg firecracker.Config) (ManagedMachine, error) {
+			factory = func(ctx context.Context, cfg firecracker.Config, _ GuestMetadata) (ManagedMachine, error) {
 				return firecracker.NewMachine(ctx, cfg)
 			}
 		}
-		machine, factoryErr := factory(ctx, config)
+		machine, factoryErr := factory(ctx, config, GuestMetadata{})
 		if factoryErr != nil {
 			return fmt.Errorf("connect to running Firecracker machine: %w", factoryErr)
 		}

@@ -18,7 +18,7 @@ Section 18, step 7 now has start and stop RPCs and a sandboxd runtime supervisor
 
 The supervisor resolves fixed image artifacts from a root-owned image directory. It requires a pinned manifest version and read-only kernel, initramfs, and SquashFS files. Runtime records use mode `0600` and are removed with a directory sync. The CLI start and stop commands now call the daemon RPCs. They do not use the temporary runner for normal operation.
 
-The jailed runtime now prepares an instance TAP before Firecracker starts. It assigns the allocated UID and GID, applies the host `/30` address, and brings the link up. It removes the TAP after the VM stops and preserves runtime state if TAP cleanup fails. The user has booted and tested VMs on this host through serial and SSH. The Codex command environment does not expose `/dev/kvm`, so it cannot run a VM from this session. The jailed runtime still needs a live boot test. Guest routing, forwarding, and firewall rules are not implemented.
+The jailed runtime prepares an instance TAP before Firecracker starts. It assigns the allocated UID and GID, applies the host `/30` address, and brings the link up. It removes the TAP after the VM stops and preserves runtime state if TAP cleanup fails. The user confirmed that jailed Firecracker starts the guest and that SSH reaches the guest at its allocated address. SSH key authentication still fails because guest bootstrap did not install the per-instance key. Guest Internet routing, forwarding, and firewall rules are not implemented.
 
 The E2B runtime checkout is retained in ignored `tmp/e2b-runtime` at commit `47096f195aca4a545a9079b706efb3a18f51cf3f`. The license, extraction record, and first Debian/Ubuntu provisioning profile are in place. There is no build command, BuildKit VM orchestration, image manifest, or SquashFS finalizer yet.
 
@@ -32,7 +32,7 @@ The complete output is in the ignored file `tmp/logs/manual-test.log`.
 
 The manual test command prepares the private disk before boot. It fixes guest home ownership, installs the public key, disables password and keyboard-interactive SSH, and validates the SSH server configuration. It waits for SSH on both boots. It checks persistence outside `/tmp`, which is cleared at boot.
 
-Next: run the one-time host setup, then test a jailed serial boot from the user's host terminal. Add routed guest networking after serial boot works. Build and provision a guest image before testing SSH. Keep the manual one-VM test as a regression check.
+The current image bundle may not contain the project bootstrap service. The image staging target packages the supplied SquashFS without running the provisioning script. Confirm this before the next SSH test.
 
 ## Completed
 
@@ -139,6 +139,10 @@ Next: run the one-time host setup, then test a jailed serial boot from the user'
 - Added importer, manifest parser, and gRPC integration tests. The staged bundle target completed with a temporary XDG data directory.
 - `gofmt`, `go vet ./...`, `go test ./...`, `make proto-lint`, `make build`, shell syntax checks, and `git diff --check` pass.
 - The image CLI validated the staged bundle before it tried sandboxd. The daemon is not running here, so this host could not test the live import call.
+- Added per-instance MMDS data to the jailed runtime. It includes the hostname, SSH user, public key, address, gateway, and interface. The SDK configures MMDS before it starts the guest.
+- Added early guest IPv4 setup through the Firecracker SDK and an MMDS link-local route in the initramfs.
+- Changed `sandboxctl ssh` to inspect daemon-owned instance state, refresh the generated SSH fragment, and execute the normal `sandbox-NAME` alias through OpenSSH configuration.
+- A live host test confirmed that the jailed VM starts and accepts TCP connections on guest SSH. The guest did not accept the managed public key. The image provisioning path must include and run the bootstrap service before key login can pass.
 - Added `internal/network.TapManager` to create, validate, configure, and remove per-instance TAP devices with `/usr/bin/ip`. It checks allocated ownership and `/30` addressing and removes partial TAPs on setup failure.
 - Wired TAP preparation and cleanup into the jailed runtime lifecycle. The runtime cleans stale TAP devices only after it confirms that the recorded Firecracker process is stopped. It keeps runtime records and jail state if TAP cleanup fails.
 - Added tests for TAP command sequences, invalid addresses, owner mismatch, partial setup rollback, and runtime prepare/remove ordering.
@@ -168,9 +172,9 @@ The user installed the package, imported the default image, and created `pkgtest
 
 ## Next tasks
 
-1. Install the package with the official static Firecracker pair. Restart sandboxd and retry `pkgtest`. Confirm that Firecracker starts and the guest reaches serial readiness.
-2. Add routed guest networking after serial boot works.
-3. Build and provision a guest image before testing SSH. Keep the manual test path until the jailed runtime passes.
+1. Connect the existing provisioning renderer to a repeatable image build so the installed image has the bootstrap service and the `dev` account.
+2. Reinstall the updated daemon and image. Restart `pkgtest` and confirm that the bootstrap marker appears and `sandboxctl ssh pkgtest` logs in without a password.
+3. Add routed guest Internet access and firewall rules.
 4. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
 5. Add cold-boot SquashFS finalization. Keep OCI pulls and extraction inside the builder VM through BuildKit.
 6. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.

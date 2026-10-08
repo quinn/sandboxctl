@@ -15,6 +15,7 @@ func TestJailedConfigurationUsesOverlayBootAndAllocatedIdentity(t *testing.T) {
 	instance := hoststate.Instance{
 		ID: "0123456789abcdef0123456789abcdef", Name: "dev1",
 		HostUID: 200001, HostGID: 200001, VCPUs: 4, MemoryMiB: 4096,
+		Subnet: "172.30.0.0/30", HostIP: "172.30.0.1", GuestIP: "172.30.0.2",
 		TapDevice: "sc000001", GuestMAC: "06:00:ac:1e:00:02",
 	}
 	image := JailedImage{
@@ -35,6 +36,14 @@ func TestJailedConfigurationUsesOverlayBootAndAllocatedIdentity(t *testing.T) {
 	}
 	if cfg.KernelImagePath != image.KernelPath || cfg.InitrdPath != image.InitramfsPath || cfg.KernelArgs != overlayboot.KernelArgs {
 		t.Fatalf("configuration does not use the proven initramfs boot inputs: %#v", cfg)
+	}
+	iface := cfg.NetworkInterfaces[0]
+	if !iface.AllowMMDS || cfg.MmdsVersion != firecracker.MMDSv2 || cfg.MmdsAddress.String() != "169.254.169.254" {
+		t.Fatalf("MMDS configuration = interface %t, version %q, address %v", iface.AllowMMDS, cfg.MmdsVersion, cfg.MmdsAddress)
+	}
+	ip := iface.StaticConfiguration.IPConfiguration
+	if ip == nil || ip.IfName != "eth0" || ip.IPAddr.String() != "172.30.0.2/30" || ip.Gateway.String() != "172.30.0.1" {
+		t.Fatalf("guest early network configuration = %#v", ip)
 	}
 	if len(cfg.Drives) != 2 {
 		t.Fatalf("drive count = %d, want 2", len(cfg.Drives))
@@ -68,6 +77,7 @@ func TestJailedConfigurationRejectsInvalidTrustedPathsAndIdentity(t *testing.T) 
 	instance := hoststate.Instance{
 		ID: "0123456789abcdef0123456789abcdef", Name: "dev1",
 		HostUID: 200001, HostGID: 200001, VCPUs: 2, MemoryMiB: 1024,
+		Subnet: "172.30.0.0/30", HostIP: "172.30.0.1", GuestIP: "172.30.0.2",
 		TapDevice: "sc000001", GuestMAC: "06:00:ac:1e:00:02",
 	}
 	image := JailedImage{KernelPath: "/kernel", InitramfsPath: "/initramfs", SquashFSPath: "/base.squashfs"}

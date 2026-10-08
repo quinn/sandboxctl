@@ -90,6 +90,10 @@ func JailedConfiguration(instance hoststate.Instance, image JailedImage, paths J
 		IsRootDevice: firecracker.Bool(false),
 		IsReadOnly:   firecracker.Bool(false),
 	}
+	guestIP, gateway, err := guestIPConfiguration(instance)
+	if err != nil {
+		return firecracker.Config{}, err
+	}
 	uid, gid := instance.HostUID, instance.HostGID
 	cfg := firecracker.Config{
 		SocketPath:      paths.APISocket,
@@ -100,10 +104,20 @@ func JailedConfiguration(instance hoststate.Instance, image JailedImage, paths J
 		InitrdPath:      image.InitramfsPath,
 		KernelArgs:      strings.Join(image.KernelArgs, " "),
 		Drives:          []models.Drive{baseDrive, stateDrive},
-		NetworkInterfaces: firecracker.NetworkInterfaces{{StaticConfiguration: &firecracker.StaticNetworkConfiguration{
-			HostDevName: instance.TapDevice,
-			MacAddress:  instance.GuestMAC,
-		}}},
+		NetworkInterfaces: firecracker.NetworkInterfaces{{
+			AllowMMDS: true,
+			StaticConfiguration: &firecracker.StaticNetworkConfiguration{
+				HostDevName: instance.TapDevice,
+				MacAddress:  instance.GuestMAC,
+				IPConfiguration: &firecracker.IPConfiguration{
+					IPAddr:  *guestIP,
+					Gateway: gateway,
+					IfName:  "eth0",
+				},
+			},
+		}},
+		MmdsAddress: net.ParseIP("169.254.169.254"),
+		MmdsVersion: firecracker.MMDSv2,
 		MachineCfg: models.MachineConfiguration{
 			VcpuCount:  firecracker.Int64(int64(instance.VCPUs)),
 			MemSizeMib: firecracker.Int64(int64(instance.MemoryMiB)),

@@ -84,7 +84,7 @@ func (m *testManagedMachine) PID() (int, error) {
 func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
 	instance := supervisorTestInstance()
-	if err := (hoststate.Store{Paths: paths}).Save(instance); err != nil {
+	if err := saveSupervisorTestInstance(paths, instance); err != nil {
 		t.Fatal(err)
 	}
 	machine := &testManagedMachine{stop: make(chan struct{})}
@@ -99,10 +99,13 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 			JailRoot: paths.Jails, APISocket: "firecracker.socket",
 		},
 		VerifyIdentity: func(int, uint32, uint32) error { return nil },
-		Factory: func(_ context.Context, cfg firecracker.Config) (ManagedMachine, error) {
+		Factory: func(_ context.Context, cfg firecracker.Config, metadata GuestMetadata) (ManagedMachine, error) {
 			factoryCalls++
 			if cfg.JailerCfg == nil || *cfg.JailerCfg.UID != 200001 {
 				t.Fatalf("factory received an unjailed configuration: %#v", cfg.JailerCfg)
+			}
+			if metadata.Sandboxctl.Hostname != instance.Name || metadata.Sandboxctl.SSHUser != "dev" || metadata.Sandboxctl.Network.Address != "172.30.0.2/30" {
+				t.Fatalf("factory received invalid guest metadata: %#v", metadata)
 			}
 			return machine, nil
 		},
@@ -143,7 +146,7 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 func TestSupervisorRequiresExplicitForceToStopVMM(t *testing.T) {
 	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
 	instance := supervisorTestInstance()
-	if err := (hoststate.Store{Paths: paths}).Save(instance); err != nil {
+	if err := saveSupervisorTestInstance(paths, instance); err != nil {
 		t.Fatal(err)
 	}
 	machine := &testManagedMachine{stop: make(chan struct{})}
@@ -156,7 +159,7 @@ func TestSupervisorRequiresExplicitForceToStopVMM(t *testing.T) {
 		},
 		VerifyIdentity: func(int, uint32, uint32) error { return nil },
 		ForceStop:      func(_ process.Record) error { return machine.StopVMM() },
-		Factory:        func(context.Context, firecracker.Config) (ManagedMachine, error) { return machine, nil },
+		Factory:        func(context.Context, firecracker.Config, GuestMetadata) (ManagedMachine, error) { return machine, nil },
 	}
 	if err := supervisor.Start(context.Background(), instance); err != nil {
 		t.Fatal(err)
@@ -176,7 +179,7 @@ func TestSupervisorRequiresExplicitForceToStopVMM(t *testing.T) {
 func TestSupervisorReportsStartFailureAndDoesNotMarkRunning(t *testing.T) {
 	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
 	instance := supervisorTestInstance()
-	if err := (hoststate.Store{Paths: paths}).Save(instance); err != nil {
+	if err := saveSupervisorTestInstance(paths, instance); err != nil {
 		t.Fatal(err)
 	}
 	machine := &testManagedMachine{stop: make(chan struct{}), startError: errors.New("start failed")}
@@ -189,7 +192,7 @@ func TestSupervisorReportsStartFailureAndDoesNotMarkRunning(t *testing.T) {
 			FirecrackerBinary: "/usr/bin/firecracker", JailerBinary: "/usr/bin/jailer",
 			JailRoot: paths.Jails, APISocket: "firecracker.socket",
 		},
-		Factory: func(context.Context, firecracker.Config) (ManagedMachine, error) { return machine, nil },
+		Factory: func(context.Context, firecracker.Config, GuestMetadata) (ManagedMachine, error) { return machine, nil },
 	}
 	if err := supervisor.Start(context.Background(), instance); err == nil {
 		t.Fatal("Start() accepted a failed machine")
@@ -262,4 +265,8 @@ func supervisorTestInstance() hoststate.Instance {
 		StateDiskBytes: 1 << 30, Subnet: "172.30.0.0/30", HostIP: "172.30.0.1", GuestIP: "172.30.0.2",
 		TapDevice: "sc000001", GuestMAC: "06:00:ac:1e:00:02", SSHUser: "dev", SSHAlias: "sandbox-dev1",
 	}
+}
+
+func saveSupervisorTestInstance(paths hoststate.Paths, instance hoststate.Instance) error {
+	return (hoststate.Store{Paths: paths}).SaveWithPublicKey(instance, supervisorTestPublicKey())
 }
