@@ -53,7 +53,7 @@ func TestTapManagerPrepareCreatesAndConfiguresTap(t *testing.T) {
 func TestTapManagerPrepareReusesOwnedTapWithoutAddress(t *testing.T) {
 	runner := &fakeRunner{results: map[string]commandResult{
 		"tuntap add dev sc000001 mode tap user 200001 group 300001": {err: errors.New("File exists")},
-		"tuntap show dev sc000001":                                  {output: "sc000001: tap persist user 200001 group 300001\n"},
+		"tuntap show dev sc000001":                                  {output: "tailscale0: tun vnet_hdr\nsc000001: tap persist user 200001 group 300001\n"},
 		"-o -4 address show dev sc000001":                           {},
 		"address replace 172.30.0.1/30 dev sc000001":                {},
 		"link set dev sc000001 up":                                  {},

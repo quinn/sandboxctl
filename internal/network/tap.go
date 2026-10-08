@@ -143,36 +143,39 @@ func validateInstanceNetwork(instance hoststate.Instance) error {
 }
 
 func parseTapOwner(output, name string) (int, int, bool) {
-	fields := strings.Fields(output)
-	if len(fields) < 6 || strings.TrimSuffix(fields[0], ":") != name {
-		return 0, 0, false
-	}
-	mode, user, group := false, -1, -1
-	for index := 1; index < len(fields); index++ {
-		switch fields[index] {
-		case "tap":
-			mode = true
-		case "user":
-			if index+1 >= len(fields) {
-				return 0, 0, false
-			}
-			value, err := strconv.Atoi(fields[index+1])
-			if err != nil {
-				return 0, 0, false
-			}
-			user = value
-		case "group":
-			if index+1 >= len(fields) {
-				return 0, 0, false
-			}
-			value, err := strconv.Atoi(fields[index+1])
-			if err != nil {
-				return 0, 0, false
-			}
-			group = value
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 6 || strings.TrimSuffix(fields[0], ":") != name {
+			continue
 		}
+		mode, user, group := false, -1, -1
+		for index := 1; index < len(fields); index++ {
+			switch fields[index] {
+			case "tap":
+				mode = true
+			case "user":
+				if index+1 >= len(fields) {
+					return 0, 0, false
+				}
+				value, err := strconv.Atoi(fields[index+1])
+				if err != nil {
+					return 0, 0, false
+				}
+				user = value
+			case "group":
+				if index+1 >= len(fields) {
+					return 0, 0, false
+				}
+				value, err := strconv.Atoi(fields[index+1])
+				if err != nil {
+					return 0, 0, false
+				}
+				group = value
+			}
+		}
+		return user, group, mode && user >= 0 && group >= 0
 	}
-	return user, group, mode && user >= 0 && group >= 0
+	return 0, 0, false
 }
 
 func hasUnexpectedAddress(output string, instance hoststate.Instance) bool {
