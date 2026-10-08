@@ -14,7 +14,7 @@ import (
 const (
 	maxCommandArguments = 256
 	maxOutputBytes      = 4 << 20
-	maxUploadBytes      = 32 << 30
+	maxTransferBytes    = 32 << 30
 	buildDirectory      = "/var/tmp/sandboxctl-build"
 )
 
@@ -35,6 +35,7 @@ type Result struct {
 type GuestExecutor interface {
 	Run(context.Context, Command) (Result, error)
 	Upload(context.Context, io.Reader, string, int64) error
+	Download(context.Context, string, io.Writer, int64) (int64, error)
 }
 
 // SSHConfig defines the host and private files for one builder SSH connection.
@@ -94,7 +95,7 @@ func (executor *SSHExecutor) Run(ctx context.Context, command Command) (Result, 
 
 // Upload writes one file atomically below the builder's private build directory.
 func (executor *SSHExecutor) Upload(ctx context.Context, source io.Reader, destination string, size int64) error {
-	if source == nil || size < 0 || size > maxUploadBytes {
+	if source == nil || size < 0 || size > maxTransferBytes {
 		return errors.New("builder upload size is invalid")
 	}
 	if !validDestination(destination) {
@@ -119,6 +120,38 @@ func (executor *SSHExecutor) Upload(ctx context.Context, source io.Reader, desti
 		return errors.New("builder upload output exceeds the size limit")
 	}
 	return nil
+}
+
+// Download copies one private builder file to a writer with a strict size limit.
+func (executor *SSHExecutor) Download(ctx context.Context, source string, destination io.Writer, maxBytes int64) (int64, error) {
+	if destination == nil || maxBytes < 1 || maxBytes > maxTransferBytes {
+		return 0, errors.New("builder download size limit is invalid")
+	}
+	if !validDestination(source) {
+		return 0, errors.New("builder download source is invalid")
+	}
+	remote := "exec cat -- " + shellQuote(source)
+	process := exec.CommandContext(ctx, executor.config.SSHPath, executor.sshArguments(remote)...)
+	output := &limitedWriter{writer: destination, limit: maxBytes}
+	stderr := &boundedBuffer{limit: maxOutputBytes}
+	process.Stdout = output
+	process.Stderr = stderr
+	if err := process.Run(); err != nil {
+		if output.exceeded {
+			return output.written, errors.New("builder download exceeds the size limit")
+		}
+		if len(stderr.bytes) != 0 {
+			return output.written, fmt.Errorf("download builder file: %w: %s", err, strings.TrimSpace(string(stderr.bytes)))
+		}
+		return output.written, fmt.Errorf("download builder file: %w", err)
+	}
+	if output.exceeded {
+		return output.written, errors.New("builder download exceeds the size limit")
+	}
+	if stderr.exceeded {
+		return output.written, errors.New("builder download error output exceeds the size limit")
+	}
+	return output.written, nil
 }
 
 func (executor *SSHExecutor) sshArguments(remote string) []string {
@@ -174,6 +207,35 @@ type boundedBuffer struct {
 	bytes    []byte
 	limit    int
 	exceeded bool
+}
+
+type limitedWriter struct {
+	writer   io.Writer
+	limit    int64
+	written  int64
+	exceeded bool
+}
+
+func (writer *limitedWriter) Write(value []byte) (int, error) {
+	remaining := writer.limit - writer.written
+	if int64(len(value)) > remaining {
+		writer.exceeded = true
+		if remaining > 0 {
+			n, err := writer.writer.Write(value[:remaining])
+			writer.written += int64(n)
+			if err != nil {
+				return n, err
+			}
+			return n, errors.New("builder download exceeds the size limit")
+		}
+		return 0, errors.New("builder download exceeds the size limit")
+	}
+	n, err := writer.writer.Write(value)
+	writer.written += int64(n)
+	if err == nil && n != len(value) {
+		err = io.ErrShortWrite
+	}
+	return n, err
 }
 
 func (buffer *boundedBuffer) Write(value []byte) (int, error) {

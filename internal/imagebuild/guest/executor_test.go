@@ -1,6 +1,10 @@
 package guest
 
 import (
+	"bytes"
+	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -93,4 +97,55 @@ func TestBoundedBufferCapsOutput(t *testing.T) {
 	if len(buffer.bytes) != 4 || strings.Contains(string(buffer.bytes), "def") {
 		t.Fatalf("output exceeded bound: %q", buffer.bytes)
 	}
+}
+
+func TestDownloadStreamsArtifactWithinLimit(t *testing.T) {
+	executor := testSSHExecutor(t, "printf artifact")
+	var output bytes.Buffer
+	n, err := executor.Download(context.Background(), buildDirectory+"/root.squashfs", &output, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 8 || output.String() != "artifact" {
+		t.Fatalf("Download() = (%d, %q), want (8, artifact)", n, output.String())
+	}
+}
+
+func TestDownloadRejectsArtifactOverLimit(t *testing.T) {
+	executor := testSSHExecutor(t, "printf artifact")
+	var output bytes.Buffer
+	n, err := executor.Download(context.Background(), buildDirectory+"/root.squashfs", &output, 4)
+	if err == nil || n != 4 || output.String() != "arti" {
+		t.Fatalf("Download() = (%d, %q, %v), want bounded output and size error", n, output.String(), err)
+	}
+}
+
+func TestDownloadRejectsInvalidSourceAndLimit(t *testing.T) {
+	executor := testSSHExecutor(t, "printf ignored")
+	for _, source := range []string{"relative/file", "/tmp/outside", buildDirectory + "/../outside"} {
+		if _, err := executor.Download(context.Background(), source, &bytes.Buffer{}, 8); err == nil {
+			t.Errorf("Download() accepted source %q", source)
+		}
+	}
+	if _, err := executor.Download(context.Background(), buildDirectory+"/file", &bytes.Buffer{}, maxTransferBytes+1); err == nil {
+		t.Fatal("Download() accepted an oversized limit")
+	}
+}
+
+func testSSHExecutor(t *testing.T, output string) *SSHExecutor {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "ssh")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+output+"\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	executor, err := NewSSHExecutor(SSHConfig{
+		Target:         "build@192.0.2.10",
+		PrivateKeyPath: "/tmp/build-key",
+		KnownHostsPath: "/tmp/build-known-hosts",
+		SSHPath:        path,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return executor
 }
