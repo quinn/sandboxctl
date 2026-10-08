@@ -17,9 +17,9 @@ ssh sandboxctl-dev1
 
 The user can include the managed configuration in the main SSH configuration.
 
-## Current functions
+## Current development functions
 
-The scaffold can do these operations:
+The current implementation can do these operations:
 
 - Create the private application directories.
 - Create a tool-owned Ed25519 SSH key.
@@ -30,7 +30,7 @@ The scaffold can do these operations:
 - Stop the SDK runner and its Firecracker process.
 - Open an SSH connection to a recorded sandbox.
 
-The scaffold cannot yet do these operations:
+The current implementation cannot yet do these operations:
 
 - Download or build a Firecracker guest kernel.
 - Build the base root file system.
@@ -83,8 +83,8 @@ The files go to these paths:
 The target verifies the checksums on later runs. Move the files and checksum
 manifest out of the way if you want to download a fresh copy.
 
-Do not use the old `download-test-assets` flow for this proof.
-That flow selects changing upstream artifacts and creates an ext4 root image.
+Do not use `download-test-assets` for this proof.
+That target selects changing upstream artifacts and creates an ext4 root image.
 The v2 design requires pinned image digests and a read-only SquashFS base.
 
 Build the initramfs and create a state disk:
@@ -106,12 +106,12 @@ Run `make overlay-state-reset` and type `RESET` at the prompt.
 Run `make overlay-proof` and confirm that the output reports a new marker.
 
 The proof checks the SquashFS digest after each VM run.
-Do not start the sandboxd migration until these checks pass.
+Do not start sandboxd implementation until these checks pass.
 
-## Legacy single-root VM test
+## Temporary single-root VM test
 
-This section describes the old single-ext4-root scaffold.
-The runtime v2 plan replaces this workflow.
+This test uses a single ext4 root drive with the current development runner.
+It does not test the SquashFS and OverlayFS runtime design.
 
 Download the upstream test kernel and Ubuntu filesystem:
 
@@ -234,7 +234,7 @@ ssh -G sandboxctl-dev1
 
 - [Implementation specification](docs/SPEC.md)
 - [Authoritative runtime v2 design](docs/SANDBOX-RUNTIME-V2.md)
-- [Migration progress](docs/PROGRESS.md)
+- [Implementation progress](docs/PROGRESS.md)
 - [Continuation instructions](docs/CONTINUE.md)
 - [Design decisions](docs/DECISIONS.md)
 - [Instructions for coding agents](AGENTS.md)

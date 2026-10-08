@@ -39,6 +39,6 @@ Usage:
 Use sandboxctl ssh-config to print the block for your SSH configuration.
 Connect with ssh sandboxctl-NAME after you add the block.
 
-The current scaffold does not create the TAP network or prepare the guest image.
+This implementation does not yet create the TAP network or prepare the guest image.
 Read docs/CONTINUE.md before you use it with important data.`)
 }

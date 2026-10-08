@@ -29,13 +29,15 @@ func TestRecordDetectsRunningAndStaleProcess(t *testing.T) {
 	}
 }
 
-func TestReadRejectsLegacyPID(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "process.json")
-	if err := os.WriteFile(path, []byte("123\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Read(path); err == nil {
-		t.Fatal("accepted a legacy PID record")
+func TestReadRejectsInvalidProcessRecord(t *testing.T) {
+	for _, content := range []string{"{", `{"pid":0,"start_time":1}`} {
+		path := filepath.Join(t.TempDir(), "process.json")
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Read(path); err == nil {
+			t.Fatalf("accepted invalid process record %q", content)
+		}
 	}
 }
 

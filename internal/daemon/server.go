@@ -154,6 +154,7 @@ func toProtocolInstance(instance hoststate.Instance) *controlpb.Instance {
 		GuestMac:       instance.GuestMAC,
 		SshUser:        instance.SSHUser,
 		SshAlias:       instance.SSHAlias,
+		RuntimeState:   "stopped",
 	}
 }
 

@@ -98,7 +98,7 @@ func TestServerListsAndInspectsSavedInstances(t *testing.T) {
 	if len(listed.GetInstances()) != 2 || listed.GetInstances()[0].GetName() != "dev1" || listed.GetInstances()[1].GetName() != "dev2" {
 		t.Fatalf("ListInstances() = %v, want instances ordered dev1, dev2", listed.GetInstances())
 	}
-	if listed.GetInstances()[0].GetHostUid() != 300001 || listed.GetInstances()[0].GetStateDiskBytes() == 0 {
+	if listed.GetInstances()[0].GetHostUid() != 300001 || listed.GetInstances()[0].GetStateDiskBytes() == 0 || listed.GetInstances()[0].GetRuntimeState() != "stopped" {
 		t.Fatalf("ListInstances() omitted instance fields: %v", listed.GetInstances()[0])
 	}
 

@@ -89,4 +89,6 @@ message Instance {
   string ssh_user = 17;
   // Gives the OpenSSH alias for the sandbox.
   string ssh_alias = 18;
+  // Reports the current runtime state known to sandboxd.
+  string runtime_state = 19;
 }

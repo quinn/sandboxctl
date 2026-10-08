@@ -15,8 +15,12 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// DialTimeout is the maximum time Dial waits for the daemon connection.
-const DialTimeout = 5 * time.Second
+const (
+	// DefaultSocketPath is the system socket for the privileged daemon.
+	DefaultSocketPath = "/run/sandboxctl/control.sock"
+	// DialTimeout is the maximum time Dial waits for the daemon connection.
+	DialTimeout = 5 * time.Second
+)
 
 // Dial connects to sandboxd over its Unix domain socket.
 func Dial(ctx context.Context, socketPath string) (*grpc.ClientConn, controlpb.ControlServiceClient, error) {

@@ -1,4 +1,4 @@
-# Migration progress
+# Implementation progress
 
 Last updated: 2026-10-07
 
@@ -12,7 +12,7 @@ Section 18 now records this gate.
 
 The Phase 1 storage proof passed. Section 18 steps 1 through 3 are complete. Step 4 host installation and doctor support are implemented and still need final integration checks on a disposable Arch host.
 
-Current migration work is section 18, step 5: move privileged state to `/var/lib/sandboxctl`. A daemon-owned state package now defines that layout and saves version-2 instance records atomically. The host installer creates the state directories as root-owned mode `0700`. sandboxd now exposes read-only list and inspect RPCs over the Unix socket and reads records from this store. The legacy CLI still reads instance records from XDG paths. The move is not complete until CLI instance operations use sandboxd and old records receive an explicit migration or rejection path.
+Current implementation work follows section 18, step 6. The daemon-owned state package defines `/var/lib/sandboxctl` and saves version-2 instance records atomically. The host installer creates the state directories as root-owned mode `0700`. sandboxd exposes list and inspect RPCs. `sandboxctl list` reads daemon state. The current create, start, stop, and SSH commands still use operator XDG records. Move them when the allocation and lifecycle RPCs are ready. Keep the temporary single-root test until the jailed runtime passes integration testing.
 
 The E2B runtime checkout is retained in ignored `tmp/e2b-runtime` at commit `47096f195aca4a545a9079b706efb3a18f51cf3f`. The license, extraction record, and first Debian/Ubuntu provisioning profile are in place. There is no build command, BuildKit VM orchestration, image manifest, or SquashFS finalizer yet.
 
@@ -34,7 +34,7 @@ Next: test the new provisioning renderer and finish the image-builder foundation
 - The SDK runtime is behind an application-facing `runtime.Backend` interface.
 - The current Go project passed `go vet ./...`, `go test ./...`, and `go build ./...` after the baseline interface change and Phase 1 tooling.
 - The required `gofmt`, `go vet ./...`, and `go test ./...` checks pass after the latest changes.
-- `bash -n` passes for the Phase 1 scripts and the legacy test scripts.
+- `bash -n` passes for the Phase 1 scripts and the manual test scripts.
 - `git diff --check` passes.
 - Firecracker and jailer v1.17.0 are installed in the current development environment.
 - Added `cmd/overlay-init` to mount SquashFS read-only, mount ext4 state read-write, assemble OverlayFS, and switch to the guest init system.
@@ -97,15 +97,18 @@ Next: test the new provisioning renderer and finish the image-builder foundation
 - Added separate `ListInstances` and `InspectInstance` RPCs. The daemon reads from the root-owned host-state store and maps invalid names and missing records to structured gRPC errors.
 - Updated `cmd/sandboxd` to use `/var/lib/sandboxctl` for instance reads. Added Unix-socket integration tests for sorted listing, record fields, inspection, invalid names, and missing records.
 - Regenerated Protocol Buffer Go files with the pinned Buf plugins.
+- Changed `sandboxctl list` to read records from sandboxd. It supports the documented versioned JSON output.
+- Removed the XDG record scan from `sandboxctl list`. The command does not import operator-side instance records.
+- `make check`, `make build`, and `git diff --check` pass after the daemon-backed list change.
 - The host-side image builder, OCI reference checks, BuildKit VM orchestration, image manifest, SquashFS finalizer, and integration boot are still open.
 - `make check` and `git diff --check` pass after the host-state changes. The generated Debian and Ubuntu scripts pass POSIX shell syntax validation in the tests.
 
 ## Decisions
 
-- Keep the existing SDK runner as migration input until a new SDK runtime completes an integration boot.
+- Keep the current SDK runner available until the jailed SDK runtime completes an integration boot.
 - Keep Phase 1 as an isolated development experiment.
 - Do not start sandboxd, its protocol, or the host installer before the Phase 1 exit conditions pass.
-- The old `download-test-assets` flow converts the SquashFS into a writable ext4 root and selects changing remote artifacts. It does not match the Phase 1 image model. Do not use it as Phase 1 input.
+- The `download-test-assets` target converts the SquashFS into a writable ext4 root and selects changing remote artifacts. It does not match the Phase 1 image model. Do not use it as Phase 1 input.
 - Use gRPC over the Unix socket. Use Buf with pinned remote plugins for schema lint and code generation.
 - Use the Unix socket's owner, group, and mode as the only client authorization check. Membership in the `sandboxctl` group grants access to the full daemon API.
 - Use separate typed RPC methods. Do not use a generic `Call` method or a negotiation RPC.
@@ -119,8 +122,8 @@ The repository has no configured Git remote or license file. The AUR draft uses 
 
 ## Next tasks
 
-1. Finish section 18 step 5 by routing CLI instance reads through sandboxd and defining how legacy schema-version-1 records are handled. Keep XDG state limited to operator-owned SSH and client data.
-2. Implement the UID, GID, address, and TAP registries in step 6. Add instance creation after these allocators can produce complete records.
-3. Finish the SDK and jailer runtime in step 7 before the builder VM depends on it.
+1. Implement the UID, GID, address, and TAP registries in section 18 step 6. Add instance creation after these allocators can produce complete records.
+2. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented. Preserve the manual test path until the jailed runtime passes integration testing.
+3. Finish the SDK and jailer runtime in section 18 step 7 before the builder VM depends on it.
 4. Add image manifest validation and cold-boot SquashFS finalization. Keep OCI pulls and extraction inside the builder VM through BuildKit.
 5. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.

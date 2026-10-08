@@ -111,11 +111,11 @@ func TestStoreLoadRejectsUnsupportedSchema(t *testing.T) {
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(directory, "instance.json"), []byte(`{"schema_version":1,"name":"dev1"}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "instance.json"), []byte(`{"schema_version":99,"name":"dev1"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err := (Store{Paths: paths}).Load("dev1")
-	if err == nil || err.Error() != "unsupported instance schema version 1; expected 2" {
+	if err == nil || err.Error() != "unsupported instance schema version 99; expected 2" {
 		t.Fatalf("Load() error = %v", err)
 	}
 }

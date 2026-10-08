@@ -8,13 +8,13 @@ Date: 2026-10-03
 
 This document defines the required runtime architecture for sandboxctl.
 
-It replaces conflicting runtime, privilege, image, networking, SSH, and Herdr requirements in the older project documents.
+It replaces conflicting runtime, privilege, image, networking, SSH, and Herdr requirements in other project documents.
 
 The Firecracker Go Software Development Kit (SDK) is already an accepted
 project decision. This document does not compare the SDK with firectl. Continue
 to use the SDK.
 
-The current source code still implements parts of the old design. Treat that code as migration input. Do not preserve an old behavior only because code exists for it.
+The current implementation is incomplete. Replace any behavior that conflicts with this design. Do not preserve a behavior only because code exists for it.
 
 ## 2. Required result
 
@@ -1051,14 +1051,14 @@ Verify:
 
 Do not add Herdr-specific tests.
 
-## 18. Migration from the scaffold
+## 18. Implementation sequence
 
-Before the migration sequence, complete the risk-first Phase 1 storage proof.
-Use the Phase 1 plan described before this migration section.
+Before the implementation sequence, complete the risk-first Phase 1 storage proof.
+Use the Phase 1 plan described above.
 Keep this proof isolated from sandboxd, the installer, and networking.
 Do not continue to the control protocol until the proof meets its exit conditions.
 
-Complete migration in this order:
+Complete the implementation in this order:
 
 1. Keep the existing project build green.
 2. Add the sandboxd command and versioned Unix socket protocol.
@@ -1070,11 +1070,10 @@ Complete migration in this order:
 8. Add immutable image import.
 9. Add initramfs OverlayFS boot.
 10. Add routed TAP and nftables support.
-11. Replace the old SSH wrapper design with generated Include configuration.
+11. Generate one OpenSSH Include fragment.
 12. Remove direct Herdr commands and the internal Herdr package.
 13. Remove ssh and scp wrapper generation.
 14. Remove firectl runtime code after the SDK path passes integration tests.
-15. Migrate or reject schema-version-1 instance records with a clear message.
 
 Do not retain two active runtime architectures.
 

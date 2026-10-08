@@ -8,7 +8,7 @@ Read these files before you change code:
 4. `docs/DECISIONS.md`
 5. `docs/CONTINUE.md`
 
-`docs/SANDBOX-RUNTIME-V2.md` is authoritative. It replaces conflicting requirements in older documents and the current scaffold.
+`docs/SANDBOX-RUNTIME-V2.md` is authoritative. It replaces conflicting requirements in other documents and the current implementation.
 
 ## Text rules
 
@@ -50,7 +50,7 @@ Do not change external command names, option names, file names, protocol names, 
 - Do not require `sudo` for routine sandbox operations.
 - Do not run Firecracker as root or as the operator in the final design.
 - Use `sudo` only for an isolated development proof when needed.
-- Keep the build green after each migration step.
+- Keep the build green after each implementation step.
 
 ## Progress tracking
 
@@ -76,6 +76,6 @@ If a check cannot run, state the reason in the handoff.
 
 ## Current task
 
-Start the migration in section 18 of `docs/SANDBOX-RUNTIME-V2.md`.
-First prove the Phase 1 SquashFS and OverlayFS boot path.
-Do not start the sandboxd protocol until the Phase 1 exit conditions pass.
+Continue the implementation sequence in section 18 of `docs/SANDBOX-RUNTIME-V2.md`.
+The Phase 1 SquashFS and OverlayFS proof has passed.
+The active task is section 18, step 6: add UID, GID, address, and TAP allocation registries.

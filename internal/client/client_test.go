@@ -76,8 +76,8 @@ func TestClientCallsDaemonOverUnixSocket(t *testing.T) {
 
 func TestClientInterceptorSetsFreshRequestMetadata(t *testing.T) {
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(
-		daemon.APIVersionMetadataKey, "old-version",
-		daemon.RequestIDMetadataKey, "old-request-id",
+		daemon.APIVersionMetadataKey, "stale-version",
+		daemon.RequestIDMetadataKey, "stale-request-id",
 	))
 	requestIDs := make([]string, 0, 2)
 	invoke := func(ctx context.Context, _ string, _, _ any, _ *grpc.ClientConn, _ ...grpc.CallOption) error {

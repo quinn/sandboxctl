@@ -78,7 +78,7 @@ func TestIncludedConfig(t *testing.T) {
 	if info.Mode().Perm() != 0600 {
 		t.Fatalf("mode = %o", info.Mode().Perm())
 	}
-	// Regeneration must replace the old address and restore private permissions.
+	// Regeneration must replace the previous address and restore private permissions.
 	instance.GuestIP = "172.30.0.11"
 	if err := s.Save(instance); err != nil {
 		t.Fatal(err)
