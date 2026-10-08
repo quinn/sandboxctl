@@ -77,7 +77,7 @@ func RunVM(name string) error {
 
 // Init creates the managed SSH key and configuration files.
 func (c *Context) Init() error {
-	if err := c.ssh.Initialize(); err != nil {
+	if err := c.ssh.PrepareKey(); err != nil {
 		return err
 	}
 	fmt.Fprintln(os.Stdout, "Sandboxctl is initialized.")

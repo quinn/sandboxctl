@@ -102,6 +102,34 @@ func TestIncludedConfig(t *testing.T) {
 	}
 }
 
+func TestWriteConfigEntriesUsesDaemonValues(t *testing.T) {
+	m := testManager(t)
+	entries := []HostEntry{{Name: "dev1", Address: "172.30.0.2", User: "dev"}}
+	if err := m.WriteConfigEntries(entries); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(m.Paths.SSHConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Host sandbox-dev1 172.30.0.2", "HostName 172.30.0.2", "User \"dev\"", "Port 22", "StrictHostKeyChecking ask"} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("SSH fragment does not contain %q: %s", want, data)
+		}
+	}
+	before := string(data)
+	if err := m.WriteConfigEntries([]HostEntry{{Name: "dev1", Address: "172.30.0.2\nHost *", User: "dev"}}); err == nil {
+		t.Fatal("accepted a line break in a daemon address")
+	}
+	data, err = os.ReadFile(m.Paths.SSHConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != before {
+		t.Fatal("invalid daemon data changed the SSH fragment")
+	}
+}
+
 func TestConfigFailurePreservesFile(t *testing.T) {
 	for _, invalid := range []model.Instance{
 		{GuestIP: "172.30.0.10\nHost *", SSHUser: "dev", SSHPort: 22},

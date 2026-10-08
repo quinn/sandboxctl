@@ -7,4 +7,4 @@ The Phase 1 SquashFS and OverlayFS proof passed.
 The temporary single-root virtual machine test also passed.
 Keep that test available until the jailed runtime passes an integration boot.
 
-The next task is section 18, step 6: implement UID, GID, address, and TAP allocation registries.
+Section 18, step 6 and stopped-instance creation are complete. The create path needs an installed image manifest and the host service. Continue with section 18, step 7: jailer launch through the SDK runtime. Keep the manual VM test available until the jailed runtime passes an integration boot.

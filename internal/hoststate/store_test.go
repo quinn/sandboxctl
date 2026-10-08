@@ -1,6 +1,7 @@
 package hoststate
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -23,6 +24,63 @@ func TestPathsEnsureCreatesPrivateLayout(t *testing.T) {
 			t.Fatalf("%s mode/type = %v, want private directory", path, info.Mode())
 		}
 	}
+}
+
+func TestStoreSavesAndLoadsGuestPublicKey(t *testing.T) {
+	paths := PathsAt(filepath.Join(t.TempDir(), "state"))
+	store := Store{Paths: paths}
+	id, err := NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := testInstance(id)
+	key := testPublicKey()
+	if err := store.SaveWithPublicKey(instance, key); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.LoadPublicKey(instance.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != key {
+		t.Fatalf("LoadPublicKey() = %q, want %q", got, key)
+	}
+	info, err := os.Stat(filepath.Join(paths.Instances, instance.Name, "authorized_key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("public key file mode = %04o, want 0600", info.Mode().Perm())
+	}
+}
+
+func TestStoreRejectsSymlinkGuestPublicKey(t *testing.T) {
+	paths := PathsAt(filepath.Join(t.TempDir(), "state"))
+	store := Store{Paths: paths}
+	if err := paths.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	directory := filepath.Join(paths.Instances, "dev1")
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "authorized_key")
+	if err := os.WriteFile(target, []byte(testPublicKey()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(directory, "authorized_key")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LoadPublicKey("dev1"); err == nil {
+		t.Fatal("accepted a symlink guest public key")
+	}
+}
+
+func testPublicKey() string {
+	data := append([]byte{0, 0, 0, 11}, []byte("ssh-ed25519")...)
+	data = append(data, 0, 0, 0, 32)
+	data = append(data, make([]byte, 32)...)
+	return "ssh-ed25519 " + base64.StdEncoding.EncodeToString(data) + " sandboxctl-test"
 }
 
 func TestPathsEnsureRejectsSymlink(t *testing.T) {
@@ -147,7 +205,7 @@ func testInstance(id string) Instance {
 		HostIP:         "172.30.0.1",
 		GuestIP:        "172.30.0.2",
 		TapDevice:      "sc000001",
-		GuestMAC:       "06:00:ac:10:00:02",
+		GuestMAC:       "06:00:ac:1e:00:02",
 		SSHUser:        "dev",
 		SSHAlias:       "sandbox-dev1",
 	}

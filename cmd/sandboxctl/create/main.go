@@ -1,17 +1,29 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
-	"net/netip"
 	"os"
-	"path/filepath"
 
-	"sandboxctl/internal/app"
+	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
-	"sandboxctl/internal/names"
+	"sandboxctl/internal/config"
+	"sandboxctl/internal/controlpb"
+	"sandboxctl/internal/daemon"
+	sshconfig "sandboxctl/internal/ssh"
 )
+
+const defaultStateDiskGiB = 20
+
+type createOptions struct {
+	Name         string
+	VCPUs        int
+	MemoryMiB    int
+	StateDiskGiB int
+	Image        string
+}
 
 func main() {
 	cmdutil.Main(run)
@@ -25,84 +37,72 @@ func run(arguments []string) error {
 		}
 		return err
 	}
-	command, err := app.New()
+	paths, err := config.Resolve()
 	if err != nil {
 		return err
 	}
-	return command.Create(options)
+	ssh := sshconfig.Manager{Paths: paths}
+	if err := ssh.PrepareKey(); err != nil {
+		return err
+	}
+	publicKey, err := os.ReadFile(paths.PublicKey())
+	if err != nil {
+		return fmt.Errorf("read managed SSH public key: %w", err)
+	}
+	connection, service, err := client.Dial(context.Background(), client.DefaultSocketPath)
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxCreateDuration)
+	defer cancel()
+	response, err := service.CreateInstance(ctx, &controlpb.CreateInstanceRequest{
+		Name: options.Name, Vcpus: int32(options.VCPUs), MemoryMib: int32(options.MemoryMiB),
+		StateDiskBytes: int64(options.StateDiskGiB) << 30, Image: options.Image, SshPublicKey: string(publicKey),
+	})
+	if err != nil {
+		return fmt.Errorf("create sandbox %s: %w", options.Name, err)
+	}
+	listContext, listCancel := context.WithTimeout(context.Background(), daemon.MaxOperationDuration)
+	defer listCancel()
+	if err := ssh.RefreshConfig(listContext, service); err != nil {
+		return fmt.Errorf("created sandbox %s, but could not refresh SSH configuration; run sandboxctl ssh-config: %w", options.Name, err)
+	}
+	instance := response.GetInstance()
+	fmt.Fprintf(os.Stdout, "Created sandbox %s.\n", instance.GetName())
+	fmt.Fprintf(os.Stdout, "SSH alias: sandbox-%s\n", instance.GetName())
+	fmt.Fprintf(os.Stdout, "Guest address: %s\n", instance.GetGuestIp())
+	fmt.Fprintf(os.Stdout, "Assigned host UID and GID: %d:%d\n", instance.GetHostUid(), instance.GetHostGid())
+	fmt.Fprintf(os.Stdout, "TAP device: %s\n", instance.GetTapDevice())
+	fmt.Fprintf(os.Stdout, "State disk size: %d GiB\n", options.StateDiskGiB)
+	return nil
 }
 
-func parse(arguments []string) (app.CreateOptions, error) {
+func parse(arguments []string) (createOptions, error) {
 	flags := flag.NewFlagSet("create", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
 	cpus := flags.Int("cpus", 2, "Number of virtual CPUs.")
 	memory := flags.Int("memory", 4096, "Memory size in MiB.")
-	kernel := flags.String("kernel", "", "Path to the uncompressed Linux kernel.")
-	rootDrive := flags.String("root-drive", "", "Path to a prepared root file system.")
-	sshUser := flags.String("ssh-user", "dev", "SSH user in the guest.")
-	guestIP := flags.String("guest-ip", "", "Static IPv4 address for the guest.")
+	diskSize := flags.Int("disk-size", defaultStateDiskGiB, "Writable state disk size in GiB.")
+	image := flags.String("image", "default", "Installed base image name.")
 	if err := flags.Parse(cmdutil.PositionalArgumentLast(arguments)); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			return app.CreateOptions{}, err
+			return createOptions{}, err
 		}
-		return app.CreateOptions{}, fmt.Errorf("parse create options: %w", err)
+		return createOptions{}, fmt.Errorf("parse create options: %w", err)
 	}
 	if flags.NArg() != 1 {
-		return app.CreateOptions{}, errors.New("usage: sandboxctl create NAME --kernel PATH --root-drive PATH")
+		return createOptions{}, errors.New("usage: sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]")
 	}
 	name := flags.Arg(0)
 	if err := cmdutil.ValidateSandboxName(name); err != nil {
-		return app.CreateOptions{}, err
+		return createOptions{}, err
 	}
-	if *cpus < 1 || *memory < 128 {
-		return app.CreateOptions{}, errors.New("cpus must be at least 1 and memory must be at least 128 MiB")
+	if err := cmdutil.ValidateSandboxName(*image); err != nil {
+		return createOptions{}, fmt.Errorf("image: %w", err)
 	}
-	if *kernel == "" || *rootDrive == "" {
-		return app.CreateOptions{}, errors.New("kernel and root-drive are required")
+	if *cpus < 1 || int64(*cpus) > (1<<31)-1 || *memory < 128 || int64(*memory) > (1<<31)-1 || *diskSize < 1 || uint64(*diskSize) > uint64(^uint64(0)>>1)>>30 {
+		return createOptions{}, errors.New("cpus must be positive, memory must be at least 128 MiB, and disk size must be a positive GiB value")
 	}
-	if err := cmdutil.ValidateGuestUser(*sshUser); err != nil {
-		return app.CreateOptions{}, err
-	}
-	kernelPath, err := regularFilePath(*kernel)
-	if err != nil {
-		return app.CreateOptions{}, fmt.Errorf("kernel: %w", err)
-	}
-	baseDrivePath, err := regularFilePath(*rootDrive)
-	if err != nil {
-		return app.CreateOptions{}, fmt.Errorf("base root drive: %w", err)
-	}
-
-	_, _, hostPart := names.NetworkIdentity(name)
-	if *guestIP == "" {
-		*guestIP = fmt.Sprintf("172.30.0.%d", hostPart)
-	}
-	address, err := netip.ParseAddr(*guestIP)
-	if err != nil || !address.Is4() || !netip.MustParsePrefix("172.30.0.0/24").Contains(address) || address.As4()[3] < 2 || address.As4()[3] > 254 {
-		return app.CreateOptions{}, errors.New("guest-ip must be a usable address in 172.30.0.0/24")
-	}
-
-	return app.CreateOptions{
-		Name:          name,
-		VCPUs:         *cpus,
-		MemoryMiB:     *memory,
-		KernelImage:   kernelPath,
-		BaseRootDrive: baseDrivePath,
-		SSHUser:       *sshUser,
-		GuestIP:       address,
-	}, nil
-}
-
-func regularFilePath(value string) (string, error) {
-	absolute, err := filepath.Abs(value)
-	if err != nil {
-		return "", err
-	}
-	info, err := os.Stat(absolute)
-	if err != nil {
-		return "", err
-	}
-	if !info.Mode().IsRegular() {
-		return "", errors.New("must be a regular file")
-	}
-	return absolute, nil
+	return createOptions{Name: name, VCPUs: *cpus, MemoryMiB: *memory, StateDiskGiB: *diskSize, Image: *image}, nil
 }

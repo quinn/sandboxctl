@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -132,6 +134,18 @@ type Store struct{ Paths Paths }
 
 // Save validates and atomically writes an instance record.
 func (s Store) Save(instance Instance) error {
+	return s.save(instance, "")
+}
+
+// SaveWithPublicKey stores an instance record and its validated guest login key.
+func (s Store) SaveWithPublicKey(instance Instance, publicKey string) error {
+	if !validPublicKey(publicKey) {
+		return errors.New("SSH public key must be an Ed25519 public key")
+	}
+	return s.save(instance, strings.TrimSpace(publicKey)+"\n")
+}
+
+func (s Store) save(instance Instance, publicKey string) error {
 	if err := validate(instance); err != nil {
 		return err
 	}
@@ -153,12 +167,60 @@ func (s Store) Save(instance Instance) error {
 	if err := os.Chmod(directory, 0o700); err != nil {
 		return fmt.Errorf("set instance directory mode: %w", err)
 	}
+	if publicKey != "" {
+		if err := atomicWrite(filepath.Join(directory, "authorized_key"), []byte(publicKey), 0o600); err != nil {
+			return fmt.Errorf("write guest public key: %w", err)
+		}
+	}
 	data, err := json.MarshalIndent(instance, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode instance record: %w", err)
 	}
 	data = append(data, '\n')
 	return atomicWrite(filepath.Join(directory, "instance.json"), data, 0o600)
+}
+
+// LoadPublicKey reads the guest login key stored for name.
+func (s Store) LoadPublicKey(name string) (string, error) {
+	if !safeName.MatchString(name) {
+		return "", ErrInvalidName
+	}
+	directory := filepath.Join(s.Paths.Instances, name)
+	directoryInfo, err := os.Lstat(directory)
+	if err != nil {
+		return "", fmt.Errorf("inspect instance directory: %w", err)
+	}
+	directoryStat, ok := directoryInfo.Sys().(*syscall.Stat_t)
+	if !directoryInfo.IsDir() || directoryInfo.Mode()&os.ModeSymlink != 0 || !ok || int(directoryStat.Uid) != os.Geteuid() || directoryInfo.Mode().Perm()&0o077 != 0 {
+		return "", errors.New("instance directory must be private and owned by sandboxd")
+	}
+	path := filepath.Join(directory, "authorized_key")
+	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return "", fmt.Errorf("read guest public key: %w", err)
+	}
+	file := os.NewFile(uintptr(fd), path)
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return "", fmt.Errorf("inspect guest public key: %w", err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !info.Mode().IsRegular() || !ok || int(stat.Uid) != os.Geteuid() || info.Mode().Perm()&0o077 != 0 || info.Size() > 16<<10 {
+		return "", errors.New("stored guest public key must be a private regular file owned by sandboxd")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, (16<<10)+1))
+	if err != nil {
+		return "", fmt.Errorf("read guest public key: %w", err)
+	}
+	if len(data) > 16<<10 {
+		return "", errors.New("stored guest public key exceeds the size limit")
+	}
+	key := strings.TrimSpace(string(data))
+	if !validPublicKey(key) {
+		return "", errors.New("stored guest public key is invalid")
+	}
+	return key, nil
 }
 
 // Load reads and validates the version-2 instance record for name.
@@ -245,6 +307,13 @@ func validate(instance Instance) error {
 	}
 	if instance.Image == "" || instance.ImageVersion == "" || instance.TapDevice == "" || instance.GuestIP == "" {
 		return errors.New("instance image, version, TAP device, and guest address are required")
+	}
+	if err := validateNetworkAllocation(Allocation{
+		Name: instance.Name, UID: uint32(instance.HostUID), GID: uint32(instance.HostGID),
+		Subnet: instance.Subnet, HostIP: instance.HostIP, GuestIP: instance.GuestIP,
+		Tap: instance.TapDevice, GuestMAC: instance.GuestMAC,
+	}); err != nil {
+		return fmt.Errorf("invalid instance network allocation: %w", err)
 	}
 	return nil
 }

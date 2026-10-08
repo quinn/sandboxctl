@@ -23,6 +23,7 @@ const (
 	ControlService_HostStatus_FullMethodName      = "/sandboxctl.ControlService/HostStatus"
 	ControlService_ListInstances_FullMethodName   = "/sandboxctl.ControlService/ListInstances"
 	ControlService_InspectInstance_FullMethodName = "/sandboxctl.ControlService/InspectInstance"
+	ControlService_CreateInstance_FullMethodName  = "/sandboxctl.ControlService/CreateInstance"
 )
 
 // ControlServiceClient is the client API for ControlService service.
@@ -37,6 +38,8 @@ type ControlServiceClient interface {
 	ListInstances(ctx context.Context, in *ListInstancesRequest, opts ...grpc.CallOption) (*ListInstancesResponse, error)
 	// Reports the saved state for one sandbox instance.
 	InspectInstance(ctx context.Context, in *InspectInstanceRequest, opts ...grpc.CallOption) (*InspectInstanceResponse, error)
+	// Creates a stopped sandbox instance.
+	CreateInstance(ctx context.Context, in *CreateInstanceRequest, opts ...grpc.CallOption) (*CreateInstanceResponse, error)
 }
 
 type controlServiceClient struct {
@@ -87,6 +90,16 @@ func (c *controlServiceClient) InspectInstance(ctx context.Context, in *InspectI
 	return out, nil
 }
 
+func (c *controlServiceClient) CreateInstance(ctx context.Context, in *CreateInstanceRequest, opts ...grpc.CallOption) (*CreateInstanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateInstanceResponse)
+	err := c.cc.Invoke(ctx, ControlService_CreateInstance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControlServiceServer is the server API for ControlService service.
 // All implementations must embed UnimplementedControlServiceServer
 // for forward compatibility.
@@ -99,6 +112,8 @@ type ControlServiceServer interface {
 	ListInstances(context.Context, *ListInstancesRequest) (*ListInstancesResponse, error)
 	// Reports the saved state for one sandbox instance.
 	InspectInstance(context.Context, *InspectInstanceRequest) (*InspectInstanceResponse, error)
+	// Creates a stopped sandbox instance.
+	CreateInstance(context.Context, *CreateInstanceRequest) (*CreateInstanceResponse, error)
 	mustEmbedUnimplementedControlServiceServer()
 }
 
@@ -120,6 +135,9 @@ func (UnimplementedControlServiceServer) ListInstances(context.Context, *ListIns
 }
 func (UnimplementedControlServiceServer) InspectInstance(context.Context, *InspectInstanceRequest) (*InspectInstanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InspectInstance not implemented")
+}
+func (UnimplementedControlServiceServer) CreateInstance(context.Context, *CreateInstanceRequest) (*CreateInstanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateInstance not implemented")
 }
 func (UnimplementedControlServiceServer) mustEmbedUnimplementedControlServiceServer() {}
 func (UnimplementedControlServiceServer) testEmbeddedByValue()                        {}
@@ -214,6 +232,24 @@ func _ControlService_InspectInstance_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlService_CreateInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateInstanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServiceServer).CreateInstance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlService_CreateInstance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServiceServer).CreateInstance(ctx, req.(*CreateInstanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ControlService_ServiceDesc is the grpc.ServiceDesc for ControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -236,6 +272,10 @@ var ControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "InspectInstance",
 			Handler:    _ControlService_InspectInstance_Handler,
+		},
+		{
+			MethodName: "CreateInstance",
+			Handler:    _ControlService_CreateInstance_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

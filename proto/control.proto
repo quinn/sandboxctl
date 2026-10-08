@@ -16,6 +16,9 @@ service ControlService {
 
   // Reports the saved state for one sandbox instance.
   rpc InspectInstance(InspectInstanceRequest) returns (InspectInstanceResponse);
+
+  // Creates a stopped sandbox instance.
+  rpc CreateInstance(CreateInstanceRequest) returns (CreateInstanceResponse);
 }
 
 message PingRequest {}
@@ -49,6 +52,26 @@ message InspectInstanceRequest {
 
 message InspectInstanceResponse {
   // Contains the saved state for the requested sandbox.
+  Instance instance = 1;
+}
+
+message CreateInstanceRequest {
+  // Names the sandbox to create.
+  string name = 1;
+  // Gives the requested virtual CPU count.
+  int32 vcpus = 2;
+  // Gives the requested guest memory size in MiB.
+  int32 memory_mib = 3;
+  // Gives the requested writable state disk size in bytes.
+  int64 state_disk_bytes = 4;
+  // Names an installed base image.
+  string image = 5;
+  // Gives the guest Ed25519 public key for SSH access.
+  string ssh_public_key = 6;
+}
+
+message CreateInstanceResponse {
+  // Contains the saved state for the new stopped sandbox.
   Instance instance = 1;
 }
 

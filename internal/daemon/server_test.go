@@ -2,8 +2,10 @@ package daemon_test
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"testing"
@@ -133,6 +135,85 @@ func TestInspectInstanceReportsInvalidAndMissingNames(t *testing.T) {
 	}
 }
 
+func TestServerCreatesStoppedInstance(t *testing.T) {
+	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
+	manager := hoststate.Manager{
+		Store: hoststate.Store{Paths: paths},
+		Allocator: hoststate.Allocator{
+			Paths: paths,
+			Config: hoststate.AllocationConfig{
+				UIDRange:    hoststate.IDRange{Start: 200000, Count: 8},
+				GIDRange:    hoststate.IDRange{Start: 300000, Count: 8},
+				AddressPool: netip.MustParsePrefix("172.30.0.0/16"),
+			},
+			TapInUse: func(string) bool { return false },
+		},
+		ImageVersions: hoststate.StaticImageVersions{"default": "sha256:0123456789abcdef"},
+		StateDisks:    daemonTestDiskBuilder{},
+	}
+	connection := startServerWithInstances(t, manager)
+	service := controlpb.NewControlServiceClient(connection)
+	ctx, cancel := callContext(daemon.APIVersion, "44444444444444444444444444444444")
+	response, err := service.CreateInstance(ctx, &controlpb.CreateInstanceRequest{
+		Name: "dev1", Vcpus: 2, MemoryMib: 2048, StateDiskBytes: 1 << 30,
+		Image: "default", SshPublicKey: daemonTestPublicKey(),
+	})
+	cancel()
+	if err != nil {
+		t.Fatalf("CreateInstance(): %v", err)
+	}
+	instance := response.GetInstance()
+	if instance.GetName() != "dev1" || instance.GetGuestIp() != "172.30.0.2" || instance.GetRuntimeState() != "stopped" || instance.GetSshAlias() != "sandbox-dev1" {
+		t.Fatalf("CreateInstance() = %v", instance)
+	}
+	if key, err := manager.Store.LoadPublicKey("dev1"); err != nil || key != daemonTestPublicKey() {
+		t.Fatalf("stored public key = %q, error = %v", key, err)
+	}
+	duplicateContext, duplicateCancel := callContext(daemon.APIVersion, "66666666666666666666666666666666")
+	_, err = service.CreateInstance(duplicateContext, &controlpb.CreateInstanceRequest{
+		Name: "dev1", Vcpus: 2, MemoryMib: 2048, StateDiskBytes: 1 << 30,
+		Image: "default", SshPublicKey: daemonTestPublicKey(),
+	})
+	duplicateCancel()
+	if status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("duplicate CreateInstance() code = %s, want AlreadyExists (%v)", status.Code(err), err)
+	}
+	invalidContext, invalidCancel := callContext(daemon.APIVersion, "77777777777777777777777777777777")
+	_, err = service.CreateInstance(invalidContext, &controlpb.CreateInstanceRequest{
+		Name: "../bad", Vcpus: 1, MemoryMib: 128, StateDiskBytes: 1 << 30,
+		Image: "default", SshPublicKey: daemonTestPublicKey(),
+	})
+	invalidCancel()
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("invalid CreateInstance() code = %s, want InvalidArgument (%v)", status.Code(err), err)
+	}
+	missingImageContext, missingImageCancel := callContext(daemon.APIVersion, "88888888888888888888888888888888")
+	_, err = service.CreateInstance(missingImageContext, &controlpb.CreateInstanceRequest{
+		Name: "dev2", Vcpus: 1, MemoryMib: 128, StateDiskBytes: 1 << 30,
+		Image: "missing", SshPublicKey: daemonTestPublicKey(),
+	})
+	missingImageCancel()
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("missing image CreateInstance() code = %s, want FailedPrecondition (%v)", status.Code(err), err)
+	}
+}
+
+type daemonTestDiskBuilder struct{}
+
+func (daemonTestDiskBuilder) Build(_ context.Context, path string, size int64, uid, gid uint32) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte("state disk"), 0o600)
+}
+
+func daemonTestPublicKey() string {
+	data := append([]byte{0, 0, 0, 11}, []byte("ssh-ed25519")...)
+	data = append(data, 0, 0, 0, 32)
+	data = append(data, make([]byte, 32)...)
+	return "ssh-ed25519 " + base64.StdEncoding.EncodeToString(data) + " test"
+}
+
 func TestListenAndServeUsesSocketPermissions(t *testing.T) {
 	socketDir := filepath.Join(t.TempDir(), "runtime", "sandboxctl")
 	socketPath := filepath.Join(socketDir, "control.sock")
@@ -189,6 +270,9 @@ func startServerWithInstances(t *testing.T, instances daemon.InstanceStore) *grp
 		t.Fatal(err)
 	}
 	server := daemon.NewServerWithInstanceStore("test-version", nil, instances)
+	if manager, ok := instances.(daemon.InstanceManager); ok {
+		server = daemon.NewServerWithInstanceManager("test-version", nil, manager)
+	}
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(func() {
 		server.Stop()
@@ -237,7 +321,7 @@ func daemonTestInstance(id, name string) hoststate.Instance {
 		HostIP:         "172.30.0.1",
 		GuestIP:        "172.30.0.2",
 		TapDevice:      "sc000001",
-		GuestMAC:       "06:00:ac:10:00:02",
+		GuestMAC:       "06:00:ac:1e:00:02",
 		SSHUser:        "dev",
 		SSHAlias:       "sandbox-" + name,
 	}

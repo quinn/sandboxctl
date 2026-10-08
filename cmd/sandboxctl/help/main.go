@@ -28,7 +28,7 @@ Usage:
   sandboxctl host install --operator USER
   sandboxctl doctor
   sandboxctl init
-  sandboxctl create NAME --kernel PATH --root-drive PATH
+  sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]
   sandboxctl start NAME [--dry-run]
   sandboxctl stop NAME
   sandboxctl list
@@ -37,8 +37,9 @@ Usage:
   sandboxctl ssh-config
 
 Use sandboxctl ssh-config to print the block for your SSH configuration.
-Connect with ssh sandboxctl-NAME after you add the block.
+Connect with ssh sandbox-NAME after you add the block.
 
-This implementation does not yet create the TAP network or prepare the guest image.
+Create requires an installed image. Image installation is not available yet.
+This implementation does not yet create the TAP network or start a jailed VM.
 Read docs/CONTINUE.md before you use it with important data.`)
 }

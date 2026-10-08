@@ -32,13 +32,7 @@ const (
 )
 
 // HostConfig contains the privileged host settings used by sandboxd.
-type HostConfig struct {
-	SchemaVersion int             `json:"schema_version"`
-	Operator      string          `json:"operator"`
-	UIDRange      cmdutil.IDRange `json:"uid_range"`
-	GIDRange      cmdutil.IDRange `json:"gid_range"`
-	AddressPool   string          `json:"address_pool"`
-}
+type HostConfig = hoststate.HostConfig
 
 // InstallOptions contains the values needed for one-time host setup.
 type InstallOptions struct {
@@ -90,7 +84,7 @@ func Install(ctx context.Context, options InstallOptions) error {
 		}
 	}
 
-	for _, command := range []string{"/usr/bin/groupadd", "/usr/bin/usermod", "/usr/bin/nft", "/usr/bin/sysctl", "/usr/bin/systemctl", "/usr/bin/ip"} {
+	for _, command := range []string{"/usr/bin/groupadd", "/usr/bin/usermod", "/usr/bin/nft", "/usr/bin/sysctl", "/usr/bin/systemctl", "/usr/bin/ip", "/usr/bin/mkfs.ext4", "/usr/bin/e2fsck"} {
 		if err := requireRegularExecutable(command); err != nil {
 			return fmt.Errorf("required host command %q was not found", command)
 		}
@@ -105,8 +99,8 @@ func Install(ctx context.Context, options InstallOptions) error {
 	config := HostConfig{
 		SchemaVersion: 1,
 		Operator:      options.Operator.Username,
-		UIDRange:      options.UIDRange,
-		GIDRange:      options.GIDRange,
+		UIDRange:      hoststate.IDRange(options.UIDRange),
+		GIDRange:      hoststate.IDRange(options.GIDRange),
 		AddressPool:   options.AddressPool.String(),
 	}
 	if err := apply(ctx, config, options.Operator.Username); err != nil {

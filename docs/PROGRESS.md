@@ -1,6 +1,6 @@
 # Implementation progress
 
-Last updated: 2026-10-07
+Last updated: 2026-10-08
 
 ## Authority and order
 
@@ -12,7 +12,7 @@ Section 18 now records this gate.
 
 The Phase 1 storage proof passed. Section 18 steps 1 through 3 are complete. Step 4 host installation and doctor support are implemented and still need final integration checks on a disposable Arch host.
 
-Current implementation work follows section 18, step 6. The daemon-owned state package defines `/var/lib/sandboxctl` and saves version-2 instance records atomically. The host installer creates the state directories as root-owned mode `0700`. sandboxd exposes list and inspect RPCs. `sandboxctl list` reads daemon state. The current create, start, stop, and SSH commands still use operator XDG records. Move them when the allocation and lifecycle RPCs are ready. Keep the temporary single-root test until the jailed runtime passes integration testing.
+Section 18, step 6 is complete. Stopped-instance creation now uses the daemon-owned allocator and store. sandboxd reads host allocation settings and image versions from root-owned state. It creates the sparse ext4 disk, stores the SSH public key, and commits a version-2 instance record. The `create` command sends operation data through gRPC and refreshes the SSH fragment from daemon state. The image installation command and jailed start/stop lifecycle are not implemented, so a real create request needs an installed image manifest and the host service. The remaining start, stop, and SSH commands still use operator XDG records. Move them when their lifecycle RPCs are ready. Keep the temporary single-root test until the jailed runtime passes integration testing.
 
 The E2B runtime checkout is retained in ignored `tmp/e2b-runtime` at commit `47096f195aca4a545a9079b706efb3a18f51cf3f`. The license, extraction record, and first Debian/Ubuntu provisioning profile are in place. There is no build command, BuildKit VM orchestration, image manifest, or SquashFS finalizer yet.
 
@@ -26,7 +26,7 @@ The complete output is in the ignored file `tmp/logs/manual-test.log`.
 
 The manual test command prepares the private disk before boot. It fixes guest home ownership, installs the public key, disables password and keyboard-interactive SSH, and validates the SSH server configuration. It waits for SSH on both boots. It checks persistence outside `/tmp`, which is cleared at boot.
 
-Next: test the new provisioning renderer and finish the image-builder foundation. Then add BuildKit orchestration and finalization. Keep the manual one-VM test as a regression check.
+Next: implement section 18, step 7: jailer launch through the SDK runtime, with dedicated identities and cleanup. Image import is still required before a complete create/start integration test. Keep the manual one-VM test as a regression check.
 
 ## Completed
 
@@ -101,7 +101,18 @@ Next: test the new provisioning renderer and finish the image-builder foundation
 - Removed the XDG record scan from `sandboxctl list`. The command does not import operator-side instance records.
 - `make check`, `make build`, and `git diff --check` pass after the daemon-backed list change.
 - The host-side image builder, OCI reference checks, BuildKit VM orchestration, image manifest, SquashFS finalizer, and integration boot are still open.
+- Added a locked, atomic allocation registry for stable UID, GID, `/30`, guest IP, guest MAC, and TAP assignments. The allocator skips host TAP-name conflicts, detects corrupt duplicate assignments, and requires the documented cleanup conditions before it releases an allocation.
+- Added allocator tests for stable assignments, uniqueness, TAP conflicts, exhaustion, release and reuse, concurrent requests, corrupt registries, and symlink rejection.
 - `make check` and `git diff --check` pass after the host-state changes. The generated Debian and Ubuntu scripts pass POSIX shell syntax validation in the tests.
+- `gofmt`, `go vet ./...`, and `go test ./...` pass after the allocator change. The sandbox blocked the Unix-socket integration tests. The full test suite passed after running it outside the sandbox.
+- Added the `CreateInstance` gRPC method with operation-specific resource and image fields. The daemon validates the request and returns structured invalid, duplicate, missing-image, canceled, and deadline errors.
+- Added host configuration loading with owner, file type, size, schema, identifier range, and address-pool checks. The host installer and daemon now share the same typed configuration.
+- Added installed-image manifest lookup at `/var/lib/sandboxctl/images/NAME/manifest.json`.
+- Added stopped-instance creation. It reserves resources under the allocation lock, creates a sparse ext4 state disk with mode `0600` and the allocated UID/GID, stores the guest public key, and atomically writes the instance record. A retry validates and reuses an existing ext4 disk. It refuses to truncate an unexpected file.
+- The create command now accepts the documented CPU, memory, disk size, and image options. It prepares the operator key before the RPC and refreshes the managed SSH fragment after creation.
+- Updated SSH configuration sync to read daemon instance state and use the `sandbox-NAME` alias.
+- Added tests for config and image manifest validation, state disk formatting, create retries and duplicates, gRPC creation and structured errors, public-key storage, and SSH fragment generation.
+- `make proto-lint`, `gofmt`, `go vet ./...`, and `go test ./...` pass. The complete Go checks passed outside the sandbox because its build cache is read-only.
 
 ## Decisions
 
@@ -122,8 +133,8 @@ The repository has no configured Git remote or license file. The AUR draft uses 
 
 ## Next tasks
 
-1. Implement the UID, GID, address, and TAP registries in section 18 step 6. Add instance creation after these allocators can produce complete records.
-2. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented. Preserve the manual test path until the jailed runtime passes integration testing.
-3. Finish the SDK and jailer runtime in section 18 step 7 before the builder VM depends on it.
-4. Add image manifest validation and cold-boot SquashFS finalization. Keep OCI pulls and extraction inside the builder VM through BuildKit.
+1. Implement section 18, step 7: jailer launch through the SDK runtime, with dedicated identities and cleanup.
+2. Implement image import and artifact validation before testing the create/start path with a built image.
+3. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented. Preserve the manual test path until the jailed runtime passes integration testing.
+4. Add cold-boot SquashFS finalization. Keep OCI pulls and extraction inside the builder VM through BuildKit.
 5. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/netip"
 	"os"
 	"os/signal"
 	"syscall"
@@ -34,8 +35,26 @@ func run(arguments []string) error {
 		return fmt.Errorf("usage: sandboxd [--socket PATH] [--systemd-socket]")
 	}
 	syscall.Umask(0o077)
-	state := hoststate.Store{Paths: hoststate.DefaultPaths()}
-	server := daemon.NewServerWithInstanceStore("0.1.0-dev", runtimeStatus{}, state)
+	paths := hoststate.DefaultPaths()
+	hostConfig, err := hoststate.LoadHostConfig("/etc/sandboxctl/host.json")
+	if err != nil {
+		return fmt.Errorf("load host configuration: %w", err)
+	}
+	addressPool, err := netip.ParsePrefix(hostConfig.AddressPool)
+	if err != nil {
+		return fmt.Errorf("parse host address pool: %w", err)
+	}
+	manager := hoststate.Manager{
+		Store: hoststate.Store{Paths: paths},
+		Allocator: hoststate.Allocator{
+			Paths: paths,
+			Config: hoststate.AllocationConfig{
+				UIDRange: hostConfig.UIDRange, GIDRange: hostConfig.GIDRange, AddressPool: addressPool,
+			},
+		},
+		ImageVersions: hoststate.InstalledImages{Paths: paths},
+	}
+	server := daemon.NewServerWithInstanceManager("0.1.0-dev", runtimeStatus{}, manager)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if *systemdSocket {

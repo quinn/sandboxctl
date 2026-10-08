@@ -28,6 +28,7 @@ const (
 	APIVersion            = "v1"
 	MaxMessageSize        = 1 << 20
 	MaxOperationDuration  = 10 * time.Second
+	MaxCreateDuration     = 2 * time.Minute
 )
 
 var requestIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
@@ -44,16 +45,25 @@ func NewServer(version string, runtime RuntimeStatus) *grpc.Server {
 
 // NewServerWithInstanceStore creates a gRPC server with read-only instance access.
 func NewServerWithInstanceStore(version string, runtime RuntimeStatus, instances InstanceStore) *grpc.Server {
+	return newServer(version, runtime, instances, nil)
+}
+
+// NewServerWithInstanceManager creates a gRPC server with create and inspect operations.
+func NewServerWithInstanceManager(version string, runtime RuntimeStatus, instances InstanceManager) *grpc.Server {
+	return newServer(version, runtime, instances, instances)
+}
+
+func newServer(version string, runtime RuntimeStatus, instances InstanceStore, creator InstanceCreator) *grpc.Server {
 	server := grpc.NewServer(
 		grpc.MaxRecvMsgSize(MaxMessageSize),
 		grpc.MaxSendMsgSize(MaxMessageSize),
 		grpc.UnaryInterceptor(unaryInterceptor),
 	)
-	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, instances: instances})
+	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, instances: instances, creator: creator})
 	return server
 }
 
-func unaryInterceptor(ctx context.Context, request any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	incoming, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.InvalidArgument, "request metadata is required")
@@ -69,7 +79,11 @@ func unaryInterceptor(ctx context.Context, request any, _ *grpc.UnaryServerInfo,
 	if _, ok := ctx.Deadline(); !ok {
 		return nil, status.Error(codes.InvalidArgument, "request deadline is required")
 	}
-	ctx, cancel := context.WithTimeout(ctx, MaxOperationDuration)
+	duration := MaxOperationDuration
+	if info.FullMethod == controlpb.ControlService_CreateInstance_FullMethodName {
+		duration = MaxCreateDuration
+	}
+	ctx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 	if err := grpc.SetHeader(ctx, metadata.Pairs(RequestIDMetadataKey, requestIDs[0])); err != nil {
 		return nil, status.Error(codes.Internal, "cannot set response request identifier")
@@ -82,12 +96,24 @@ type service struct {
 	version   string
 	runtime   RuntimeStatus
 	instances InstanceStore
+	creator   InstanceCreator
 }
 
 // InstanceStore provides saved instance records to the control service.
 type InstanceStore interface {
 	List() ([]hoststate.Instance, error)
 	Load(string) (hoststate.Instance, error)
+}
+
+// InstanceCreator creates a stopped instance and reserves its host resources.
+type InstanceCreator interface {
+	Create(context.Context, hoststate.CreateOptions) (hoststate.Instance, error)
+}
+
+// InstanceManager provides saved instance state and creates stopped instances.
+type InstanceManager interface {
+	InstanceStore
+	InstanceCreator
 }
 
 func (s *service) Ping(context.Context, *controlpb.PingRequest) (*controlpb.PingResponse, error) {
@@ -128,6 +154,38 @@ func (s *service) InspectInstance(_ context.Context, request *controlpb.InspectI
 		return nil, status.Error(codes.Internal, "cannot read instance state")
 	}
 	return &controlpb.InspectInstanceResponse{Instance: toProtocolInstance(instance)}, nil
+}
+
+func (s *service) CreateInstance(ctx context.Context, request *controlpb.CreateInstanceRequest) (*controlpb.CreateInstanceResponse, error) {
+	if s.creator == nil {
+		return nil, status.Error(codes.FailedPrecondition, "instance creation is unavailable")
+	}
+	if request.GetVcpus() < 1 || request.GetMemoryMib() < 128 || request.GetStateDiskBytes() < 1 || request.GetImage() == "" {
+		return nil, status.Error(codes.InvalidArgument, "CPU, memory, disk size, and image are required")
+	}
+	instance, err := s.creator.Create(ctx, hoststate.CreateOptions{
+		Name: request.GetName(), VCPUs: int(request.GetVcpus()), MemoryMiB: int(request.GetMemoryMib()),
+		StateDiskBytes: request.GetStateDiskBytes(), Image: request.GetImage(), SSHPublicKey: request.GetSshPublicKey(),
+	})
+	if errors.Is(err, hoststate.ErrInvalidName) || errors.Is(err, hoststate.ErrInvalidCreateOptions) || errors.Is(err, hoststate.ErrInvalidSSHPublicKey) {
+		return nil, status.Error(codes.InvalidArgument, "create request is invalid")
+	}
+	if errors.Is(err, hoststate.ErrAlreadyExists) {
+		return nil, status.Error(codes.AlreadyExists, "sandbox already exists")
+	}
+	if errors.Is(err, hoststate.ErrImageNotInstalled) || errors.Is(err, hoststate.ErrImageLookupUnavailable) {
+		return nil, status.Error(codes.FailedPrecondition, "requested image is not installed")
+	}
+	if errors.Is(err, context.Canceled) {
+		return nil, status.Error(codes.Canceled, "create request was canceled")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return nil, status.Error(codes.DeadlineExceeded, "create request exceeded its time limit")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "cannot create sandbox instance")
+	}
+	return &controlpb.CreateInstanceResponse{Instance: toProtocolInstance(instance)}, nil
 }
 
 func toProtocolInstance(instance hoststate.Instance) *controlpb.Instance {

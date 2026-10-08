@@ -373,6 +373,11 @@ The project image manifest must contain:
 - Required kernel arguments.
 - Build provenance reference.
 
+Store each installed image under `/var/lib/sandboxctl/images/NAME/`.
+Store its manifest as `manifest.json`.
+The manifest must use `schema_version`, `name`, and `version` fields.
+The `version` field identifies the pinned installed image version.
+
 Do not select an artifact by sorting an untrusted remote directory listing and taking the last value.
 
 Use an explicit image version and pinned digests.
@@ -711,6 +716,10 @@ Use:
       instances/
       allocations/
       jails/
+
+Store each instance under `instances/NAME/`.
+Keep its `instance.json`, `authorized_key`, and `state.ext4` files in that directory.
+Use mode `0600` for these files.
 
     /run/sandboxctl/
       control.sock
