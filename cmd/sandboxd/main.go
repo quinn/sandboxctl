@@ -57,8 +57,8 @@ func run(arguments []string) error {
 		Images:     hoststate.InstalledImages{Paths: paths},
 		Network:    network.TapManager{},
 		Paths: runtime.JailedRuntimePaths{
-			FirecrackerBinary: "/usr/bin/firecracker",
-			JailerBinary:      "/usr/bin/jailer",
+			FirecrackerBinary: runtime.DefaultFirecrackerBinaryPath,
+			JailerBinary:      runtime.DefaultJailerBinaryPath,
 			JailRoot:          paths.Jails,
 			APISocket:         "firecracker.socket",
 		},

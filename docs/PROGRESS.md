@@ -164,11 +164,11 @@ The Codex command environment does not expose `/dev/kvm` and blocks `sudo`. The 
 Buf remote generation requires access to the Buf Schema Registry. `make generate` fails inside the sandbox because that network call is blocked. The generated files are present from a network-enabled run.
 The repository has no license file. The AUR draft uses the GitHub URL inferred from the workspace path. Confirm the public source URL and select a license before publication.
 
-The user installed the package, imported the default image, and created `pkgtest`. Structured logging found and resolved the TAP parser issue: `ip tuntap show` returned the unrelated `tailscale0` line before the requested TAP. Firecracker exits with status 1 before creating its API socket. The failed-start cleanup fix has now been exercised: a retry no longer reports an unverified process or jail cleanup error. The inspected jail had no Firecracker log file. The jailed configuration now sends Firecracker logs to the system journal through a log FIFO. The next build also enables SDK debug output and Firecracker debug logs so the exit cause can be identified.
+The user installed the package, imported the default image, and created `pkgtest`. Structured logging found and resolved the TAP parser issue: `ip tuntap show` returned the unrelated `tailscale0` line before the requested TAP. SDK debug output identified the Firecracker startup failure: the jailer reports `Failed to exec into Firecracker: No such file or directory`. The host's `/usr/bin/firecracker` is dynamically linked and requires `/lib64/ld-linux-x86-64.so.2`, which is absent from the jail. The official Firecracker jailer documentation requires a statically linked Firecracker binary paired with the same-version jailer. The package now bundles the official static v1.17.0 x86-64 pair. Host install and doctor now reject a dynamic Firecracker binary. The daemon now uses the package-installed paths under `/usr/lib/sandboxctl`.
 
 ## Next tasks
 
-1. Install the Firecracker debug logging change. Retry `pkgtest` and inspect the journal for the Firecracker startup error and jailer command.
+1. Install the package with the official static Firecracker pair. Restart sandboxd and retry `pkgtest`. Confirm that Firecracker starts and the guest reaches serial readiness.
 2. Add routed guest networking after serial boot works.
 3. Build and provision a guest image before testing SSH. Keep the manual test path until the jailed runtime passes.
 4. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.

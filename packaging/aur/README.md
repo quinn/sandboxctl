@@ -1,6 +1,6 @@
 # Arch package draft
 
-`PKGBUILD` builds `sandboxctl`, its `sandboxctl-*` command executables, and `sandboxd` from the Git repository. It installs these executables and the systemd unit files. It depends on Arch's `firecracker` package, which provides both Firecracker and jailer.
+`PKGBUILD` builds `sandboxctl`, its `sandboxctl-*` command executables, and `sandboxd` from the Git repository. It installs these executables, the systemd unit files, and the official Firecracker v1.17.0 x86-64 release binaries. The Firecracker and jailer binaries come from the same release. The jailer requires the static Firecracker binary.
 
 The package does not enable the socket or change host configuration. Run `sudo sandboxctl host install --operator USER` after you install the package. That command applies the host-specific setup and enables the socket.
 

@@ -97,8 +97,10 @@ The Arch package must install `sandboxctl`, its `sandboxctl-<command>` helper
 executables, `sandboxd`, `sandboxd.socket`, and `sandboxd.service`. The
 `sandboxctl` front end must find command helpers through `PATH` and replace
 itself with the selected helper. The `sandboxd` executable must remain separate.
-The package must depend on the Arch `firecracker` package, which provides both
-Firecracker and jailer. The package must not enable the socket.
+The Arch package must include the official x86-64 Firecracker and jailer
+binaries from the same pinned release. The jailer requires a statically linked
+Firecracker binary. The package must not depend on a dynamically linked host
+Firecracker package. The package must not enable the socket.
 
 The host-install command must:
 
@@ -106,13 +108,14 @@ The host-install command must:
 2. Resolve the selected operator before it changes any files.
 3. Verify that the package-installed `sandboxd` executable and unit files exist.
 4. Verify that Firecracker and jailer have the same release version.
-5. Create the sandboxctl system group.
-6. Add the selected operator to the sandboxctl group.
-7. Create root-owned configuration and state directories.
-8. Configure the dedicated sandboxctl nftables table.
-9. Configure IPv4 forwarding through a dedicated sysctl file.
-10. Enable sandboxd.socket.
-11. Tell the operator when a new login session is necessary.
+5. Verify that Firecracker is statically linked for the jailer chroot.
+6. Create the sandboxctl system group.
+7. Add the selected operator to the sandboxctl group.
+8. Create root-owned configuration and state directories.
+9. Configure the dedicated sandboxctl nftables table.
+10. Configure IPv4 forwarding through a dedicated sysctl file.
+11. Enable sandboxd.socket.
+12. Tell the operator when a new login session is necessary.
 
 The installer must be idempotent.
 

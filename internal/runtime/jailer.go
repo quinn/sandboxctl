@@ -36,6 +36,13 @@ var (
 	tapNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_.-]{1,15}$`)
 )
 
+const (
+	// DefaultFirecrackerBinaryPath is the package-installed static Firecracker binary.
+	DefaultFirecrackerBinaryPath = "/usr/lib/sandboxctl/firecracker"
+	// DefaultJailerBinaryPath is the package-installed jailer paired with Firecracker.
+	DefaultJailerBinaryPath = "/usr/lib/sandboxctl/jailer"
+)
+
 // JailedConfiguration builds the SDK configuration for the V2 jailed boot layout.
 // The daemon must validate every path and prepare the TAP device before Start.
 func JailedConfiguration(instance hoststate.Instance, image JailedImage, paths JailedRuntimePaths) (firecracker.Config, error) {

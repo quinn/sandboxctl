@@ -21,14 +21,15 @@ import (
 
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/hoststate"
+	microvmruntime "sandboxctl/internal/runtime"
 )
 
 const (
 	configRoot        = "/etc/sandboxctl"
 	stateRoot         = hoststate.DefaultRoot
 	groupName         = "sandboxctl"
-	firecrackerBinary = "/usr/bin/firecracker"
-	jailerBinary      = "/usr/bin/jailer"
+	firecrackerBinary = microvmruntime.DefaultFirecrackerBinaryPath
+	jailerBinary      = microvmruntime.DefaultJailerBinaryPath
 )
 
 // HostConfig contains the privileged host settings used by sandboxd.
@@ -94,6 +95,9 @@ func Install(ctx context.Context, options InstallOptions) error {
 		if err := requireRegularExecutable(path); err != nil {
 			return err
 		}
+	}
+	if err := requireStaticallyLinked(paths.firecracker); err != nil {
+		return err
 	}
 
 	config := HostConfig{

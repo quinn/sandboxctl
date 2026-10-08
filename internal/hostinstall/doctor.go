@@ -18,12 +18,13 @@ import (
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/config"
 	"sandboxctl/internal/controlpb"
+	microvmruntime "sandboxctl/internal/runtime"
 )
 
 const (
 	controlSocket        = "/run/sandboxctl/control.sock"
-	installedFirecracker = "/usr/bin/firecracker"
-	installedJailer      = "/usr/bin/jailer"
+	installedFirecracker = microvmruntime.DefaultFirecrackerBinaryPath
+	installedJailer      = microvmruntime.DefaultJailerBinaryPath
 )
 
 type result struct {
@@ -115,6 +116,9 @@ func checkDaemon(ctx context.Context) result {
 }
 
 func checkRuntimeVersions(ctx context.Context) result {
+	if err := requireStaticallyLinked(installedFirecracker); err != nil {
+		return result{"Firecracker and jailer versions", err}
+	}
 	firecracker, err := commandVersion(ctx, installedFirecracker, "Firecracker")
 	if err != nil {
 		return result{"Firecracker and jailer versions", err}
