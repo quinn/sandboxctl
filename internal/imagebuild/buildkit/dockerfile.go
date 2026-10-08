@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"sandboxctl/internal/imagebuild/distro"
+	"sandboxctl/internal/imagebuild/provision"
 )
 
 var pinnedImagePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}$`)
@@ -37,4 +40,13 @@ func ContextFiles(baseImage, provisioningScript string) (map[string][]byte, erro
 		return nil, err
 	}
 	return map[string][]byte{"Dockerfile": []byte(dockerfile), "provision.sh": []byte(provisioningScript)}, nil
+}
+
+// ProvisioningContext renders the selected guest profile into a BuildKit context.
+func ProvisioningContext(baseImage string, profile distro.Profile) (map[string][]byte, error) {
+	script, err := provision.Render(profile)
+	if err != nil {
+		return nil, err
+	}
+	return ContextFiles(baseImage, script)
 }
