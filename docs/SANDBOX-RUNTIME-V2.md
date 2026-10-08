@@ -379,6 +379,9 @@ Store each installed image under `/var/lib/sandboxctl/images/NAME/`.
 Store its manifest as `manifest.json`.
 The manifest must use `schema_version`, `name`, and `version` fields.
 The `version` field identifies the pinned installed image version.
+Use `sha256:` followed by the digest of the manifest fields and fixed artifact digests.
+Hash the schema, name, architecture, compatibility, kernel, guest, provenance, kernel arguments, and artifact fields in that order.
+Encode each UTF-8 field as its 64-bit big-endian byte length followed by its bytes.
 
 Do not select an artifact by sorting an untrusted remote directory listing and taking the last value.
 
@@ -829,9 +832,15 @@ The command must not change host state without an explicit repair option.
 
 ### 13.4 Image installation
 
-    sandboxctl image install NAME [--version VERSION]
+    sandboxctl image install NAME --version VERSION
 
+The command reads a local bundle from the XDG data directory.
+The bundle contains `manifest.json`, `vmlinux`, `initramfs.cpio.gz`, and `root.squashfs`.
 The command must use a pinned manifest and digest.
+The operator command must verify every artifact before it sends the bytes.
+The daemon must verify every artifact again before it commits the image.
+The daemon must not open a path supplied by the operator.
+The daemon must publish the image only after all artifact sizes and digests match.
 
 Do not use a moving latest prefix.
 

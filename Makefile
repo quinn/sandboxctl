@@ -1,6 +1,6 @@
-.PHONY: build sandboxctl test check generate proto-lint download-test-assets download-overlay-assets manual-test manual-test-prepare overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof clean
+.PHONY: build sandboxctl test check generate proto-lint download-test-assets download-overlay-assets manual-test manual-test-prepare overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof stage-overlay-image clean
 
-SANDBOXCTL_COMMANDS = create doctor help host host/install init list paths ssh ssh-config start stop version vmrun
+SANDBOXCTL_COMMANDS = create doctor help host host/install image image/install init list paths ssh ssh-config start stop version vmrun
 
 build:
 	mkdir -p bin
@@ -55,6 +55,9 @@ overlay-proof: download-overlay-assets overlay-initramfs overlay-state-disk
 	@test -r tmp/config/images/default/vmlinux || { echo 'Missing tmp/config/images/default/vmlinux.' >&2; exit 1; }
 	@test -r tmp/config/images/default/ubuntu.squashfs || { echo 'Missing tmp/config/images/default/ubuntu.squashfs.' >&2; exit 1; }
 	go run ./cmd/overlay-proof --kernel tmp/config/images/default/vmlinux --initramfs tmp/config/initramfs/overlay-initramfs.cpio.gz --squashfs tmp/config/images/default/ubuntu.squashfs --state-disk tmp/config/state/overlay-proof.ext4
+
+stage-overlay-image: download-overlay-assets overlay-initramfs
+	./scripts/stage-overlay-image.sh
 
 clean:
 	rm -rf bin dist

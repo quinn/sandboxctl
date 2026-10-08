@@ -61,7 +61,7 @@ func run(arguments []string) error {
 			APISocket:         "firecracker.socket",
 		},
 	}
-	server := daemon.NewServerWithInstanceManager("0.1.0-dev", supervisor, manager)
+	server := daemon.NewServerWithImageStore("0.1.0-dev", supervisor, manager, paths)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if *systemdSocket {

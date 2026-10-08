@@ -26,6 +26,7 @@ const (
 	ControlService_CreateInstance_FullMethodName  = "/sandboxctl.ControlService/CreateInstance"
 	ControlService_StartInstance_FullMethodName   = "/sandboxctl.ControlService/StartInstance"
 	ControlService_StopInstance_FullMethodName    = "/sandboxctl.ControlService/StopInstance"
+	ControlService_InstallImage_FullMethodName    = "/sandboxctl.ControlService/InstallImage"
 )
 
 // ControlServiceClient is the client API for ControlService service.
@@ -46,6 +47,8 @@ type ControlServiceClient interface {
 	StartInstance(ctx context.Context, in *StartInstanceRequest, opts ...grpc.CallOption) (*StartInstanceResponse, error)
 	// Stops a running sandbox instance.
 	StopInstance(ctx context.Context, in *StopInstanceRequest, opts ...grpc.CallOption) (*StopInstanceResponse, error)
+	// Imports a pinned image manifest and its fixed boot artifacts.
+	InstallImage(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[InstallImageRequest, InstallImageResponse], error)
 }
 
 type controlServiceClient struct {
@@ -126,6 +129,19 @@ func (c *controlServiceClient) StopInstance(ctx context.Context, in *StopInstanc
 	return out, nil
 }
 
+func (c *controlServiceClient) InstallImage(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[InstallImageRequest, InstallImageResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ControlService_ServiceDesc.Streams[0], ControlService_InstallImage_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[InstallImageRequest, InstallImageResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ControlService_InstallImageClient = grpc.ClientStreamingClient[InstallImageRequest, InstallImageResponse]
+
 // ControlServiceServer is the server API for ControlService service.
 // All implementations must embed UnimplementedControlServiceServer
 // for forward compatibility.
@@ -144,6 +160,8 @@ type ControlServiceServer interface {
 	StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResponse, error)
 	// Stops a running sandbox instance.
 	StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error)
+	// Imports a pinned image manifest and its fixed boot artifacts.
+	InstallImage(grpc.ClientStreamingServer[InstallImageRequest, InstallImageResponse]) error
 	mustEmbedUnimplementedControlServiceServer()
 }
 
@@ -174,6 +192,9 @@ func (UnimplementedControlServiceServer) StartInstance(context.Context, *StartIn
 }
 func (UnimplementedControlServiceServer) StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopInstance not implemented")
+}
+func (UnimplementedControlServiceServer) InstallImage(grpc.ClientStreamingServer[InstallImageRequest, InstallImageResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method InstallImage not implemented")
 }
 func (UnimplementedControlServiceServer) mustEmbedUnimplementedControlServiceServer() {}
 func (UnimplementedControlServiceServer) testEmbeddedByValue()                        {}
@@ -322,6 +343,13 @@ func _ControlService_StopInstance_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlService_InstallImage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ControlServiceServer).InstallImage(&grpc.GenericServerStream[InstallImageRequest, InstallImageResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ControlService_InstallImageServer = grpc.ClientStreamingServer[InstallImageRequest, InstallImageResponse]
+
 // ControlService_ServiceDesc is the grpc.ServiceDesc for ControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -358,6 +386,12 @@ var ControlService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlService_StopInstance_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "InstallImage",
+			Handler:       _ControlService_InstallImage_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "control.proto",
 }

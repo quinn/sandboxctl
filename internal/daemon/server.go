@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"os"
@@ -31,6 +32,7 @@ const (
 	MaxCreateDuration     = 2 * time.Minute
 	MaxStartDuration      = 2 * time.Minute
 	MaxStopDuration       = 30 * time.Second
+	MaxInstallDuration    = 30 * time.Minute
 )
 
 var requestIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
@@ -55,16 +57,66 @@ func NewServerWithInstanceManager(version string, runtime RuntimeStatus, instanc
 	return newServer(version, runtime, instances, instances)
 }
 
+// NewServerWithImageStore creates a control server that can import images into paths.
+func NewServerWithImageStore(version string, runtime RuntimeStatus, instances InstanceManager, paths hoststate.Paths) *grpc.Server {
+	return newServerWithImageStore(version, runtime, instances, instances, paths)
+}
+
 func newServer(version string, runtime RuntimeStatus, instances InstanceStore, creator InstanceCreator) *grpc.Server {
+	return newServerConfigured(version, runtime, instances, creator, nil)
+}
+
+func newServerWithImageStore(version string, runtime RuntimeStatus, instances InstanceStore, creator InstanceCreator, paths hoststate.Paths) *grpc.Server {
+	return newServerConfigured(version, runtime, instances, creator, &paths)
+}
+
+func newServerConfigured(version string, runtime RuntimeStatus, instances InstanceStore, creator InstanceCreator, imagePaths *hoststate.Paths) *grpc.Server {
 	server := grpc.NewServer(
 		grpc.MaxRecvMsgSize(MaxMessageSize),
 		grpc.MaxSendMsgSize(MaxMessageSize),
 		grpc.UnaryInterceptor(unaryInterceptor),
+		grpc.StreamInterceptor(streamInterceptor),
 	)
 	controller, _ := runtime.(RuntimeController)
-	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, controller: controller, instances: instances, creator: creator})
+	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, controller: controller, instances: instances, creator: creator, imagePaths: imagePaths, imageSlot: make(chan struct{}, 1)})
 	return server
 }
+
+func streamInterceptor(server any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	incoming, ok := metadata.FromIncomingContext(stream.Context())
+	if !ok {
+		return status.Error(codes.InvalidArgument, "request metadata is required")
+	}
+	apiVersions := incoming.Get(APIVersionMetadataKey)
+	if len(apiVersions) != 1 || apiVersions[0] != APIVersion {
+		return status.Error(codes.FailedPrecondition, "unsupported API version")
+	}
+	requestIDs := incoming.Get(RequestIDMetadataKey)
+	if len(requestIDs) != 1 || !requestIDPattern.MatchString(requestIDs[0]) {
+		return status.Error(codes.InvalidArgument, "request identifier is missing or invalid")
+	}
+	ctx := stream.Context()
+	if _, ok := ctx.Deadline(); !ok {
+		return status.Error(codes.InvalidArgument, "request deadline is required")
+	}
+	duration := MaxOperationDuration
+	if info.FullMethod == controlpb.ControlService_InstallImage_FullMethodName {
+		duration = MaxInstallDuration
+	}
+	ctx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+	if err := grpc.SetHeader(ctx, metadata.Pairs(RequestIDMetadataKey, requestIDs[0])); err != nil {
+		return status.Error(codes.Internal, "cannot set response request identifier")
+	}
+	return handler(server, &contextServerStream{ServerStream: stream, ctx: ctx})
+}
+
+type contextServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (stream *contextServerStream) Context() context.Context { return stream.ctx }
 
 func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	incoming, ok := metadata.FromIncomingContext(ctx)
@@ -105,6 +157,8 @@ type service struct {
 	controller RuntimeController
 	instances  InstanceStore
 	creator    InstanceCreator
+	imagePaths *hoststate.Paths
+	imageSlot  chan struct{}
 }
 
 // InstanceStore provides saved instance records to the control service.
@@ -264,6 +318,73 @@ func (s *service) StopInstance(ctx context.Context, request *controlpb.StopInsta
 		return nil, status.Error(codes.FailedPrecondition, "cannot stop sandbox")
 	}
 	return &controlpb.StopInstanceResponse{Instance: s.protocolInstance(instance)}, nil
+}
+
+func (s *service) InstallImage(stream controlpb.ControlService_InstallImageServer) error {
+	if s.imagePaths == nil {
+		return status.Error(codes.FailedPrecondition, "image installation is unavailable")
+	}
+	select {
+	case s.imageSlot <- struct{}{}:
+		defer func() { <-s.imageSlot }()
+	case <-stream.Context().Done():
+		if errors.Is(stream.Context().Err(), context.DeadlineExceeded) {
+			return status.Error(codes.DeadlineExceeded, "image import exceeded its time limit")
+		}
+		return status.Error(codes.Canceled, "image import was canceled")
+	}
+	first, err := stream.Recv()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return status.Error(codes.InvalidArgument, "image manifest is required")
+		}
+		return err
+	}
+	if first.GetArtifactName() != "manifest.json" || first.GetOffset() != 0 || first.GetName() == "" || first.GetVersion() == "" {
+		return status.Error(codes.InvalidArgument, "first image chunk must contain the manifest")
+	}
+	image, err := hoststate.BeginImageImport(*s.imagePaths, first.GetName(), first.GetVersion(), first.GetData())
+	if err != nil {
+		if errors.Is(err, hoststate.ErrImageAlreadyInstalled) {
+			return status.Error(codes.AlreadyExists, "image is already installed")
+		}
+		if errors.Is(err, hoststate.ErrInvalidName) || errors.Is(err, hoststate.ErrInvalidImageManifest) {
+			return status.Error(codes.InvalidArgument, "image manifest or identity is invalid")
+		}
+		return status.Error(codes.Internal, "cannot prepare image import")
+	}
+	defer image.Abort()
+	for {
+		request, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if request.GetName() != first.GetName() || request.GetVersion() != first.GetVersion() {
+			return status.Error(codes.InvalidArgument, "image identity changed during import")
+		}
+		if err := image.WriteChunk(request.GetArtifactName(), request.GetOffset(), request.GetData()); err != nil {
+			if errors.Is(err, hoststate.ErrInvalidImageChunk) {
+				return status.Error(codes.InvalidArgument, "image artifact chunk is invalid")
+			}
+			return status.Error(codes.Internal, "cannot write image artifact")
+		}
+	}
+	if err := image.Commit(); err != nil {
+		if errors.Is(err, hoststate.ErrImageAlreadyInstalled) {
+			return status.Error(codes.AlreadyExists, "image is already installed")
+		}
+		if errors.Is(err, hoststate.ErrInvalidImageChunk) {
+			return status.Error(codes.InvalidArgument, "image import is incomplete")
+		}
+		return status.Error(codes.Internal, "cannot publish installed image")
+	}
+	if err := stream.SendAndClose(&controlpb.InstallImageResponse{Name: first.GetName(), Version: first.GetVersion()}); err != nil {
+		return status.Error(codes.Internal, "cannot return image installation result")
+	}
+	return nil
 }
 
 func (s *service) protocolInstance(instance hoststate.Instance) *controlpb.Instance {

@@ -2,7 +2,10 @@ package daemon_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/netip"
@@ -15,6 +18,7 @@ import (
 	"sandboxctl/internal/controlpb"
 	"sandboxctl/internal/daemon"
 	"sandboxctl/internal/hoststate"
+	"sandboxctl/internal/imagebuild/manifest"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -199,6 +203,61 @@ func TestServerCreatesStoppedInstance(t *testing.T) {
 	}
 }
 
+func TestServerImportsVerifiedImageStream(t *testing.T) {
+	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
+	manager := hoststate.Manager{
+		Store: hoststate.Store{Paths: paths},
+		Allocator: hoststate.Allocator{Paths: paths, Config: hoststate.AllocationConfig{
+			UIDRange: hoststate.IDRange{Start: 200000, Count: 4}, GIDRange: hoststate.IDRange{Start: 300000, Count: 4},
+			AddressPool: netip.MustParsePrefix("172.30.0.0/16"),
+		}},
+		ImageVersions: hoststate.StaticImageVersions{}, StateDisks: daemonTestDiskBuilder{},
+	}
+	connection := startServerWithImageStore(t, manager, paths)
+	service := controlpb.NewControlServiceClient(connection)
+	artifacts := map[string][]byte{"vmlinux": []byte("kernel"), "initramfs.cpio.gz": []byte("initramfs"), "root.squashfs": []byte("squashfs")}
+	artifactInfo := make(map[string]manifest.Artifact, len(artifacts))
+	for name, data := range artifacts {
+		digest := sha256.Sum256(data)
+		artifactInfo[name] = manifest.Artifact{Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:])}
+	}
+	imageManifest := manifest.Manifest{
+		SchemaVersion: 1, Name: "default", Architecture: "x86_64", Firecracker: "1.17.x",
+		KernelVersion: "6.1.155", Guest: manifest.Guest{Distribution: "Ubuntu", Version: "24.04"},
+		Artifacts: artifactInfo, KernelArgs: []string{"console=ttyS0", "rdinit=/init"}, Provenance: "test",
+	}
+	version := manifest.VersionForManifest(imageManifest)
+	imageManifest.Version = version
+	manifestData, err := json.Marshal(imageManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := callContext(daemon.APIVersion, "77777777777777777777777777777777")
+	defer cancel()
+	stream, err := service.InstallImage(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := stream.Send(&controlpb.InstallImageRequest{Name: "default", Version: version, ArtifactName: "manifest.json", Data: manifestData}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range manifest.ArtifactNames() {
+		if err := stream.Send(&controlpb.InstallImageRequest{Name: "default", Version: version, ArtifactName: name, Data: artifacts[name]}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	response, err := stream.CloseAndRecv()
+	if err != nil {
+		t.Fatalf("InstallImage(): %v", err)
+	}
+	if response.GetName() != "default" || response.GetVersion() != version {
+		t.Fatalf("InstallImage() = %v", response)
+	}
+	if _, err := (hoststate.InstalledImages{Paths: paths}).ResolveBootImage("default", version); err != nil {
+		t.Fatalf("resolve imported image: %v", err)
+	}
+}
+
 func TestServerStartsAndStopsInstanceThroughRuntimeController(t *testing.T) {
 	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
 	store := hoststate.Store{Paths: paths}
@@ -363,15 +422,23 @@ func startServerWithInstances(t *testing.T, instances daemon.InstanceStore) *grp
 }
 
 func startServerWithRuntime(t *testing.T, instances daemon.InstanceStore, runtime daemon.RuntimeStatus) *grpc.ClientConn {
+	server := daemon.NewServerWithInstanceStore("test-version", runtime, instances)
+	if manager, ok := instances.(daemon.InstanceManager); ok {
+		server = daemon.NewServerWithInstanceManager("test-version", runtime, manager)
+	}
+	return startServerWithGRPCServer(t, server)
+}
+
+func startServerWithImageStore(t *testing.T, instances daemon.InstanceManager, paths hoststate.Paths) *grpc.ClientConn {
+	return startServerWithGRPCServer(t, daemon.NewServerWithImageStore("test-version", nil, instances, paths))
+}
+
+func startServerWithGRPCServer(t *testing.T, server *grpc.Server) *grpc.ClientConn {
 	t.Helper()
 	socketPath := filepath.Join(t.TempDir(), "control.sock")
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
 		t.Fatal(err)
-	}
-	server := daemon.NewServerWithInstanceStore("test-version", runtime, instances)
-	if manager, ok := instances.(daemon.InstanceManager); ok {
-		server = daemon.NewServerWithInstanceManager("test-version", runtime, manager)
 	}
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(func() {

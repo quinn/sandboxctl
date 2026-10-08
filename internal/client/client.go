@@ -34,6 +34,7 @@ func Dial(ctx context.Context, socketPath string) (*grpc.ClientConn, controlpb.C
 		"unix://"+filepath.ToSlash(absSocketPath),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(clientInterceptor),
+		grpc.WithStreamInterceptor(clientStreamInterceptor),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallSendMsgSize(daemon.MaxMessageSize),
 			grpc.MaxCallRecvMsgSize(daemon.MaxMessageSize),
@@ -59,6 +60,22 @@ func Dial(ctx context.Context, socketPath string) (*grpc.ClientConn, controlpb.C
 	}
 
 	return connection, controlpb.NewControlServiceClient(connection), nil
+}
+
+func clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, connection *grpc.ClientConn, method string, streamer grpc.Streamer, options ...grpc.CallOption) (grpc.ClientStream, error) {
+	requestID, err := daemon.NewRequestID()
+	if err != nil {
+		return nil, err
+	}
+	outgoing, _ := metadata.FromOutgoingContext(ctx)
+	outgoing = outgoing.Copy()
+	if outgoing == nil {
+		outgoing = metadata.MD{}
+	}
+	outgoing.Set(daemon.APIVersionMetadataKey, daemon.APIVersion)
+	outgoing.Set(daemon.RequestIDMetadataKey, requestID)
+	ctx = metadata.NewOutgoingContext(ctx, outgoing)
+	return streamer(ctx, desc, connection, method, options...)
 }
 
 func clientInterceptor(ctx context.Context, method string, request, response any, connection *grpc.ClientConn, invoke grpc.UnaryInvoker, options ...grpc.CallOption) error {

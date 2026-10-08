@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -27,6 +28,18 @@ func TestValidateGuestUser(t *testing.T) {
 	for _, name := range []string{"", "1dev", "Dev", "dev.user", "dev user"} {
 		if err := ValidateGuestUser(name); err == nil {
 			t.Errorf("ValidateGuestUser(%q) accepted invalid name", name)
+		}
+	}
+}
+
+func TestValidateImageVersion(t *testing.T) {
+	valid := "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	if err := ValidateImageVersion(valid); err != nil {
+		t.Fatalf("ValidateImageVersion(%q): %v", valid, err)
+	}
+	for _, value := range []string{"", "../../tmp", "sha256:ABCDEF", "sha256:" + strings.Repeat("a", 63)} {
+		if err := ValidateImageVersion(value); err == nil {
+			t.Errorf("ValidateImageVersion(%q) accepted invalid input", value)
 		}
 	}
 }

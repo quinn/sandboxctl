@@ -25,6 +25,9 @@ service ControlService {
 
   // Stops a running sandbox instance.
   rpc StopInstance(StopInstanceRequest) returns (StopInstanceResponse);
+
+  // Imports a pinned image manifest and its fixed boot artifacts.
+  rpc InstallImage(stream InstallImageRequest) returns (InstallImageResponse);
 }
 
 message PingRequest {}
@@ -101,6 +104,26 @@ message StopInstanceRequest {
 message StopInstanceResponse {
   // Contains the stopped sandbox state.
   Instance instance = 1;
+}
+
+message InstallImageRequest {
+  // Names the image in the installed image store.
+  string name = 1;
+  // Gives the expected pinned SHA-256 image version.
+  string version = 2;
+  // Names manifest.json, vmlinux, initramfs.cpio.gz, or root.squashfs.
+  string artifact_name = 3;
+  // Gives the byte offset of this chunk in the named artifact.
+  uint64 offset = 4;
+  // Contains one bounded chunk of artifact data.
+  bytes data = 5;
+}
+
+message InstallImageResponse {
+  // Names the installed image.
+  string name = 1;
+  // Gives the installed image version.
+  string version = 2;
 }
 
 message Instance {

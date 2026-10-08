@@ -28,6 +28,7 @@ Usage:
   sandboxctl host install --operator USER
   sandboxctl doctor
   sandboxctl init
+  sandboxctl image install NAME --version sha256:DIGEST
   sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]
   sandboxctl start NAME [--dry-run]
   sandboxctl stop NAME [--force]
@@ -39,7 +40,8 @@ Usage:
 Use sandboxctl ssh-config to print the block for your SSH configuration.
 Connect with ssh sandbox-NAME after you add the block.
 
-Create requires an installed image. Image installation is not available yet.
+Image install reads a verified image bundle from the XDG data directory.
+Create requires an installed image.
 Start requires an installed image, a prepared TAP device, and KVM access.
 Guest networking is not configured yet.
 Read docs/CONTINUE.md before you use it with important data.`)

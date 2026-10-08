@@ -19,6 +19,7 @@ type testImageResolver struct{}
 func (testImageResolver) ResolveBootImage(name, version string) (hoststate.BootImage, error) {
 	return hoststate.BootImage{
 		Version: version, KernelPath: "/kernel", InitramfsPath: "/initramfs", SquashFSPath: "/root.squashfs",
+		KernelArgs: []string{"console=ttyS0", "panic=1", "reboot=k", "rdinit=/init"},
 	}, nil
 }
 

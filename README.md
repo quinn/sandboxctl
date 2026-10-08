@@ -10,7 +10,7 @@ The completed tool will provide this workflow:
 
 ```sh
 sandboxctl init
-sandboxctl image install default
+sandboxctl image install default --version sha256:DIGEST
 sandboxctl create dev1 --cpus 4 --memory 8192
 sandboxctl start dev1
 ssh sandbox-dev1
@@ -32,11 +32,11 @@ The current implementation can do these operations:
 - Start and stop a jailed VM through sandboxd when the image and TAP device are installed.
 
 The create operation needs an installed image manifest and the host service.
-The image installation command is not available yet.
+Image installation uses a verified local image bundle.
 
 The current implementation cannot yet do these operations:
 
-- Install or build a base image.
+- Build a base image.
 - Create and configure TAP devices or firewall rules.
 - Delete or reset a sandbox.
 
@@ -110,6 +110,27 @@ Run `make overlay-proof` and confirm that the output reports a new marker.
 
 The proof checks the SquashFS digest after each VM run.
 Do not start sandboxd implementation until these checks pass.
+
+## Import the Phase 1 image
+
+The image import command reads a local image bundle from the XDG data directory.
+Build the bundle with:
+
+```sh
+make stage-overlay-image
+```
+
+The target stages the verified kernel and SquashFS with the project initramfs.
+It writes the bundle under `~/.local/share/sandboxctl/images/default/VERSION`.
+It prints the pinned version and the install command.
+The bundle uses the Phase 1 guest image. It is for serial boot tests.
+It does not provide the `dev` user or SSH setup.
+
+The install command sends the manifest and artifacts to sandboxd.
+The CLI verifies each artifact before it sends the bytes.
+The daemon verifies the sizes and SHA-256 digests again.
+The daemon publishes the image only after all checks pass.
+The daemon stores the image under `/var/lib/sandboxctl/images/default`.
 
 ## Temporary single-root VM test
 

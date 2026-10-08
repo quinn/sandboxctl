@@ -20,7 +20,7 @@ mkdir -p "$output_dir"
 chmod 0700 "$output_dir"
 archive="$output_dir/.overlay-initramfs.cpio.gz.$$"
 trap 'rm -rf -- "$stage"; rm -f -- "$archive"' EXIT
-(cd "$stage" && printf '.\n./init\n' | cpio -o -H newc --quiet | gzip -n) > "$archive"
+(cd "$stage" && printf '.\n./init\n' | cpio --reproducible -o -H newc --quiet | gzip -n) > "$archive"
 chmod 0600 "$archive"
 mv -f -- "$archive" "$output_dir/overlay-initramfs.cpio.gz"
 printf 'Built %s\n' "$output_dir/overlay-initramfs.cpio.gz"

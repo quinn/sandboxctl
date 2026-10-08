@@ -15,8 +15,9 @@ type IDRange struct {
 }
 
 var (
-	validSandboxName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
-	validGuestUser   = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+	validSandboxName  = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+	validGuestUser    = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+	validImageVersion = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
 // ValidateSandboxName reports whether value is a valid sandbox name.
@@ -31,6 +32,14 @@ func ValidateSandboxName(value string) error {
 func ValidateGuestUser(value string) error {
 	if !validGuestUser.MatchString(value) {
 		return errors.New("SSH user must start with a lower-case letter or underscore and contain only lower-case letters, digits, underscores, or hyphens")
+	}
+	return nil
+}
+
+// ValidateImageVersion checks a pinned image version before path construction.
+func ValidateImageVersion(value string) error {
+	if !validImageVersion.MatchString(value) {
+		return errors.New("image version must use sha256: followed by 64 lower-case hexadecimal characters")
 	}
 	return nil
 }

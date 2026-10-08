@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+
+	"sandboxctl/internal/imagebuild/manifest"
 )
 
 // InstalledImages reads pinned versions from daemon-owned image manifests.
@@ -21,6 +23,7 @@ type BootImage struct {
 	KernelPath    string
 	InitramfsPath string
 	SquashFSPath  string
+	KernelArgs    []string
 }
 
 // ResolveVersion returns the installed version recorded for name.
@@ -94,6 +97,25 @@ func (images InstalledImages) ResolveBootImage(name, version string) (BootImage,
 		InitramfsPath: filepath.Join(directory, "initramfs.cpio.gz"),
 		SquashFSPath:  filepath.Join(directory, "root.squashfs"),
 	}
+	manifestPath := filepath.Join(directory, "manifest.json")
+	manifestFD, err := syscall.Open(manifestPath, syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return BootImage{}, fmt.Errorf("open installed image manifest: %w", err)
+	}
+	manifestFile := os.NewFile(uintptr(manifestFD), manifestPath)
+	manifestData, readErr := io.ReadAll(io.LimitReader(manifestFile, manifest.MaxManifestSize+1))
+	closeErr := manifestFile.Close()
+	if readErr != nil || len(manifestData) > manifest.MaxManifestSize {
+		return BootImage{}, errors.New("installed image manifest cannot be read")
+	}
+	if closeErr != nil {
+		return BootImage{}, fmt.Errorf("close installed image manifest: %w", closeErr)
+	}
+	imageManifest, err := manifest.Parse(manifestData)
+	if err != nil || imageManifest.Name != name || imageManifest.Version != installedVersion {
+		return BootImage{}, errors.New("installed image manifest is invalid")
+	}
+	image.KernelArgs = append([]string(nil), imageManifest.KernelArgs...)
 	for _, path := range []string{image.KernelPath, image.InitramfsPath, image.SquashFSPath} {
 		fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0)
 		if err != nil {

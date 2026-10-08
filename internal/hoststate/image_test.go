@@ -58,23 +58,23 @@ func TestInstalledImagesResolveAndValidateBootArtifacts(t *testing.T) {
 	if err := os.Mkdir(directory, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	manifest := `{"schema_version":1,"name":"default","version":"sha256:0123456789abcdef"}`
-	if err := os.WriteFile(filepath.Join(directory, "manifest.json"), []byte(manifest), 0o600); err != nil {
+	manifestData, artifacts, version := imageFixture(t)
+	if err := os.WriteFile(filepath.Join(directory, "manifest.json"), manifestData, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"vmlinux", "initramfs.cpio.gz", "root.squashfs"} {
-		if err := os.WriteFile(filepath.Join(directory, name), []byte("artifact"), 0o444); err != nil {
+	for name, data := range artifacts {
+		if err := os.WriteFile(filepath.Join(directory, name), data, 0o444); err != nil {
 			t.Fatal(err)
 		}
 	}
-	image, err := (InstalledImages{Paths: paths}).ResolveBootImage("default", "sha256:0123456789abcdef")
+	image, err := (InstalledImages{Paths: paths}).ResolveBootImage("default", version)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if image.Version != "sha256:0123456789abcdef" || image.KernelPath != filepath.Join(directory, "vmlinux") || image.InitramfsPath != filepath.Join(directory, "initramfs.cpio.gz") || image.SquashFSPath != filepath.Join(directory, "root.squashfs") {
+	if image.Version != version || image.KernelPath != filepath.Join(directory, "vmlinux") || image.InitramfsPath != filepath.Join(directory, "initramfs.cpio.gz") || image.SquashFSPath != filepath.Join(directory, "root.squashfs") || len(image.KernelArgs) == 0 {
 		t.Fatalf("resolved boot image = %#v", image)
 	}
-	if _, err := (InstalledImages{Paths: paths}).ResolveBootImage("default", "different"); err == nil {
+	if _, err := (InstalledImages{Paths: paths}).ResolveBootImage("default", "sha256:different"); err == nil {
 		t.Fatal("accepted a different pinned image version")
 	}
 }
@@ -88,19 +88,19 @@ func TestInstalledImagesRejectWritableBootArtifact(t *testing.T) {
 	if err := os.Mkdir(directory, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	manifest := `{"schema_version":1,"name":"default","version":"pinned"}`
-	if err := os.WriteFile(filepath.Join(directory, "manifest.json"), []byte(manifest), 0o600); err != nil {
+	manifestData, artifacts, version := imageFixture(t)
+	if err := os.WriteFile(filepath.Join(directory, "manifest.json"), manifestData, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"vmlinux", "initramfs.cpio.gz", "root.squashfs"} {
-		if err := os.WriteFile(filepath.Join(directory, name), []byte("artifact"), 0o444); err != nil {
+	for name, data := range artifacts {
+		if err := os.WriteFile(filepath.Join(directory, name), data, 0o444); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := os.Chmod(filepath.Join(directory, "root.squashfs"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := (InstalledImages{Paths: paths}).ResolveBootImage("default", "pinned"); err == nil {
+	if _, err := (InstalledImages{Paths: paths}).ResolveBootImage("default", version); err == nil {
 		t.Fatal("accepted a writable boot artifact")
 	}
 }

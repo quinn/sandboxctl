@@ -366,6 +366,7 @@ func (s *Supervisor) configuration(instance hoststate.Instance) (firecracker.Con
 	paths.StateDiskPath = filepath.Join(s.StatePaths.Instances, instance.Name, "state.ext4")
 	config, err := JailedConfiguration(instance, JailedImage{
 		KernelPath: image.KernelPath, InitramfsPath: image.InitramfsPath, SquashFSPath: image.SquashFSPath,
+		KernelArgs: image.KernelArgs,
 	}, paths)
 	if err != nil {
 		return firecracker.Config{}, "", "", fmt.Errorf("build jailed Firecracker configuration: %w", err)

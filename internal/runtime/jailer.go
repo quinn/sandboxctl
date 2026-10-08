@@ -7,11 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	firecracker "github.com/firecracker-microvm/firecracker-go-sdk"
 	models "github.com/firecracker-microvm/firecracker-go-sdk/client/models"
 	"sandboxctl/internal/hoststate"
-	"sandboxctl/internal/overlayboot"
 )
 
 // JailedImage contains the immutable boot files installed for one image version.
@@ -19,6 +19,7 @@ type JailedImage struct {
 	KernelPath    string
 	InitramfsPath string
 	SquashFSPath  string
+	KernelArgs    []string
 }
 
 // JailedRuntimePaths contains trusted paths selected by the host installer.
@@ -63,6 +64,9 @@ func JailedConfiguration(instance hoststate.Instance, image JailedImage, paths J
 	if !tapNamePattern.MatchString(instance.TapDevice) {
 		return firecracker.Config{}, errors.New("instance network identity is missing")
 	}
+	if len(image.KernelArgs) == 0 {
+		return firecracker.Config{}, errors.New("image kernel arguments are required")
+	}
 	mac, err := net.ParseMAC(instance.GuestMAC)
 	if err != nil || len(mac) != 6 {
 		return firecracker.Config{}, errors.New("instance guest MAC address is invalid")
@@ -84,7 +88,7 @@ func JailedConfiguration(instance hoststate.Instance, image JailedImage, paths J
 		SocketPath:      paths.APISocket,
 		KernelImagePath: image.KernelPath,
 		InitrdPath:      image.InitramfsPath,
-		KernelArgs:      overlayboot.KernelArgs,
+		KernelArgs:      strings.Join(image.KernelArgs, " "),
 		Drives:          []models.Drive{baseDrive, stateDrive},
 		NetworkInterfaces: firecracker.NetworkInterfaces{{StaticConfiguration: &firecracker.StaticNetworkConfiguration{
 			HostDevName: instance.TapDevice,

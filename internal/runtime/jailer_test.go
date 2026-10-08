@@ -19,6 +19,7 @@ func TestJailedConfigurationUsesOverlayBootAndAllocatedIdentity(t *testing.T) {
 		KernelPath:    "/var/lib/sandboxctl/images/default/vmlinux",
 		InitramfsPath: "/var/lib/sandboxctl/images/default/initramfs.cpio.gz",
 		SquashFSPath:  "/var/lib/sandboxctl/images/default/root.squashfs",
+		KernelArgs:    strings.Fields(overlayboot.KernelArgs),
 	}
 	paths := JailedRuntimePaths{
 		FirecrackerBinary: "/usr/bin/firecracker", JailerBinary: "/usr/bin/jailer",
@@ -64,6 +65,7 @@ func TestJailedConfigurationRejectsInvalidTrustedPathsAndIdentity(t *testing.T) 
 		TapDevice: "sc000001", GuestMAC: "06:00:ac:1e:00:02",
 	}
 	image := JailedImage{KernelPath: "/kernel", InitramfsPath: "/initramfs", SquashFSPath: "/base.squashfs"}
+	image.KernelArgs = strings.Fields(overlayboot.KernelArgs)
 	paths := JailedRuntimePaths{
 		FirecrackerBinary: "/usr/bin/firecracker", JailerBinary: "/usr/bin/jailer",
 		JailRoot: "/var/lib/sandboxctl/jails", APISocket: "firecracker.socket",
