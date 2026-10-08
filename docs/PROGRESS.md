@@ -32,7 +32,7 @@ The complete output is in the ignored file `tmp/logs/manual-test.log`.
 
 The manual test command prepares the private disk before boot. It fixes guest home ownership, installs the public key, disables password and keyboard-interactive SSH, and validates the SSH server configuration. It waits for SSH on both boots. It checks persistence outside `/tmp`, which is cleared at boot.
 
-Next: run the jailed serial boot and TAP setup from the user's host terminal. Add routed guest networking after serial boot works. Build and provision a guest image before testing SSH. Keep the manual one-VM test as a regression check.
+Next: install the current checkout with `make install`, run the one-time host setup, and test a jailed serial boot from the user's host terminal. Add routed guest networking after serial boot works. Build and provision a guest image before testing SSH. Keep the manual one-VM test as a regression check.
 
 ## Completed
 
@@ -144,6 +144,7 @@ Next: run the jailed serial boot and TAP setup from the user's host terminal. Ad
 - Added tests for TAP command sequences, invalid addresses, owner mismatch, partial setup rollback, and runtime prepare/remove ordering.
 - `go test ./internal/network ./internal/runtime ./cmd/sandboxd` passed for this change.
 - The Codex command environment does not expose `/dev/kvm`; the user's earlier serial and SSH VM tests confirm that the host can run VMs. The jailed runtime still needs a live boot test. Guest routing, forwarding, and firewall rules are still open.
+- Added `make install` with a local `sandboxctl-local` package recipe. It builds from the current working tree through `yay`; it does not fetch from GitHub or push changes.
 
 ## Decisions
 

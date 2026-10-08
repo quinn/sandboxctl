@@ -29,7 +29,7 @@ The current implementation can do these operations:
 - Allocate a unique host identity, `/30` network, and TAP name for each instance.
 - Create a sparse ext4 state disk for a stopped instance.
 - Generate the OpenSSH configuration fragment from daemon state.
-- Start and stop a jailed VM through sandboxd when the image and TAP device are installed.
+- Create and configure a per-instance TAP, then start and stop a jailed VM through sandboxd.
 
 The create operation needs an installed image manifest and the host service.
 Image installation uses a verified local image bundle.
@@ -37,7 +37,7 @@ Image installation uses a verified local image bundle.
 The current implementation cannot yet do these operations:
 
 - Build a base image.
-- Create and configure TAP devices or firewall rules.
+- Configure routed guest networking and firewall rules.
 - Delete or reset a sandbox.
 
 The jailed runtime has unit tests. It has not passed a live boot test on a KVM host.
@@ -57,6 +57,16 @@ executable for each CLI command. Use the Make target to run the local CLI:
 ```sh
 make sandboxctl ARGS="help"
 ```
+
+Build and install a local Arch package with `yay`:
+
+```sh
+make install
+```
+
+This target builds from the current checkout. It does not push or fetch source
+from GitHub. The AUR draft in `packaging/aur` uses the configured GitHub `main`
+branch.
 
 ## Initialize and inspect
 

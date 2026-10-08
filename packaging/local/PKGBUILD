@@ -1,0 +1,45 @@
+pkgname=sandboxctl-local
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc='Manage local Firecracker development sandboxes'
+arch=('x86_64')
+url='https://github.com/quinn/sandboxctl'
+license=('unknown')
+depends=('firecracker' 'e2fsprogs' 'iproute2' 'nftables' 'openssh')
+makedepends=('git' 'go>=1.27')
+provides=('sandboxctl')
+conflicts=('sandboxctl' 'sandboxctl-git')
+
+pkgver() {
+	local project_root="$startdir/../.."
+	local count hash
+	count=$(git -C "$project_root" rev-list --count HEAD)
+	hash=$(git -C "$project_root" rev-parse --short=7 HEAD)
+	printf '0.1.0.r%s.g%s\n' "$count" "$hash"
+}
+
+prepare() {
+	local project_root="$startdir/../.."
+	mkdir -p "$srcdir/sandboxctl"
+	git -C "$project_root" ls-files --cached --others --exclude-standard -z > "$srcdir/source-files"
+	tar -C "$project_root" --null --files-from="$srcdir/source-files" -cf - |
+		tar -C "$srcdir/sandboxctl" -xf -
+	rm "$srcdir/source-files"
+}
+
+build() {
+	cd "$srcdir/sandboxctl"
+	make build
+}
+
+package() {
+	cd "$srcdir/sandboxctl"
+	install -Dm755 bin/sandboxctl "$pkgdir/usr/bin/sandboxctl"
+	install -Dm755 bin/sandboxd "$pkgdir/usr/bin/sandboxd"
+	for executable in bin/sandboxctl-*; do
+		install -Dm755 "$executable" "$pkgdir/usr/bin/${executable##*/}"
+	done
+	install -Dm644 packaging/systemd/sandboxd.socket "$pkgdir/usr/lib/systemd/system/sandboxd.socket"
+	install -Dm644 packaging/systemd/sandboxd.service "$pkgdir/usr/lib/systemd/system/sandboxd.service"
+	install -Dm644 README.md "$pkgdir/usr/share/doc/sandboxctl/README.md"
+}
