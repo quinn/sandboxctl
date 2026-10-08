@@ -14,6 +14,8 @@ The Phase 1 storage proof passed. Section 18 steps 1 through 3 are complete. Ste
 
 Section 18, step 6 is complete. Stopped-instance creation now uses the daemon-owned allocator and store. sandboxd reads host allocation settings and image versions from root-owned state. It creates the sparse ext4 disk, stores the SSH public key, and commits a version-2 instance record. The `create` command sends operation data through gRPC and refreshes the SSH fragment from daemon state. The image installation command and jailed start/stop lifecycle are not implemented, so a real create request needs an installed image manifest and the host service. The remaining start, stop, and SSH commands still use operator XDG records. Move them when their lifecycle RPCs are ready. Keep the temporary single-root test until the jailed runtime passes integration testing.
 
+Section 18, step 7 is underway. The new SDK configuration builder uses the instance UID and GID, the jailer, cgroup version 2, and the Phase 1 SquashFS plus ext4 boot layout. Unit tests check the jail identity, read-only base drive, writable state disk, and safe paths. This code does not start or supervise a Firecracker process yet. The current host has Firecracker and jailer installed, but it has no `/dev/kvm`, so it cannot run a live jailed VM test.
+
 The E2B runtime checkout is retained in ignored `tmp/e2b-runtime` at commit `47096f195aca4a545a9079b706efb3a18f51cf3f`. The license, extraction record, and first Debian/Ubuntu provisioning profile are in place. There is no build command, BuildKit VM orchestration, image manifest, or SquashFS finalizer yet.
 
 Phase 1 storage proof is complete. It booted with read-only `/dev/vda` and writable `/dev/vdb`. A guest test file persisted across restart and disappeared after state-disk reset. The proof runner checked the SquashFS digest on each run.
@@ -26,7 +28,7 @@ The complete output is in the ignored file `tmp/logs/manual-test.log`.
 
 The manual test command prepares the private disk before boot. It fixes guest home ownership, installs the public key, disables password and keyboard-interactive SSH, and validates the SSH server configuration. It waits for SSH on both boots. It checks persistence outside `/tmp`, which is cleared at boot.
 
-Next: implement section 18, step 7: jailer launch through the SDK runtime, with dedicated identities and cleanup. Image import is still required before a complete create/start integration test. Keep the manual one-VM test as a regression check.
+Next: connect the jailed SDK configuration to sandboxd start and stop operations. Add process identity tracking and failed-start cleanup. Then test a real boot on a host with `/dev/kvm`. Image import is still required for the supported create/start workflow. Keep the manual one-VM test as a regression check.
 
 ## Completed
 
@@ -113,6 +115,9 @@ Next: implement section 18, step 7: jailer launch through the SDK runtime, with 
 - Updated SSH configuration sync to read daemon instance state and use the `sandbox-NAME` alias.
 - Added tests for config and image manifest validation, state disk formatting, create retries and duplicates, gRPC creation and structured errors, public-key storage, and SSH fragment generation.
 - `make proto-lint`, `gofmt`, `go vet ./...`, and `go test ./...` pass. The complete Go checks passed outside the sandbox because its build cache is read-only.
+- Added the jailed SDK configuration builder for the V2 boot layout. It gives the jailer the allocated UID and GID, uses cgroup version 2, and connects the read-only SquashFS and writable ext4 drives to the proven initramfs arguments.
+- Added tests for jail identity, SDK chroot setup, boot inputs, drive access modes, TAP names, and rejected paths. `gofmt`, `go vet ./...`, `go test ./...`, and `git diff --check` pass.
+- Confirmed that Firecracker and jailer are installed in this environment. `/dev/kvm` is absent, so live jailed VM validation cannot run here.
 
 ## Decisions
 
@@ -133,8 +138,9 @@ The repository has no configured Git remote or license file. The AUR draft uses 
 
 ## Next tasks
 
-1. Implement section 18, step 7: jailer launch through the SDK runtime, with dedicated identities and cleanup.
+1. Complete section 18, step 7 by adding sandboxd start and stop lifecycle operations, process identity tracking, and failed-start cleanup.
 2. Implement image import and artifact validation before testing the create/start path with a built image.
-3. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented. Preserve the manual test path until the jailed runtime passes integration testing.
-4. Add cold-boot SquashFS finalization. Keep OCI pulls and extraction inside the builder VM through BuildKit.
-5. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.
+3. Run the jailed boot on a Linux KVM host. Keep the manual test path until it passes.
+4. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
+5. Add cold-boot SquashFS finalization. Keep OCI pulls and extraction inside the builder VM through BuildKit.
+6. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.
