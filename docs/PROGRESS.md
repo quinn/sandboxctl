@@ -164,11 +164,11 @@ The Codex command environment does not expose `/dev/kvm` and blocks `sudo`. The 
 Buf remote generation requires access to the Buf Schema Registry. `make generate` fails inside the sandbox because that network call is blocked. The generated files are present from a network-enabled run.
 The repository has no license file. The AUR draft uses the GitHub URL inferred from the workspace path. Confirm the public source URL and select a license before publication.
 
-The user installed the package, imported the default image, and created `pkgtest`. Starting it returns a generic `FailedPrecondition` error. The TAP device exists as `sc000001`, belongs to UID/GID `200000:200000`, and has host address `172.30.0.1/30`. The first failed attempt reached Firecracker startup and exited with status 1. A later retry left no jail directory and did not add new journal details. The daemon previously hid runtime errors from both the client and journal.
+The user installed the package, imported the default image, and created `pkgtest`. The initial failure reached Firecracker startup and exited with status 1. Structured daemon logging then identified the current failure: `ip tuntap add` fails for the existing `sc000001`, and TAP owner verification rejects it. The user previously observed `sc000001` with UID/GID `200000:200000` and host address `172.30.0.1/30`, matching the instance record. The exact `ip tuntap show` output captured by sandboxd is not yet known.
 
 ## Next tasks
 
-1. Install the logging update and retry the existing `pkgtest` instance. Read the detailed start error from the system journal before changing runtime behavior.
+1. Install the TAP diagnostic update and retry the existing `pkgtest` instance. Compare the logged `ip tuntap show` output and parsed IDs with the instance allocation.
 2. Add routed guest networking after serial boot works.
 3. Build and provision a guest image before testing SSH. Keep the manual test path until the jailed runtime passes.
 4. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.

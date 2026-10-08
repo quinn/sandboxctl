@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/netip"
 	"os/exec"
 	"regexp"
@@ -100,6 +101,15 @@ func (manager TapManager) verifyExisting(ctx context.Context, runner CommandRunn
 	}
 	uid, gid, ok := parseTapOwner(string(output), instance.TapDevice)
 	if !ok || uid != instance.HostUID || gid != instance.HostGID {
+		slog.Error("existing TAP owner does not match allocation",
+			"device", instance.TapDevice,
+			"expected_uid", instance.HostUID,
+			"expected_gid", instance.HostGID,
+			"parsed_uid", uid,
+			"parsed_gid", gid,
+			"recognized", ok,
+			"output", strings.TrimSpace(string(output)),
+		)
 		return fmt.Errorf("TAP device %s does not match the allocated owner", instance.TapDevice)
 	}
 	addressOutput, err := runner.Run(ctx, "/usr/bin/ip", "-o", "-4", "address", "show", "dev", instance.TapDevice)
