@@ -58,15 +58,16 @@ executable for each CLI command. Use the Make target to run the local CLI:
 make sandboxctl ARGS="help"
 ```
 
-Build and install a local Arch package with `yay`:
+Build and install a local Arch package:
 
 ```sh
 make install
 ```
 
-This target builds from the current checkout. It does not push or fetch source
-from GitHub. The AUR draft in `packaging/aur` uses the configured GitHub `main`
-branch.
+This target uses `yay` to build and install the current checkout. The checkout
+must have a Git remote. For local development, use the bare remote described
+in the development notes. This target does not use GitHub. The AUR draft in
+`packaging/aur` uses the configured GitHub `main` branch.
 
 ## Initialize and inspect
 

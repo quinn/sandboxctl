@@ -144,7 +144,7 @@ Next: install the current checkout with `make install`, run the one-time host se
 - Added tests for TAP command sequences, invalid addresses, owner mismatch, partial setup rollback, and runtime prepare/remove ordering.
 - `go test ./internal/network ./internal/runtime ./cmd/sandboxd` passed for this change.
 - The Codex command environment does not expose `/dev/kvm`; the user's earlier serial and SSH VM tests confirm that the host can run VMs. The jailed runtime still needs a live boot test. Guest routing, forwarding, and firewall rules are still open.
-- Added `make install` with a local `sandboxctl-local` package recipe. It builds from the current working tree through `yay`; it does not fetch from GitHub or push changes.
+- Added `make install` with a local `sandboxctl-local` package recipe. It uses `yay` to build this working tree. The local package test uses a bare Git remote beside the checkout. It does not use GitHub.
 
 ## Decisions
 
