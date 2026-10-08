@@ -30,7 +30,7 @@ Usage:
   sandboxctl init
   sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]
   sandboxctl start NAME [--dry-run]
-  sandboxctl stop NAME
+  sandboxctl stop NAME [--force]
   sandboxctl list
   sandboxctl ssh NAME [COMMAND ...]
   sandboxctl paths
@@ -40,6 +40,7 @@ Use sandboxctl ssh-config to print the block for your SSH configuration.
 Connect with ssh sandbox-NAME after you add the block.
 
 Create requires an installed image. Image installation is not available yet.
-This implementation does not yet create the TAP network or start a jailed VM.
+Start requires an installed image, a prepared TAP device, and KVM access.
+Guest networking is not configured yet.
 Read docs/CONTINUE.md before you use it with important data.`)
 }

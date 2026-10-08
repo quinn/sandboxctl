@@ -29,6 +29,7 @@ The current implementation can do these operations:
 - Allocate a unique host identity, `/30` network, and TAP name for each instance.
 - Create a sparse ext4 state disk for a stopped instance.
 - Generate the OpenSSH configuration fragment from daemon state.
+- Start and stop a jailed VM through sandboxd when the image and TAP device are installed.
 
 The create operation needs an installed image manifest and the host service.
 The image installation command is not available yet.
@@ -36,9 +37,10 @@ The image installation command is not available yet.
 The current implementation cannot yet do these operations:
 
 - Install or build a base image.
-- Start and stop a jailed VM through sandboxd.
 - Create and configure TAP devices or firewall rules.
 - Delete or reset a sandbox.
+
+The jailed runtime has unit tests. It has not passed a live boot test on a KVM host.
 
 ## Build
 

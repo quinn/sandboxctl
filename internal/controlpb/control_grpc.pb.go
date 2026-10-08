@@ -24,6 +24,8 @@ const (
 	ControlService_ListInstances_FullMethodName   = "/sandboxctl.ControlService/ListInstances"
 	ControlService_InspectInstance_FullMethodName = "/sandboxctl.ControlService/InspectInstance"
 	ControlService_CreateInstance_FullMethodName  = "/sandboxctl.ControlService/CreateInstance"
+	ControlService_StartInstance_FullMethodName   = "/sandboxctl.ControlService/StartInstance"
+	ControlService_StopInstance_FullMethodName    = "/sandboxctl.ControlService/StopInstance"
 )
 
 // ControlServiceClient is the client API for ControlService service.
@@ -40,6 +42,10 @@ type ControlServiceClient interface {
 	InspectInstance(ctx context.Context, in *InspectInstanceRequest, opts ...grpc.CallOption) (*InspectInstanceResponse, error)
 	// Creates a stopped sandbox instance.
 	CreateInstance(ctx context.Context, in *CreateInstanceRequest, opts ...grpc.CallOption) (*CreateInstanceResponse, error)
+	// Starts a stopped sandbox instance.
+	StartInstance(ctx context.Context, in *StartInstanceRequest, opts ...grpc.CallOption) (*StartInstanceResponse, error)
+	// Stops a running sandbox instance.
+	StopInstance(ctx context.Context, in *StopInstanceRequest, opts ...grpc.CallOption) (*StopInstanceResponse, error)
 }
 
 type controlServiceClient struct {
@@ -100,6 +106,26 @@ func (c *controlServiceClient) CreateInstance(ctx context.Context, in *CreateIns
 	return out, nil
 }
 
+func (c *controlServiceClient) StartInstance(ctx context.Context, in *StartInstanceRequest, opts ...grpc.CallOption) (*StartInstanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartInstanceResponse)
+	err := c.cc.Invoke(ctx, ControlService_StartInstance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlServiceClient) StopInstance(ctx context.Context, in *StopInstanceRequest, opts ...grpc.CallOption) (*StopInstanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StopInstanceResponse)
+	err := c.cc.Invoke(ctx, ControlService_StopInstance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControlServiceServer is the server API for ControlService service.
 // All implementations must embed UnimplementedControlServiceServer
 // for forward compatibility.
@@ -114,6 +140,10 @@ type ControlServiceServer interface {
 	InspectInstance(context.Context, *InspectInstanceRequest) (*InspectInstanceResponse, error)
 	// Creates a stopped sandbox instance.
 	CreateInstance(context.Context, *CreateInstanceRequest) (*CreateInstanceResponse, error)
+	// Starts a stopped sandbox instance.
+	StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResponse, error)
+	// Stops a running sandbox instance.
+	StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error)
 	mustEmbedUnimplementedControlServiceServer()
 }
 
@@ -138,6 +168,12 @@ func (UnimplementedControlServiceServer) InspectInstance(context.Context, *Inspe
 }
 func (UnimplementedControlServiceServer) CreateInstance(context.Context, *CreateInstanceRequest) (*CreateInstanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateInstance not implemented")
+}
+func (UnimplementedControlServiceServer) StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartInstance not implemented")
+}
+func (UnimplementedControlServiceServer) StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopInstance not implemented")
 }
 func (UnimplementedControlServiceServer) mustEmbedUnimplementedControlServiceServer() {}
 func (UnimplementedControlServiceServer) testEmbeddedByValue()                        {}
@@ -250,6 +286,42 @@ func _ControlService_CreateInstance_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlService_StartInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartInstanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServiceServer).StartInstance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlService_StartInstance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServiceServer).StartInstance(ctx, req.(*StartInstanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlService_StopInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopInstanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServiceServer).StopInstance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlService_StopInstance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServiceServer).StopInstance(ctx, req.(*StopInstanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ControlService_ServiceDesc is the grpc.ServiceDesc for ControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -276,6 +348,14 @@ var ControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateInstance",
 			Handler:    _ControlService_CreateInstance_Handler,
+		},
+		{
+			MethodName: "StartInstance",
+			Handler:    _ControlService_StartInstance_Handler,
+		},
+		{
+			MethodName: "StopInstance",
+			Handler:    _ControlService_StopInstance_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

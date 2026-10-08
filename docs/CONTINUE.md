@@ -7,6 +7,6 @@ The Phase 1 SquashFS and OverlayFS proof passed.
 The temporary single-root virtual machine test also passed.
 Keep that test available until the jailed runtime passes an integration boot.
 
-Section 18, step 6 and stopped-instance creation are complete. Section 18, step 7 is underway. The SDK jailed configuration now uses the allocated UID and GID with the Phase 1 read-only SquashFS and writable ext4 layout. It does not start or supervise Firecracker yet.
+Section 18, step 6 and stopped-instance creation are complete. Section 18, step 7 has daemon start and stop RPCs and a jailed SDK supervisor. The supervisor checks process identity and stores a private runtime record. The CLI start and stop commands use the daemon.
 
-Next, connect this configuration to sandboxd start and stop operations. Add process identity tracking and failed-start cleanup. The current host has no `/dev/kvm`, so run the live jailed boot on a Linux KVM host. Image import is still required for the complete create/start workflow. Keep the manual VM test available until the jailed runtime passes an integration boot.
+The runtime lifecycle has unit tests, but it has not passed a live boot. This host has no `/dev/kvm`. Image installation and TAP setup are also missing. Complete the required checks, then implement those two paths. Run the jailed boot on a Linux KVM host and confirm SSH access. Keep the manual VM test available until the jailed runtime passes an integration boot.

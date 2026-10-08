@@ -99,3 +99,13 @@ func TestStopAndWait(t *testing.T) {
 		t.Fatal("process did not stop")
 	}
 }
+
+func TestOwnerReturnsEffectiveIDs(t *testing.T) {
+	uid, gid, err := Owner(os.Getpid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uid != uint32(os.Geteuid()) || gid != uint32(os.Getegid()) {
+		t.Fatalf("effective identity = %d:%d, want %d:%d", uid, gid, os.Geteuid(), os.Getegid())
+	}
+}

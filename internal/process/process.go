@@ -40,6 +40,51 @@ func Current(pid int) (Record, error) {
 	return Record{PID: pid, StartTime: start}, nil
 }
 
+// Owner returns the effective user and group identifiers for pid.
+func Owner(pid int) (uint32, uint32, error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return 0, 0, err
+	}
+	var uid, gid uint32
+	var hasUID, hasGID bool
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		if fields[0] != "Uid:" && fields[0] != "Gid:" {
+			continue
+		}
+		value, err := strconv.ParseUint(fields[2], 10, 32)
+		if err != nil {
+			return 0, 0, fmt.Errorf("parse process identity: %w", err)
+		}
+		if fields[0] == "Uid:" {
+			uid, hasUID = uint32(value), true
+		} else {
+			gid, hasGID = uint32(value), true
+		}
+	}
+	if !hasUID || !hasGID {
+		return 0, 0, errors.New("process status does not contain UID and GID")
+	}
+	return uid, gid, nil
+}
+
+// BootID returns the identifier for the current Linux boot.
+func BootID() (string, error) {
+	data, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
+	if err != nil {
+		return "", err
+	}
+	value := strings.TrimSpace(string(data))
+	if value == "" || strings.ContainsAny(value, "\r\n\x00") {
+		return "", errors.New("kernel boot identifier is invalid")
+	}
+	return value, nil
+}
+
 // Write atomically stores record at path with private file permissions.
 func Write(path string, record Record) error {
 	data, err := json.Marshal(record)

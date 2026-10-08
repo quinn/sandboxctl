@@ -19,6 +19,12 @@ service ControlService {
 
   // Creates a stopped sandbox instance.
   rpc CreateInstance(CreateInstanceRequest) returns (CreateInstanceResponse);
+
+  // Starts a stopped sandbox instance.
+  rpc StartInstance(StartInstanceRequest) returns (StartInstanceResponse);
+
+  // Stops a running sandbox instance.
+  rpc StopInstance(StopInstanceRequest) returns (StopInstanceResponse);
 }
 
 message PingRequest {}
@@ -72,6 +78,28 @@ message CreateInstanceRequest {
 
 message CreateInstanceResponse {
   // Contains the saved state for the new stopped sandbox.
+  Instance instance = 1;
+}
+
+message StartInstanceRequest {
+  // Names the sandbox to start.
+  string name = 1;
+}
+
+message StartInstanceResponse {
+  // Contains the running sandbox state.
+  Instance instance = 1;
+}
+
+message StopInstanceRequest {
+  // Names the sandbox to stop.
+  string name = 1;
+  // Requests a forced VMM stop without a guest shutdown request.
+  bool force = 2;
+}
+
+message StopInstanceResponse {
+  // Contains the stopped sandbox state.
   Instance instance = 1;
 }
 

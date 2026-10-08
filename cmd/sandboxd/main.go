@@ -11,11 +11,8 @@ import (
 
 	"sandboxctl/internal/daemon"
 	"sandboxctl/internal/hoststate"
+	"sandboxctl/internal/runtime"
 )
-
-type runtimeStatus struct{}
-
-func (runtimeStatus) Ready() bool { return false }
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -54,7 +51,17 @@ func run(arguments []string) error {
 		},
 		ImageVersions: hoststate.InstalledImages{Paths: paths},
 	}
-	server := daemon.NewServerWithInstanceManager("0.1.0-dev", runtimeStatus{}, manager)
+	supervisor := &runtime.Supervisor{
+		StatePaths: paths,
+		Images:     hoststate.InstalledImages{Paths: paths},
+		Paths: runtime.JailedRuntimePaths{
+			FirecrackerBinary: "/usr/bin/firecracker",
+			JailerBinary:      "/usr/bin/jailer",
+			JailRoot:          paths.Jails,
+			APISocket:         "firecracker.socket",
+		},
+	}
+	server := daemon.NewServerWithInstanceManager("0.1.0-dev", supervisor, manager)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if *systemdSocket {

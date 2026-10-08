@@ -16,6 +16,8 @@ var (
 	ErrInvalidCreateOptions   = errors.New("invalid create options")
 	ErrInvalidSSHPublicKey    = errors.New("SSH public key must be an Ed25519 public key")
 	ErrImageLookupUnavailable = errors.New("installed image lookup is unavailable")
+	ErrAlreadyStarting        = errors.New("sandbox start is already in progress")
+	ErrAlreadyRunning         = errors.New("sandbox is already running")
 )
 
 // ImageVersions provides the pinned version for an installed image name.

@@ -101,6 +101,20 @@ type Instance struct {
 	Extra          map[string]json.RawMessage `json:"-"`
 }
 
+// RuntimeRecord identifies one running Firecracker process and its jail.
+type RuntimeRecord struct {
+	SchemaVersion int       `json:"schema_version"`
+	InstanceID    string    `json:"instance_id"`
+	PID           int       `json:"pid"`
+	ProcessStart  uint64    `json:"process_start_time"`
+	BootID        string    `json:"boot_id"`
+	HostUID       int       `json:"host_uid"`
+	HostGID       int       `json:"host_gid"`
+	JailerID      string    `json:"jailer_id"`
+	APISocket     string    `json:"api_socket"`
+	StartedAt     time.Time `json:"started_at"`
+}
+
 // MarshalJSON includes fields that a newer daemon added to a record.
 func (instance Instance) MarshalJSON() ([]byte, error) {
 	type stored Instance
@@ -221,6 +235,87 @@ func (s Store) LoadPublicKey(name string) (string, error) {
 		return "", errors.New("stored guest public key is invalid")
 	}
 	return key, nil
+}
+
+// SaveRuntime atomically records the process identity and jail for an instance.
+func (s Store) SaveRuntime(name string, record RuntimeRecord) error {
+	instance, err := s.Load(name)
+	if err != nil {
+		return err
+	}
+	if record.SchemaVersion != 1 || record.InstanceID != instance.ID || record.PID < 1 || record.ProcessStart == 0 || record.BootID == "" || record.HostUID != instance.HostUID || record.HostGID != instance.HostGID || record.JailerID != instance.ID || !filepath.IsAbs(record.APISocket) || record.StartedAt.IsZero() {
+		return errors.New("runtime record does not match the instance")
+	}
+	data, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode runtime record: %w", err)
+	}
+	return atomicWrite(filepath.Join(s.Paths.Instances, name, "runtime.json"), append(data, '\n'), 0o600)
+}
+
+// LoadRuntime reads the private runtime record for an instance.
+func (s Store) LoadRuntime(name string) (RuntimeRecord, error) {
+	if !safeName.MatchString(name) {
+		return RuntimeRecord{}, ErrInvalidName
+	}
+	path := filepath.Join(s.Paths.Instances, name, "runtime.json")
+	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return RuntimeRecord{}, err
+	}
+	file := os.NewFile(uintptr(fd), path)
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return RuntimeRecord{}, fmt.Errorf("inspect runtime record: %w", err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !info.Mode().IsRegular() || !ok || int(stat.Uid) != os.Geteuid() || info.Mode().Perm() != 0o600 || info.Size() > 1<<20 {
+		return RuntimeRecord{}, errors.New("runtime record must be a private regular file owned by sandboxd")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+	if err != nil {
+		return RuntimeRecord{}, fmt.Errorf("read runtime record: %w", err)
+	}
+	var record RuntimeRecord
+	if len(data) > 1<<20 || json.Unmarshal(data, &record) != nil || record.SchemaVersion != 1 || record.InstanceID == "" || record.PID < 1 || record.ProcessStart == 0 || record.BootID == "" || record.HostUID < 1 || record.HostGID < 1 || record.JailerID == "" || !filepath.IsAbs(record.APISocket) || record.StartedAt.IsZero() {
+		return RuntimeRecord{}, errors.New("runtime record is invalid")
+	}
+	instance, err := s.Load(name)
+	if err != nil {
+		return RuntimeRecord{}, err
+	}
+	if record.InstanceID != instance.ID || record.HostUID != instance.HostUID || record.HostGID != instance.HostGID || record.JailerID != instance.ID {
+		return RuntimeRecord{}, errors.New("runtime record does not match the instance")
+	}
+	return record, nil
+}
+
+// RemoveRuntime removes the runtime record only when it still matches expected.
+func (s Store) RemoveRuntime(name string, expected RuntimeRecord) error {
+	current, err := s.LoadRuntime(name)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if current != expected {
+		return nil
+	}
+	directory := filepath.Join(s.Paths.Instances, name)
+	if err := os.Remove(filepath.Join(directory, "runtime.json")); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("remove runtime record: %w", err)
+	}
+	parent, err := os.Open(directory)
+	if err != nil {
+		return fmt.Errorf("open instance directory: %w", err)
+	}
+	defer parent.Close()
+	if err := parent.Sync(); err != nil {
+		return fmt.Errorf("sync instance directory: %w", err)
+	}
+	return nil
 }
 
 // Load reads and validates the version-2 instance record for name.

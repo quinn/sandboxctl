@@ -188,6 +188,53 @@ func TestStoreLoadRejectsInvalidNameAndMissingRecord(t *testing.T) {
 	}
 }
 
+func TestStoreSavesAndRemovesRuntimeRecordByIdentity(t *testing.T) {
+	paths := PathsAt(filepath.Join(t.TempDir(), "state"))
+	store := Store{Paths: paths}
+	id, err := NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := testInstance(id)
+	if err := store.Save(instance); err != nil {
+		t.Fatal(err)
+	}
+	record := RuntimeRecord{
+		SchemaVersion: 1, InstanceID: id, PID: 1234, ProcessStart: 5678,
+		BootID: "boot-id", HostUID: instance.HostUID, HostGID: instance.HostGID,
+		JailerID: id, APISocket: "/var/lib/sandboxctl/jails/firecracker/" + id + "/root/firecracker.socket",
+		StartedAt: time.Date(2026, time.October, 8, 12, 0, 0, 0, time.UTC),
+	}
+	if err := store.SaveRuntime(instance.Name, record); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.LoadRuntime(instance.Name)
+	if err != nil || loaded != record {
+		t.Fatalf("LoadRuntime() = %#v, %v; want %#v", loaded, err, record)
+	}
+	info, err := os.Stat(filepath.Join(paths.Instances, instance.Name, "runtime.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("runtime record mode = %04o, want 0600", info.Mode().Perm())
+	}
+	other := record
+	other.PID++
+	if err := store.RemoveRuntime(instance.Name, other); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LoadRuntime(instance.Name); err != nil {
+		t.Fatalf("mismatched record removed runtime state: %v", err)
+	}
+	if err := store.RemoveRuntime(instance.Name, record); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LoadRuntime(instance.Name); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("runtime record remains: %v", err)
+	}
+}
+
 func testInstance(id string) Instance {
 	return Instance{
 		SchemaVersion:  InstanceSchemaVersion,

@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 
 	"sandboxctl/internal/app"
+	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
+	"sandboxctl/internal/controlpb"
+	"sandboxctl/internal/daemon"
 )
 
 func main() {
@@ -22,11 +26,27 @@ func run(arguments []string) error {
 		}
 		return err
 	}
-	command, err := app.New()
+	if options.DryRun {
+		command, err := app.New()
+		if err != nil {
+			return err
+		}
+		return command.Start(options)
+	}
+	connection, service, err := client.Dial(context.Background(), client.DefaultSocketPath)
 	if err != nil {
 		return err
 	}
-	return command.Start(options)
+	defer connection.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxStartDuration)
+	defer cancel()
+	response, err := service.StartInstance(ctx, &controlpb.StartInstanceRequest{Name: options.Name})
+	if err != nil {
+		return fmt.Errorf("start sandbox %s: %w", options.Name, err)
+	}
+	fmt.Fprintf(os.Stdout, "Started sandbox %s.\n", response.GetInstance().GetName())
+	fmt.Fprintf(os.Stdout, "SSH alias: %s\n", response.GetInstance().GetSshAlias())
+	return nil
 }
 
 func parse(arguments []string) (app.StartOptions, error) {

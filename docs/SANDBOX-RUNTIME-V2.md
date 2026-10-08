@@ -373,6 +373,8 @@ The project image manifest must contain:
 - Required kernel arguments.
 - Build provenance reference.
 
+Store the boot artifacts as `vmlinux`, `initramfs.cpio.gz`, and `root.squashfs` beside `manifest.json`.
+
 Store each installed image under `/var/lib/sandboxctl/images/NAME/`.
 Store its manifest as `manifest.json`.
 The manifest must use `schema_version`, `name`, and `version` fields.

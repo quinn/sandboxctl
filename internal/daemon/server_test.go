@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -198,6 +199,101 @@ func TestServerCreatesStoppedInstance(t *testing.T) {
 	}
 }
 
+func TestServerStartsAndStopsInstanceThroughRuntimeController(t *testing.T) {
+	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
+	store := hoststate.Store{Paths: paths}
+	id, err := hoststate.NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(daemonTestInstance(id, "dev1")); err != nil {
+		t.Fatal(err)
+	}
+	runtime := &testRuntimeController{running: make(map[string]bool)}
+	connection := startServerWithRuntime(t, store, runtime)
+	service := controlpb.NewControlServiceClient(connection)
+
+	startCtx, startCancel := callContext(daemon.APIVersion, "77777777777777777777777777777777")
+	started, err := service.StartInstance(startCtx, &controlpb.StartInstanceRequest{Name: "dev1"})
+	startCancel()
+	if err != nil {
+		t.Fatalf("StartInstance(): %v", err)
+	}
+	if started.GetInstance().GetRuntimeState() != "running" || !runtime.Running("dev1") {
+		t.Fatalf("StartInstance() response = %v", started.GetInstance())
+	}
+
+	listCtx, listCancel := callContext(daemon.APIVersion, "88888888888888888888888888888888")
+	listed, err := service.ListInstances(listCtx, &controlpb.ListInstancesRequest{})
+	listCancel()
+	if err != nil || len(listed.GetInstances()) != 1 || listed.GetInstances()[0].GetRuntimeState() != "running" {
+		t.Fatalf("ListInstances() after start = %v, %v", listed, err)
+	}
+
+	stopCtx, stopCancel := callContext(daemon.APIVersion, "99999999999999999999999999999999")
+	stopped, err := service.StopInstance(stopCtx, &controlpb.StopInstanceRequest{Name: "dev1", Force: true})
+	stopCancel()
+	if err != nil {
+		t.Fatalf("StopInstance(): %v", err)
+	}
+	if stopped.GetInstance().GetRuntimeState() != "stopped" || runtime.Running("dev1") {
+		t.Fatalf("StopInstance() response = %v", stopped.GetInstance())
+	}
+	runtime.mu.Lock()
+	defer runtime.mu.Unlock()
+	if !runtime.force {
+		t.Fatal("StopInstance() did not pass the force option")
+	}
+}
+
+func TestServerRejectsStartAndStopForMissingInstance(t *testing.T) {
+	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
+	store := hoststate.Store{Paths: paths}
+	connection := startServerWithRuntime(t, store, &testRuntimeController{running: make(map[string]bool)})
+	service := controlpb.NewControlServiceClient(connection)
+	ctx, cancel := callContext(daemon.APIVersion, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	_, err := service.StartInstance(ctx, &controlpb.StartInstanceRequest{Name: "missing"})
+	cancel()
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("StartInstance() code = %s, want NotFound (%v)", status.Code(err), err)
+	}
+	ctx, cancel = callContext(daemon.APIVersion, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	_, err = service.StopInstance(ctx, &controlpb.StopInstanceRequest{Name: "missing"})
+	cancel()
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("StopInstance() code = %s, want NotFound (%v)", status.Code(err), err)
+	}
+}
+
+type testRuntimeController struct {
+	mu      sync.Mutex
+	running map[string]bool
+	force   bool
+}
+
+func (r *testRuntimeController) Ready() bool { return true }
+
+func (r *testRuntimeController) Running(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.running[name]
+}
+
+func (r *testRuntimeController) Start(_ context.Context, instance hoststate.Instance) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.running[instance.Name] = true
+	return nil
+}
+
+func (r *testRuntimeController) Stop(_ context.Context, name string, force bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.force = force
+	delete(r.running, name)
+	return nil
+}
+
 type daemonTestDiskBuilder struct{}
 
 func (daemonTestDiskBuilder) Build(_ context.Context, path string, size int64, uid, gid uint32) error {
@@ -263,15 +359,19 @@ func startServer(t *testing.T) *grpc.ClientConn {
 }
 
 func startServerWithInstances(t *testing.T, instances daemon.InstanceStore) *grpc.ClientConn {
+	return startServerWithRuntime(t, instances, nil)
+}
+
+func startServerWithRuntime(t *testing.T, instances daemon.InstanceStore, runtime daemon.RuntimeStatus) *grpc.ClientConn {
 	t.Helper()
 	socketPath := filepath.Join(t.TempDir(), "control.sock")
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := daemon.NewServerWithInstanceStore("test-version", nil, instances)
+	server := daemon.NewServerWithInstanceStore("test-version", runtime, instances)
 	if manager, ok := instances.(daemon.InstanceManager); ok {
-		server = daemon.NewServerWithInstanceManager("test-version", nil, manager)
+		server = daemon.NewServerWithInstanceManager("test-version", runtime, manager)
 	}
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(func() {

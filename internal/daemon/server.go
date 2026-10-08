@@ -29,6 +29,8 @@ const (
 	MaxMessageSize        = 1 << 20
 	MaxOperationDuration  = 10 * time.Second
 	MaxCreateDuration     = 2 * time.Minute
+	MaxStartDuration      = 2 * time.Minute
+	MaxStopDuration       = 30 * time.Second
 )
 
 var requestIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
@@ -59,7 +61,8 @@ func newServer(version string, runtime RuntimeStatus, instances InstanceStore, c
 		grpc.MaxSendMsgSize(MaxMessageSize),
 		grpc.UnaryInterceptor(unaryInterceptor),
 	)
-	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, instances: instances, creator: creator})
+	controller, _ := runtime.(RuntimeController)
+	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, controller: controller, instances: instances, creator: creator})
 	return server
 }
 
@@ -82,6 +85,10 @@ func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerIn
 	duration := MaxOperationDuration
 	if info.FullMethod == controlpb.ControlService_CreateInstance_FullMethodName {
 		duration = MaxCreateDuration
+	} else if info.FullMethod == controlpb.ControlService_StartInstance_FullMethodName {
+		duration = MaxStartDuration
+	} else if info.FullMethod == controlpb.ControlService_StopInstance_FullMethodName {
+		duration = MaxStopDuration
 	}
 	ctx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
@@ -93,10 +100,11 @@ func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerIn
 
 type service struct {
 	controlpb.UnimplementedControlServiceServer
-	version   string
-	runtime   RuntimeStatus
-	instances InstanceStore
-	creator   InstanceCreator
+	version    string
+	runtime    RuntimeStatus
+	controller RuntimeController
+	instances  InstanceStore
+	creator    InstanceCreator
 }
 
 // InstanceStore provides saved instance records to the control service.
@@ -114,6 +122,18 @@ type InstanceCreator interface {
 type InstanceManager interface {
 	InstanceStore
 	InstanceCreator
+}
+
+// RuntimeController starts and stops jailed Firecracker machines.
+type RuntimeController interface {
+	Start(context.Context, hoststate.Instance) error
+	Stop(context.Context, string, bool) error
+	Running(string) bool
+}
+
+// RuntimeStateReporter reports persisted runtime state after daemon restart.
+type RuntimeStateReporter interface {
+	RuntimeState(string) string
 }
 
 func (s *service) Ping(context.Context, *controlpb.PingRequest) (*controlpb.PingResponse, error) {
@@ -134,7 +154,7 @@ func (s *service) ListInstances(context.Context, *controlpb.ListInstancesRequest
 	}
 	response := &controlpb.ListInstancesResponse{Instances: make([]*controlpb.Instance, 0, len(instances))}
 	for _, instance := range instances {
-		response.Instances = append(response.Instances, toProtocolInstance(instance))
+		response.Instances = append(response.Instances, s.protocolInstance(instance))
 	}
 	return response, nil
 }
@@ -153,7 +173,7 @@ func (s *service) InspectInstance(_ context.Context, request *controlpb.InspectI
 	if err != nil {
 		return nil, status.Error(codes.Internal, "cannot read instance state")
 	}
-	return &controlpb.InspectInstanceResponse{Instance: toProtocolInstance(instance)}, nil
+	return &controlpb.InspectInstanceResponse{Instance: s.protocolInstance(instance)}, nil
 }
 
 func (s *service) CreateInstance(ctx context.Context, request *controlpb.CreateInstanceRequest) (*controlpb.CreateInstanceResponse, error) {
@@ -185,10 +205,78 @@ func (s *service) CreateInstance(ctx context.Context, request *controlpb.CreateI
 	if err != nil {
 		return nil, status.Error(codes.Internal, "cannot create sandbox instance")
 	}
-	return &controlpb.CreateInstanceResponse{Instance: toProtocolInstance(instance)}, nil
+	return &controlpb.CreateInstanceResponse{Instance: s.protocolInstance(instance)}, nil
 }
 
-func toProtocolInstance(instance hoststate.Instance) *controlpb.Instance {
+func (s *service) StartInstance(ctx context.Context, request *controlpb.StartInstanceRequest) (*controlpb.StartInstanceResponse, error) {
+	if s.controller == nil || s.instances == nil {
+		return nil, status.Error(codes.FailedPrecondition, "sandbox runtime is unavailable")
+	}
+	instance, err := s.instances.Load(request.GetName())
+	if errors.Is(err, hoststate.ErrInvalidName) {
+		return nil, status.Error(codes.InvalidArgument, "invalid sandbox name")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, status.Error(codes.NotFound, "sandbox does not exist")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "cannot read sandbox state")
+	}
+	if err := s.controller.Start(ctx, instance); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, status.Error(codes.Canceled, "start request was canceled")
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, status.Error(codes.DeadlineExceeded, "start request exceeded its time limit")
+		}
+		if errors.Is(err, hoststate.ErrAlreadyStarting) {
+			return nil, status.Error(codes.Aborted, "sandbox is already starting")
+		}
+		if errors.Is(err, hoststate.ErrAlreadyRunning) {
+			return nil, status.Error(codes.FailedPrecondition, "sandbox is already running")
+		}
+		return nil, status.Error(codes.FailedPrecondition, "cannot start sandbox")
+	}
+	return &controlpb.StartInstanceResponse{Instance: s.protocolInstance(instance)}, nil
+}
+
+func (s *service) StopInstance(ctx context.Context, request *controlpb.StopInstanceRequest) (*controlpb.StopInstanceResponse, error) {
+	if s.controller == nil || s.instances == nil {
+		return nil, status.Error(codes.FailedPrecondition, "sandbox runtime is unavailable")
+	}
+	instance, err := s.instances.Load(request.GetName())
+	if errors.Is(err, hoststate.ErrInvalidName) {
+		return nil, status.Error(codes.InvalidArgument, "invalid sandbox name")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, status.Error(codes.NotFound, "sandbox does not exist")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "cannot read sandbox state")
+	}
+	if err := s.controller.Stop(ctx, instance.Name, request.GetForce()); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, status.Error(codes.Canceled, "stop request was canceled")
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, status.Error(codes.DeadlineExceeded, "stop request exceeded its time limit")
+		}
+		return nil, status.Error(codes.FailedPrecondition, "cannot stop sandbox")
+	}
+	return &controlpb.StopInstanceResponse{Instance: s.protocolInstance(instance)}, nil
+}
+
+func (s *service) protocolInstance(instance hoststate.Instance) *controlpb.Instance {
+	state := "stopped"
+	if reporter, ok := s.controller.(RuntimeStateReporter); ok {
+		state = reporter.RuntimeState(instance.Name)
+	} else if s.controller != nil && s.controller.Running(instance.Name) {
+		state = "running"
+	}
+	return toProtocolInstance(instance, state)
+}
+
+func toProtocolInstance(instance hoststate.Instance, runtimeState string) *controlpb.Instance {
 	createdAt := ""
 	if !instance.CreatedAt.IsZero() {
 		createdAt = instance.CreatedAt.Format(time.RFC3339Nano)
@@ -212,7 +300,7 @@ func toProtocolInstance(instance hoststate.Instance) *controlpb.Instance {
 		GuestMac:       instance.GuestMAC,
 		SshUser:        instance.SSHUser,
 		SshAlias:       instance.SSHAlias,
-		RuntimeState:   "stopped",
+		RuntimeState:   runtimeState,
 	}
 }
 
