@@ -18,7 +18,7 @@ Section 18, step 7 now has start and stop RPCs and a sandboxd runtime supervisor
 
 The supervisor resolves fixed image artifacts from a root-owned image directory. It requires a pinned manifest version and read-only kernel, initramfs, and SquashFS files. Runtime records use mode `0600` and are removed with a directory sync. The CLI start and stop commands now call the daemon RPCs. They do not use the temporary runner for normal operation.
 
-The jailed runtime now prepares an instance TAP before Firecracker starts. It assigns the allocated UID and GID, applies the host `/30` address, and brings the link up. It removes the TAP after the VM stops and preserves runtime state if TAP cleanup fails. This host has Firecracker and jailer installed, but it has no `/dev/kvm`, so a managed boot remains untested. Guest routing, forwarding, and firewall rules are not implemented.
+The jailed runtime now prepares an instance TAP before Firecracker starts. It assigns the allocated UID and GID, applies the host `/30` address, and brings the link up. It removes the TAP after the VM stops and preserves runtime state if TAP cleanup fails. The user has booted and tested VMs on this host through serial and SSH. The Codex command environment does not expose `/dev/kvm`, so it cannot run a VM from this session. The jailed runtime still needs a live boot test. Guest routing, forwarding, and firewall rules are not implemented.
 
 The E2B runtime checkout is retained in ignored `tmp/e2b-runtime` at commit `47096f195aca4a545a9079b706efb3a18f51cf3f`. The license, extraction record, and first Debian/Ubuntu provisioning profile are in place. There is no build command, BuildKit VM orchestration, image manifest, or SquashFS finalizer yet.
 
@@ -32,7 +32,7 @@ The complete output is in the ignored file `tmp/logs/manual-test.log`.
 
 The manual test command prepares the private disk before boot. It fixes guest home ownership, installs the public key, disables password and keyboard-interactive SSH, and validates the SSH server configuration. It waits for SSH on both boots. It checks persistence outside `/tmp`, which is cleared at boot.
 
-Next: test TAP setup on a Linux host with the required privileges, then run the jailed serial boot on a host with `/dev/kvm`. Add routed guest networking after serial boot works. Build and provision a guest image before testing SSH. Keep the manual one-VM test as a regression check.
+Next: run the jailed serial boot and TAP setup from the user's host terminal. Add routed guest networking after serial boot works. Build and provision a guest image before testing SSH. Keep the manual one-VM test as a regression check.
 
 ## Completed
 
@@ -143,7 +143,7 @@ Next: test TAP setup on a Linux host with the required privileges, then run the 
 - Wired TAP preparation and cleanup into the jailed runtime lifecycle. The runtime cleans stale TAP devices only after it confirms that the recorded Firecracker process is stopped. It keeps runtime records and jail state if TAP cleanup fails.
 - Added tests for TAP command sequences, invalid addresses, owner mismatch, partial setup rollback, and runtime prepare/remove ordering.
 - `go test ./internal/network ./internal/runtime ./cmd/sandboxd` passed for this change.
-- Live VM validation remains blocked by the missing `/dev/kvm` device. Guest routing, forwarding, and firewall rules are still open.
+- The Codex command environment does not expose `/dev/kvm`; the user's earlier serial and SSH VM tests confirm that the host can run VMs. The jailed runtime still needs a live boot test. Guest routing, forwarding, and firewall rules are still open.
 
 ## Decisions
 
@@ -158,13 +158,13 @@ Next: test TAP setup on a Linux host with the required privileges, then run the 
 
 ## Blockers
 
-The current development container has no `/dev/kvm` and blocks `sudo`. It cannot repeat the guest proof or validate privileged host operations.
+The Codex command environment does not expose `/dev/kvm` and blocks `sudo`. The user's host terminal can run VMs and privileged commands. Do not infer host KVM availability from the Codex command environment.
 Buf remote generation requires access to the Buf Schema Registry. `make generate` fails inside the sandbox because that network call is blocked. The generated files are present from a network-enabled run.
 The repository has no configured Git remote or license file. The AUR draft uses the GitHub URL inferred from the workspace path. Confirm the public source URL and select a license before publication.
 
 ## Next tasks
 
-1. Run the jailed serial boot and TAP setup on a Linux host with `/dev/kvm`.
+1. Run the jailed serial boot and TAP setup from the user's host terminal.
 2. Add routed guest networking after serial boot works.
 3. Build and provision a guest image before testing SSH. Keep the manual test path until the jailed runtime passes.
 4. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
