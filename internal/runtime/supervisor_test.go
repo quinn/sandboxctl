@@ -32,6 +32,21 @@ type testManagedMachine struct {
 	forceCall    bool
 }
 
+type testNetworkManager struct {
+	prepared int
+	removed  int
+}
+
+func (manager *testNetworkManager) Prepare(context.Context, hoststate.Instance) error {
+	manager.prepared++
+	return nil
+}
+
+func (manager *testNetworkManager) Remove(context.Context, hoststate.Instance) error {
+	manager.removed++
+	return nil
+}
+
 func (m *testManagedMachine) Start(context.Context) error { return m.startError }
 
 func (m *testManagedMachine) Wait(ctx context.Context) error {
@@ -73,10 +88,12 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 		t.Fatal(err)
 	}
 	machine := &testManagedMachine{stop: make(chan struct{})}
+	networkManager := &testNetworkManager{}
 	factoryCalls := 0
 	supervisor := &Supervisor{
 		StatePaths: paths,
 		Images:     testImageResolver{},
+		Network:    networkManager,
 		Paths: JailedRuntimePaths{
 			FirecrackerBinary: "/usr/bin/firecracker", JailerBinary: "/usr/bin/jailer",
 			JailRoot: paths.Jails, APISocket: "firecracker.socket",
@@ -102,6 +119,9 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 	if factoryCalls != 1 {
 		t.Fatalf("machine factory calls = %d, want 1", factoryCalls)
 	}
+	if networkManager.prepared != 1 {
+		t.Fatalf("TAP prepare calls = %d, want 1", networkManager.prepared)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if err := supervisor.Stop(ctx, instance.Name, false); err != nil {
@@ -109,6 +129,9 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 	}
 	if supervisor.Running(instance.Name) {
 		t.Fatal("supervisor still reports the stopped VM")
+	}
+	if networkManager.removed != 1 {
+		t.Fatalf("TAP remove calls = %d, want 1", networkManager.removed)
 	}
 	machine.mu.Lock()
 	defer machine.mu.Unlock()

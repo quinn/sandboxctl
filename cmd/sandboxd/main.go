@@ -11,6 +11,7 @@ import (
 
 	"sandboxctl/internal/daemon"
 	"sandboxctl/internal/hoststate"
+	"sandboxctl/internal/network"
 	"sandboxctl/internal/runtime"
 )
 
@@ -54,6 +55,7 @@ func run(arguments []string) error {
 	supervisor := &runtime.Supervisor{
 		StatePaths: paths,
 		Images:     hoststate.InstalledImages{Paths: paths},
+		Network:    network.TapManager{},
 		Paths: runtime.JailedRuntimePaths{
 			FirecrackerBinary: "/usr/bin/firecracker",
 			JailerBinary:      "/usr/bin/jailer",

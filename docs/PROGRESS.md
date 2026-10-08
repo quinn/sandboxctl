@@ -18,7 +18,7 @@ Section 18, step 7 now has start and stop RPCs and a sandboxd runtime supervisor
 
 The supervisor resolves fixed image artifacts from a root-owned image directory. It requires a pinned manifest version and read-only kernel, initramfs, and SquashFS files. Runtime records use mode `0600` and are removed with a directory sync. The CLI start and stop commands now call the daemon RPCs. They do not use the temporary runner for normal operation.
 
-Step 7 still needs a live integration boot. This host has Firecracker and jailer installed, but it has no `/dev/kvm`. A Make target can stage the Phase 1 boot artifacts as a pinned image bundle. TAP setup is not implemented. The current start path therefore cannot yet boot a managed VM end to end.
+The jailed runtime now prepares an instance TAP before Firecracker starts. It assigns the allocated UID and GID, applies the host `/30` address, and brings the link up. It removes the TAP after the VM stops and preserves runtime state if TAP cleanup fails. This host has Firecracker and jailer installed, but it has no `/dev/kvm`, so a managed boot remains untested. Guest routing, forwarding, and firewall rules are not implemented.
 
 The E2B runtime checkout is retained in ignored `tmp/e2b-runtime` at commit `47096f195aca4a545a9079b706efb3a18f51cf3f`. The license, extraction record, and first Debian/Ubuntu provisioning profile are in place. There is no build command, BuildKit VM orchestration, image manifest, or SquashFS finalizer yet.
 
@@ -32,7 +32,7 @@ The complete output is in the ignored file `tmp/logs/manual-test.log`.
 
 The manual test command prepares the private disk before boot. It fixes guest home ownership, installs the public key, disables password and keyboard-interactive SSH, and validates the SSH server configuration. It waits for SSH on both boots. It checks persistence outside `/tmp`, which is cleared at boot.
 
-Next: implement the minimum TAP setup needed by `sandboxctl start`. Then run the jailed serial boot on a Linux host with `/dev/kvm`. Build and provision a guest image before testing SSH. Keep the manual one-VM test as a regression check.
+Next: test TAP setup on a Linux host with the required privileges, then run the jailed serial boot on a host with `/dev/kvm`. Add routed guest networking after serial boot works. Build and provision a guest image before testing SSH. Keep the manual one-VM test as a regression check.
 
 ## Completed
 
@@ -139,7 +139,11 @@ Next: implement the minimum TAP setup needed by `sandboxctl start`. Then run the
 - Added importer, manifest parser, and gRPC integration tests. The staged bundle target completed with a temporary XDG data directory.
 - `gofmt`, `go vet ./...`, `go test ./...`, `make proto-lint`, `make build`, shell syntax checks, and `git diff --check` pass.
 - The image CLI validated the staged bundle before it tried sandboxd. The daemon is not running here, so this host could not test the live import call.
-- Live VM validation remains blocked by the missing `/dev/kvm` device and TAP setup.
+- Added `internal/network.TapManager` to create, validate, configure, and remove per-instance TAP devices with `/usr/bin/ip`. It checks allocated ownership and `/30` addressing and removes partial TAPs on setup failure.
+- Wired TAP preparation and cleanup into the jailed runtime lifecycle. The runtime cleans stale TAP devices only after it confirms that the recorded Firecracker process is stopped. It keeps runtime records and jail state if TAP cleanup fails.
+- Added tests for TAP command sequences, invalid addresses, owner mismatch, partial setup rollback, and runtime prepare/remove ordering.
+- `go test ./internal/network ./internal/runtime ./cmd/sandboxd` passed for this change.
+- Live VM validation remains blocked by the missing `/dev/kvm` device. Guest routing, forwarding, and firewall rules are still open.
 
 ## Decisions
 
@@ -160,8 +164,9 @@ The repository has no configured Git remote or license file. The AUR draft uses 
 
 ## Next tasks
 
-1. Implement the minimum TAP setup needed by `sandboxctl start`.
-2. Run a jailed serial boot on a Linux KVM host. Build and provision a guest image before testing SSH. Keep the manual test path until the jailed runtime passes.
+1. Run the jailed serial boot and TAP setup on a Linux host with `/dev/kvm`.
+2. Add routed guest networking after serial boot works.
+3. Build and provision a guest image before testing SSH. Keep the manual test path until the jailed runtime passes.
 4. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
 5. Add cold-boot SquashFS finalization. Keep OCI pulls and extraction inside the builder VM through BuildKit.
 6. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.

@@ -38,18 +38,25 @@ type BootImageResolver interface {
 	ResolveBootImage(string, string) (hoststate.BootImage, error)
 }
 
+// NetworkManager prepares and removes the host TAP for one sandbox.
+type NetworkManager interface {
+	Prepare(context.Context, hoststate.Instance) error
+	Remove(context.Context, hoststate.Instance) error
+}
+
 type processIDSource interface {
 	PID() (int, error)
 }
 
 type supervisedMachine struct {
-	machine ManagedMachine
-	cancel  context.CancelFunc
-	process process.Record
-	record  hoststate.RuntimeRecord
-	path    string
-	done    chan struct{}
-	err     error
+	machine  ManagedMachine
+	cancel   context.CancelFunc
+	process  process.Record
+	record   hoststate.RuntimeRecord
+	instance hoststate.Instance
+	path     string
+	done     chan struct{}
+	err      error
 }
 
 // Supervisor owns SDK machine lifecycles started by sandboxd.
@@ -58,6 +65,7 @@ type Supervisor struct {
 	Images         BootImageResolver
 	Paths          JailedRuntimePaths
 	Factory        MachineFactory
+	Network        NetworkManager
 	ForceStop      func(process.Record) error
 	WaitProcess    func(context.Context, process.Record) error
 	VerifyIdentity func(int, uint32, uint32) error
@@ -170,6 +178,9 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) err
 		if live {
 			return hoststate.ErrAlreadyRunning
 		}
+		if err := s.removeTap(instance); err != nil {
+			return fmt.Errorf("remove stale TAP device: %w", err)
+		}
 		if err := store.RemoveRuntime(instance.Name, previous); err != nil {
 			return fmt.Errorf("remove stale runtime record: %w", err)
 		}
@@ -192,6 +203,9 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) err
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect jail path: %w", err)
 	}
+	if err := s.prepareTap(ctx, instance); err != nil {
+		return fmt.Errorf("prepare sandbox TAP: %w", err)
+	}
 
 	factory := s.Factory
 	if factory == nil {
@@ -203,7 +217,7 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) err
 	machine, err := factory(runContext, config)
 	if err != nil {
 		cancel()
-		return fmt.Errorf("create Firecracker SDK machine: %w", err)
+		return errors.Join(fmt.Errorf("create Firecracker SDK machine: %w", err), s.removeTap(instance))
 	}
 	startResult := make(chan error, 1)
 	go func() { startResult <- machine.Start(runContext) }()
@@ -212,7 +226,7 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) err
 		if err != nil {
 			cancel()
 			_ = machine.StopVMM()
-			cleanupErr := cleanupFailedStart(machine, jailPath, s.Paths.JailRoot)
+			cleanupErr := s.cleanupFailedStart(machine, jailPath, instance)
 			return errors.Join(fmt.Errorf("start jailed Firecracker machine: %w", err), cleanupErr)
 		}
 	case <-ctx.Done():
@@ -221,34 +235,34 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) err
 		select {
 		case startErr := <-startResult:
 			if startErr != nil {
-				cleanupErr := cleanupFailedStart(machine, jailPath, s.Paths.JailRoot)
+				cleanupErr := s.cleanupFailedStart(machine, jailPath, instance)
 				return errors.Join(fmt.Errorf("start jailed Firecracker machine: %w", ctx.Err()), cleanupErr)
 			}
 		case <-time.After(5 * time.Second):
 			return fmt.Errorf("start jailed Firecracker machine: %w; machine did not stop during cleanup", ctx.Err())
 		}
-		cleanupErr := cleanupFailedStart(machine, jailPath, s.Paths.JailRoot)
+		cleanupErr := s.cleanupFailedStart(machine, jailPath, instance)
 		return errors.Join(fmt.Errorf("start jailed Firecracker machine: %w", ctx.Err()), cleanupErr)
 	}
 	pidSource, ok := machine.(processIDSource)
 	if !ok {
 		cancel()
 		_ = machine.StopVMM()
-		cleanupErr := cleanupFailedStart(machine, jailPath, s.Paths.JailRoot)
+		cleanupErr := s.cleanupFailedStart(machine, jailPath, instance)
 		return errors.Join(errors.New("SDK machine does not expose its process identifier"), cleanupErr)
 	}
 	pid, err := pidSource.PID()
 	if err != nil {
 		cancel()
 		_ = machine.StopVMM()
-		cleanupErr := cleanupFailedStart(machine, jailPath, s.Paths.JailRoot)
+		cleanupErr := s.cleanupFailedStart(machine, jailPath, instance)
 		return errors.Join(fmt.Errorf("read Firecracker process identifier: %w", err), cleanupErr)
 	}
 	processRecord, err := process.Current(pid)
 	if err != nil {
 		cancel()
 		_ = machine.StopVMM()
-		cleanupErr := cleanupFailedStart(machine, jailPath, s.Paths.JailRoot)
+		cleanupErr := s.cleanupFailedStart(machine, jailPath, instance)
 		return errors.Join(fmt.Errorf("identify Firecracker process: %w", err), cleanupErr)
 	}
 	verifyIdentity := s.VerifyIdentity
@@ -258,14 +272,14 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) err
 	if err := verifyIdentity(pid, uint32(instance.HostUID), uint32(instance.HostGID)); err != nil {
 		cancel()
 		_ = machine.StopVMM()
-		cleanupErr := cleanupFailedStart(machine, jailPath, s.Paths.JailRoot)
+		cleanupErr := s.cleanupFailedStart(machine, jailPath, instance)
 		return errors.Join(fmt.Errorf("verify Firecracker process identity: %w", err), cleanupErr)
 	}
 	bootID, err := process.BootID()
 	if err != nil {
 		cancel()
 		_ = machine.StopVMM()
-		cleanupErr := cleanupFailedStart(machine, jailPath, s.Paths.JailRoot)
+		cleanupErr := s.cleanupFailedStart(machine, jailPath, instance)
 		return errors.Join(fmt.Errorf("read host boot identifier: %w", err), cleanupErr)
 	}
 	runtimeRecord := hoststate.RuntimeRecord{
@@ -277,10 +291,10 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) err
 	if err := store.SaveRuntime(instance.Name, runtimeRecord); err != nil {
 		cancel()
 		_ = machine.StopVMM()
-		cleanupErr := cleanupFailedStart(machine, jailPath, s.Paths.JailRoot)
+		cleanupErr := s.cleanupFailedStart(machine, jailPath, instance)
 		return errors.Join(fmt.Errorf("save Firecracker process identity: %w", err), cleanupErr)
 	}
-	entry := &supervisedMachine{machine: machine, cancel: cancel, process: processRecord, record: runtimeRecord, path: jailPath, done: make(chan struct{})}
+	entry := &supervisedMachine{machine: machine, cancel: cancel, process: processRecord, record: runtimeRecord, instance: instance, path: jailPath, done: make(chan struct{})}
 	s.mu.Lock()
 	if s.running == nil {
 		s.running = make(map[string]*supervisedMachine)
@@ -339,12 +353,18 @@ func (s *Supervisor) Stop(ctx context.Context, name string, force bool) error {
 func (s *Supervisor) wait(name string, entry *supervisedMachine, ctx context.Context) {
 	entry.err = entry.machine.Wait(ctx)
 	entry.cancel()
-	store := hoststate.Store{Paths: s.StatePaths}
-	if err := store.RemoveRuntime(name, entry.record); err != nil {
-		entry.err = errors.Join(entry.err, fmt.Errorf("remove runtime record: %w", err))
+	tapErr := s.removeTap(entry.instance)
+	if tapErr != nil {
+		entry.err = errors.Join(entry.err, fmt.Errorf("remove stopped TAP device: %w", tapErr))
 	}
-	if err := removeJail(entry.path, s.Paths.JailRoot); err != nil {
-		entry.err = errors.Join(entry.err, fmt.Errorf("remove stopped Firecracker jail: %w", err))
+	store := hoststate.Store{Paths: s.StatePaths}
+	if tapErr == nil {
+		if err := store.RemoveRuntime(name, entry.record); err != nil {
+			entry.err = errors.Join(entry.err, fmt.Errorf("remove runtime record: %w", err))
+		}
+		if err := removeJail(entry.path, s.Paths.JailRoot); err != nil {
+			entry.err = errors.Join(entry.err, fmt.Errorf("remove stopped Firecracker jail: %w", err))
+		}
 	}
 	s.mu.Lock()
 	if s.running[name] == entry {
@@ -398,6 +418,9 @@ func (s *Supervisor) stopRecorded(ctx context.Context, name string, force bool) 
 	}
 	jailPath := filepath.Join(s.Paths.JailRoot, filepath.Base(s.Paths.FirecrackerBinary), instance.ID)
 	if !live {
+		if err := s.removeTap(instance); err != nil {
+			return fmt.Errorf("remove stopped TAP device: %w", err)
+		}
 		if err := store.RemoveRuntime(name, record); err != nil {
 			return fmt.Errorf("remove stopped runtime record: %w", err)
 		}
@@ -438,6 +461,9 @@ func (s *Supervisor) stopRecorded(ctx context.Context, name string, force bool) 
 	}
 	if err := wait(ctx, process.Record{PID: record.PID, StartTime: record.ProcessStart}); err != nil {
 		return err
+	}
+	if err := s.removeTap(instance); err != nil {
+		return fmt.Errorf("remove stopped TAP device: %w", err)
 	}
 	if err := store.RemoveRuntime(name, record); err != nil {
 		return fmt.Errorf("remove stopped runtime record: %w", err)
@@ -509,26 +535,52 @@ func verifyProcessIdentity(pid int, uid, gid uint32) error {
 	return nil
 }
 
-func cleanupFailedStart(machine ManagedMachine, jailPath, jailRoot string) error {
+func failedStartStopped(machine ManagedMachine) error {
 	pidSource, ok := machine.(processIDSource)
 	if !ok {
-		return nil
+		return errors.New("cannot prove failed Firecracker process stopped; jail resources were kept")
 	}
 	pid, err := pidSource.PID()
 	if err != nil {
-		return removeJail(jailPath, jailRoot)
+		return fmt.Errorf("cannot prove failed Firecracker process stopped: %w", err)
 	}
 	record, err := process.Current(pid)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrProcessDone) {
-			return removeJail(jailPath, jailRoot)
+			return nil
 		}
 		return fmt.Errorf("cannot prove failed Firecracker process stopped: %w", err)
 	}
 	if !process.WaitStopped(record, 5*time.Second) {
 		return errors.New("failed Firecracker process is still running; jail resources were kept")
 	}
-	return removeJail(jailPath, jailRoot)
+	return nil
+}
+
+func (s *Supervisor) prepareTap(ctx context.Context, instance hoststate.Instance) error {
+	if s.Network == nil {
+		return nil
+	}
+	return s.Network.Prepare(ctx, instance)
+}
+
+func (s *Supervisor) removeTap(instance hoststate.Instance) error {
+	if s.Network == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return s.Network.Remove(ctx, instance)
+}
+
+func (s *Supervisor) cleanupFailedStart(machine ManagedMachine, jailPath string, instance hoststate.Instance) error {
+	if err := failedStartStopped(machine); err != nil {
+		return err
+	}
+	if err := s.removeTap(instance); err != nil {
+		return fmt.Errorf("remove TAP after failed start: %w", err)
+	}
+	return removeJail(jailPath, s.Paths.JailRoot)
 }
 
 func removeJail(path, root string) error {
