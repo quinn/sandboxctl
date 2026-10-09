@@ -76,3 +76,43 @@ func TestVerifyPersistenceRejectsUnexpectedMarker(t *testing.T) {
 		t.Fatal("accepted a marker with unexpected contents")
 	}
 }
+
+func TestInstallBootstrapWritesProgramAndEnablesService(t *testing.T) {
+	root := t.TempDir()
+	program := []byte("guest-bootstrap-test")
+	if err := InstallBootstrap(root, program); err != nil {
+		t.Fatal(err)
+	}
+	if err := InstallBootstrap(root, program); err != nil {
+		t.Fatalf("InstallBootstrap() retry: %v", err)
+	}
+	programPath := filepath.Join(root, "usr/local/libexec/sandboxctl-bootstrap")
+	got, err := os.ReadFile(programPath)
+	if err != nil || string(got) != string(program) {
+		t.Fatalf("bootstrap program = %q, %v", got, err)
+	}
+	programInfo, err := os.Stat(programPath)
+	if err != nil || programInfo.Mode().Perm() != 0o755 {
+		t.Fatalf("bootstrap program mode = %v, %v", programInfo, err)
+	}
+	servicePath := filepath.Join(root, "etc/systemd/system/sandboxctl-bootstrap.service")
+	service, err := os.ReadFile(servicePath)
+	if err != nil || string(service) != bootstrapService {
+		t.Fatalf("bootstrap service = %q, %v", service, err)
+	}
+	linkPath := filepath.Join(root, "etc/systemd/system/sockets.target.wants/sandboxctl-bootstrap.service")
+	target, err := os.Readlink(linkPath)
+	if err != nil || target != "/etc/systemd/system/sandboxctl-bootstrap.service" {
+		t.Fatalf("bootstrap service link = %q, %v", target, err)
+	}
+}
+
+func TestInstallBootstrapRejectsSymlinkPath(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Symlink(t.TempDir(), filepath.Join(root, "usr")); err != nil {
+		t.Fatal(err)
+	}
+	if err := InstallBootstrap(root, []byte("binary")); err == nil {
+		t.Fatal("InstallBootstrap() followed a guest root symlink")
+	}
+}

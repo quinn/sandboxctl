@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -14,6 +15,21 @@ import (
 
 const persistenceMarker = ".sandboxctl-phase1-overlay-proof"
 const persistenceValue = "overlay-state-was-retained-v1\n"
+
+const bootstrapService = `[Unit]
+Description=Configure this sandbox from Firecracker metadata
+DefaultDependencies=no
+After=local-fs.target
+Before=ssh.socket ssh.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/sandboxctl-bootstrap
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sockets.target
+`
 
 // Mount describes one filesystem mount used during the overlay boot.
 type Mount struct {
@@ -78,6 +94,13 @@ func Run() error {
 	if err := mountFS(mounts[2]); err != nil {
 		return fmt.Errorf("mount overlay: %w", err)
 	}
+	bootstrap, err := os.ReadFile("/bootstrap")
+	if err != nil {
+		return fmt.Errorf("read guest bootstrap program: %w", err)
+	}
+	if err := InstallBootstrap("/newroot", bootstrap); err != nil {
+		return fmt.Errorf("install guest bootstrap program: %w", err)
+	}
 	if err := addMMDSRoute(); err != nil {
 		return fmt.Errorf("add the MMDS route: %w", err)
 	}
@@ -122,6 +145,111 @@ func Run() error {
 		return fmt.Errorf("start guest init: %w", err)
 	}
 	return nil
+}
+
+// InstallBootstrap places the fixed metadata bootstrap and service into root.
+func InstallBootstrap(root string, binary []byte) error {
+	if !filepath.IsAbs(root) || len(binary) == 0 || len(binary) > 32<<20 {
+		return errors.New("guest bootstrap root or binary is invalid")
+	}
+	rootInfo, err := os.Lstat(root)
+	if err != nil || !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 {
+		return errors.New("guest root must be a real directory")
+	}
+	libexec := filepath.Join(root, "usr", "local", "libexec")
+	if err := ensureRealDirectory(root, filepath.Join(root, "usr")); err != nil {
+		return err
+	}
+	if err := ensureRealDirectory(root, filepath.Join(root, "usr", "local")); err != nil {
+		return err
+	}
+	if err := ensureRealDirectory(root, libexec); err != nil {
+		return err
+	}
+	if err := writeBootstrapFile(filepath.Join(libexec, "sandboxctl-bootstrap"), binary, 0o755); err != nil {
+		return fmt.Errorf("write guest bootstrap program: %w", err)
+	}
+	servicePath := filepath.Join(root, "etc", "systemd", "system", "sandboxctl-bootstrap.service")
+	for _, directory := range []string{
+		filepath.Join(root, "etc"),
+		filepath.Join(root, "etc", "systemd"),
+		filepath.Join(root, "etc", "systemd", "system"),
+	} {
+		if err := ensureRealDirectory(root, directory); err != nil {
+			return err
+		}
+	}
+	if err := writeBootstrapFile(servicePath, []byte(bootstrapService), 0o644); err != nil {
+		return fmt.Errorf("write guest bootstrap service: %w", err)
+	}
+	wants := filepath.Join(root, "etc", "systemd", "system", "sockets.target.wants")
+	if err := ensureRealDirectory(root, wants); err != nil {
+		return err
+	}
+	linkPath := filepath.Join(wants, "sandboxctl-bootstrap.service")
+	if target, err := os.Readlink(linkPath); err == nil {
+		if target != "/etc/systemd/system/sandboxctl-bootstrap.service" {
+			return errors.New("guest bootstrap service link has an unexpected target")
+		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		if err := os.Symlink("/etc/systemd/system/sandboxctl-bootstrap.service", linkPath); err != nil {
+			return fmt.Errorf("enable guest bootstrap service: %w", err)
+		}
+	} else {
+		return fmt.Errorf("inspect guest bootstrap service link: %w", err)
+	}
+	return nil
+}
+
+func ensureRealDirectory(root, path string) error {
+	relative, err := filepath.Rel(root, path)
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return errors.New("guest bootstrap path escapes the root")
+	}
+	current := root
+	for _, component := range strings.Split(relative, string(filepath.Separator)) {
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			if err := os.Mkdir(current, 0o755); err != nil {
+				return fmt.Errorf("create guest bootstrap directory: %w", err)
+			}
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("inspect guest bootstrap directory: %w", err)
+		}
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("guest bootstrap path contains a non-directory")
+		}
+	}
+	return nil
+}
+
+func writeBootstrapFile(path string, content []byte, mode os.FileMode) error {
+	directory := filepath.Dir(path)
+	file, err := os.CreateTemp(directory, ".sandboxctl-bootstrap-")
+	if err != nil {
+		return err
+	}
+	temporary := file.Name()
+	defer os.Remove(temporary)
+	if _, err := file.Write(content); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Chmod(mode); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporary, path)
 }
 
 func addMMDSRoute() error {

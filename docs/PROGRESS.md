@@ -10,6 +10,8 @@ Section 18 now records this gate.
 
 ## Current phase
 
+The active iteration is a live guest bootstrap test. The staged default image now receives a sandboxctl bootstrap binary and systemd unit from the initramfs. The unit starts before the SSH socket. It reads the per-instance Firecracker Metadata Service document, validates the key and `/30` network values, creates the `dev` account, installs the key, sets the hostname, creates per-instance SSH host keys on first boot, disables password SSH, and writes a completion marker. Unit tests and required Go checks pass. The image bundle is staged under `tmp/test-data` at `sha256:d81ae56ef48ccf654c704ac3f761403705474f041bb5cbbd0169b9a4cac022c9`. Live guest execution is the next check.
+
 The Phase 1 storage proof passed. Section 18 steps 1 through 3 are complete. Step 4 host installation and doctor support are implemented and still need final integration checks on a disposable Arch host.
 
 Section 18, step 6 is complete. Stopped-instance creation now uses the daemon-owned allocator and store. sandboxd reads host allocation settings and image versions from root-owned state. It creates the sparse ext4 disk, stores the SSH public key, and commits a version-2 instance record. The `create` command sends operation data through gRPC and refreshes the SSH fragment from daemon state. Image installation now imports a pinned local bundle through a bounded gRPC stream. The remaining SSH command still uses operator XDG records. Keep the temporary single-root test until the jailed runtime passes integration testing.
@@ -18,7 +20,7 @@ Section 18, step 7 now has start and stop RPCs and a sandboxd runtime supervisor
 
 The supervisor resolves fixed image artifacts from a root-owned image directory. It requires a pinned manifest version and read-only kernel, initramfs, and SquashFS files. Runtime records use mode `0600` and are removed with a directory sync. The CLI start and stop commands now call the daemon RPCs. They do not use the temporary runner for normal operation.
 
-The jailed runtime prepares an instance TAP before Firecracker starts. It assigns the allocated UID and GID, applies the host `/30` address, and brings the link up. It removes the TAP after the VM stops and preserves runtime state if TAP cleanup fails. The user confirmed that jailed Firecracker starts the guest and that SSH reaches the guest at its allocated address. SSH key authentication still fails because guest bootstrap did not install the per-instance key. Guest Internet routing, forwarding, and firewall rules are not implemented.
+The jailed runtime prepares an instance TAP before Firecracker starts. It assigns the allocated UID and GID, applies the host `/30` address, and brings the link up. It removes the TAP after the VM stops and preserves runtime state if TAP cleanup fails. The user confirmed that jailed Firecracker starts the guest and that SSH reaches the guest at its allocated address. The new bootstrap path is intended to install the per-instance key before SSH starts; this remains unverified on a live guest. Guest Internet routing, forwarding, and firewall rules are not implemented.
 
 The E2B runtime checkout is retained in ignored `tmp/e2b-runtime` at commit `47096f195aca4a545a9079b706efb3a18f51cf3f`. The license, extraction record, and first Debian/Ubuntu provisioning profile are in place. There is no build command, BuildKit VM orchestration, image manifest, or SquashFS finalizer yet.
 
@@ -32,7 +34,7 @@ The complete output is in the ignored file `tmp/logs/manual-test.log`.
 
 The manual test command prepares the private disk before boot. It fixes guest home ownership, installs the public key, disables password and keyboard-interactive SSH, and validates the SSH server configuration. It waits for SSH on both boots. It checks persistence outside `/tmp`, which is cleared at boot.
 
-The current image bundle may not contain the project bootstrap service. The image staging target packages the supplied SquashFS without running the provisioning script. Confirm this before the next SSH test.
+The current staged test bundle uses the upstream Ubuntu SquashFS without running the image provisioning script. The initramfs now installs the fixed bootstrap program and its systemd unit into the writable OverlayFS before it starts the guest. The bootstrap replaces image host keys on first boot and preserves generated keys on later boots. This path is only a test bridge; it does not replace the planned BuildKit image builder.
 
 ## Completed
 
@@ -176,12 +178,15 @@ Added `make download-builder-tools` to download the pinned BuildKit v0.34.0 Linu
 
 Updated the fixed guest build service to start BuildKit for one build, wait for its Unix socket, report bounded startup logs on failure, and stop the daemon when the build exits. It also checks that `buildctl` and `buildkitd` are v0.34.0. The service requires these tools at `/usr/local/bin` and `mksquashfs` at `/usr/bin`. `make check`, shell syntax checks, and `git diff --check` pass outside the sandbox. The reproducible builder image and sandboxd VM factory remain open. This environment still cannot boot a VM because it has no `/dev/kvm`.
 
+Added a static guest bootstrap binary to the Phase 1 initramfs. Before `switch_root`, overlay init installs the binary and a systemd unit into the writable guest layer. The unit is wanted by `sockets.target` and ordered before `ssh.socket` and `ssh.service`, so SSH cannot accept a connection before key setup finishes. The bootstrap reads token-protected Firecracker metadata, validates the fixed schema, checks the guest address and route, creates the `dev` account, installs the authorized key, enforces key-only SSH, sets the hostname, creates guest host keys, and writes an atomic completion marker. On the first boot, it removes host keys from the upstream image before generating per-instance keys. It keeps those keys on later boots. The guest sudo policy is added only when the image has both `sudo` and `visudo`; this supports the raw Ubuntu test image, which lacks those tools. Focused tests and the full `gofmt`, `go vet ./...`, `go test ./...`, and `git diff --check` run pass. `make overlay-initramfs` and `make stage-overlay-image` pass. Added `make manual-bootstrap-test` to stage and import this image, create a new sandbox, test the marker, hostname, and key-only SSH, and save output to `tmp/logs/guest-bootstrap-test.log`. The staged bundle is `sha256:d81ae56ef48ccf654c704ac3f761403705474f041bb5cbbd0169b9a4cac022c9` under `tmp/test-data`. The live guest run is now the next check. The test leaves the VM running for diagnosis.
+
 ## Next tasks
 
-1. Create a pinned builder base image that contains the fixed service, BuildKit client and daemon, and SquashFS tools. Keep the build service inside the guest.
-2. Add a sandboxd-managed ephemeral builder lifecycle and implement the runner's VM factory. Start only the fixed builder image and service. Do not add a general command RPC.
-3. Export a validated image bundle through the bounded guest stream. Include kernel, initramfs, SquashFS, and manifest.
-4. Add `sandboxctl image build` and run the build on a KVM host. Restart `pkgtest` and confirm that the bootstrap marker appears and `sandboxctl ssh pkgtest` logs in without a password.
-4. Add routed guest Internet access and firewall rules if the builder or guest cannot reach required network resources.
+1. Run the staged bootstrap bundle on the user's KVM host. Confirm the marker, hostname, per-instance host key, and public-key SSH login.
+2. Create a pinned builder base image that contains the fixed service, BuildKit client and daemon, and SquashFS tools. Keep the build service inside the guest.
+3. Add a sandboxd-managed ephemeral builder lifecycle and implement the runner's VM factory. Start only the fixed builder image and service. Do not add a general command RPC.
+4. Export a validated image bundle through the bounded guest stream. Include kernel, initramfs, SquashFS, and manifest.
+5. Add `sandboxctl image build` and run the build on a KVM host.
+6. Add routed guest Internet access and firewall rules if the builder or guest cannot reach required network resources.
 5. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
 6. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.

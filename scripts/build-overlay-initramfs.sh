@@ -15,12 +15,14 @@ esac
 
 cd "$repo_dir"
 CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" go build -trimpath -ldflags='-s -w' -o "$stage/init" ./cmd/overlay-init
+CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" go build -trimpath -ldflags='-s -w' -o "$stage/bootstrap" ./cmd/guest-bootstrap
 chmod 0755 "$stage/init"
+chmod 0755 "$stage/bootstrap"
 mkdir -p "$output_dir"
 chmod 0700 "$output_dir"
 archive="$output_dir/.overlay-initramfs.cpio.gz.$$"
 trap 'rm -rf -- "$stage"; rm -f -- "$archive"' EXIT
-(cd "$stage" && printf '.\n./init\n' | cpio --reproducible -o -H newc --quiet | gzip -n) > "$archive"
+(cd "$stage" && printf '.\n./bootstrap\n./init\n' | cpio --reproducible -o -H newc --quiet | gzip -n) > "$archive"
 chmod 0600 "$archive"
 mv -f -- "$archive" "$output_dir/overlay-initramfs.cpio.gz"
 printf 'Built %s\n' "$output_dir/overlay-initramfs.cpio.gz"
