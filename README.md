@@ -177,6 +177,16 @@ The builder image must be installed. The command stages a private image bundle
 and prints the `sandboxctl image install` command. Guest Internet access is not
 available yet, so registry pulls may fail until routed networking is added.
 
+Run the isolated build iteration with:
+
+```sh
+make manual-image-build
+```
+
+This target builds and installs a temporary builder image, runs the workspace
+CLI against the installed daemon, and records output in
+`tmp/logs/image-build-test.log`. It keeps test data under `tmp/image-build-*`.
+
 Run the live boot test with:
 
 ```sh
