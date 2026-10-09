@@ -11,6 +11,6 @@ Section 18, step 6 and stopped-instance creation are complete. Section 18, step 
 
 The latest staged image includes a guest bootstrap binary and systemd unit in the initramfs. The unit runs before `ssh.socket`, reads token-protected Firecracker metadata, creates the `dev` account, installs the public key, sets the hostname, creates per-instance host keys, disables password SSH, and writes `/var/lib/sandboxctl/bootstrap-complete`.
 
-The last live run started the VM and received its MMDS session token. The guest metadata request returned HTTP 404. The daemon stored metadata at the MMDS root, while the guest requested `/latest/meta-data/`. The daemon now nests the document under `latest/meta-data`, and a test checks that path. The service forwards logs to both the guest journal and serial console.
+The latest live run loaded MMDS data, verified networking, created the `dev` account, prepared SSH host keys, and configured key-only SSH. It failed because `hostnamectl` could not connect to D-Bus. Guest bootstrap now writes `/etc/hostname` and calls `syscall.Sethostname`, which does not require D-Bus.
 
-Run `make manual-bootstrap-test` to test the corrected MMDS document. If it fails, inspect the reported console file with `sudo tail -n 160 /var/lib/sandboxctl/instances/NAME/console.log`. This environment has no `/dev/kvm`. The pinned builder image and sandboxd VM factory remain open.
+Stop the failed sandbox, then run `make manual-bootstrap-test` to test hostname setup and full bootstrap. If it fails, inspect the reported console file with `sudo tail -n 160 /var/lib/sandboxctl/instances/NAME/console.log`. This environment has no `/dev/kvm`. The pinned builder image and sandboxd VM factory remain open.

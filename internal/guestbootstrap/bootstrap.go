@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -205,10 +206,10 @@ func apply(ctx context.Context, metadata Metadata) error {
 	if err := writeHostname("/", guest.Hostname); err != nil {
 		return err
 	}
-	if err := run(ctx, "/usr/bin/hostnamectl", "set-hostname", guest.Hostname); err != nil {
-		return fmt.Errorf("set guest hostname: %w", err)
+	if err := syscall.Sethostname([]byte(guest.Hostname)); err != nil {
+		return fmt.Errorf("set guest kernel hostname: %w", err)
 	}
-	slog.Info("guest hostname configured", "hostname", guest.Hostname)
+	slog.Info("guest hostname applied", "hostname", guest.Hostname)
 	if err := os.MkdirAll("/var/lib/sandboxctl", 0o755); err != nil {
 		return fmt.Errorf("create guest state directory: %w", err)
 	}
