@@ -3,6 +3,7 @@ package overlayinit
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -99,6 +100,9 @@ func TestInstallBootstrapWritesProgramAndEnablesService(t *testing.T) {
 	service, err := os.ReadFile(servicePath)
 	if err != nil || string(service) != bootstrapService {
 		t.Fatalf("bootstrap service = %q, %v", service, err)
+	}
+	if !strings.Contains(string(service), "StandardOutput=journal+console\n") || !strings.Contains(string(service), "StandardError=journal+console\n") {
+		t.Fatal("bootstrap service does not send its logs to the journal and serial console")
 	}
 	linkPath := filepath.Join(root, "etc/systemd/system/sockets.target.wants/sandboxctl-bootstrap.service")
 	target, err := os.Readlink(linkPath)

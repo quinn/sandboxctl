@@ -25,6 +25,8 @@ Before=ssh.socket ssh.service
 [Service]
 Type=oneshot
 ExecStart=/usr/local/libexec/sandboxctl-bootstrap
+StandardOutput=journal+console
+StandardError=journal+console
 RemainAfterExit=yes
 
 [Install]
