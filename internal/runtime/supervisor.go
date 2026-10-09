@@ -484,13 +484,7 @@ func (s *Supervisor) DeleteStopped(ctx context.Context, instance hoststate.Insta
 	}
 	interfaceExists := s.InterfaceExists
 	if interfaceExists == nil {
-		interfaceExists = func(name string) (bool, error) {
-			_, err := net.InterfaceByName(name)
-			if errors.Is(err, syscall.ENODEV) || errors.Is(err, syscall.ENXIO) {
-				return false, nil
-			}
-			return err == nil, err
-		}
+		interfaceExists = networkInterfaceExists
 	}
 	present, err := interfaceExists(instance.TapDevice)
 	if err != nil {
@@ -519,6 +513,19 @@ func (s *Supervisor) DeleteStopped(ctx context.Context, instance hoststate.Insta
 		return err
 	}
 	return remove()
+}
+
+func networkInterfaceExists(name string) (bool, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return false, err
+	}
+	for _, iface := range interfaces {
+		if iface.Name == name {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (s *Supervisor) wait(name string, entry *supervisedMachine, ctx context.Context) {

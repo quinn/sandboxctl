@@ -196,6 +196,16 @@ func TestSupervisorDeleteStoppedRequiresCleanRuntimeResources(t *testing.T) {
 	}
 }
 
+func TestNetworkInterfaceExistsReturnsFalseForMissingDevice(t *testing.T) {
+	exists, err := networkInterfaceExists("sandboxctl-test-interface-missing")
+	if err != nil {
+		t.Fatalf("networkInterfaceExists() error = %v", err)
+	}
+	if exists {
+		t.Fatal("networkInterfaceExists() reported a missing interface")
+	}
+}
+
 func TestSupervisorRequiresExplicitForceToStopVMM(t *testing.T) {
 	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
 	instance := supervisorTestInstance()
