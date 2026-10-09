@@ -10,7 +10,7 @@ Section 18 now records this gate.
 
 ## Current phase
 
-The first live guest bootstrap test passed on 2026-10-09. It confirmed the completion marker, runtime hostname, and public-key SSH login. The test now also stops and restarts the same VM, then checks bootstrap state and SSH again. Run `make manual-bootstrap-test` on the KVM host to verify persistence across restart.
+The live guest bootstrap test passed on 2026-10-09. It confirmed the completion marker, runtime hostname, and public-key SSH login on first boot and after stopping and restarting the same VM. The SSH login after restart also confirmed that the guest host key remained stable. The test log is `tmp/logs/guest-bootstrap-test.log`. Guest bootstrap and persistence now have a working VM proof. The next task is to create a pinned builder base image.
 
 Added private guest serial capture at `/var/lib/sandboxctl/instances/NAME/console.log`. The log is limited to 4 MiB and uses mode `0600`. Added `slog` events for CLI command and daemon RPC lifecycles. The guest bootstrap logs each setup stage without logging the key. The first metadata lookup failed because the daemon stored metadata at the MMDS root while the guest requested `/latest/meta-data/`. The daemon now nests the document under `latest/meta-data`, and a unit test checks this tree shape. The bootstrap service sends its logs to the serial console. The latest live run confirms that metadata lookup now succeeds and locates the next blocker at hostname setup.
 
@@ -174,7 +174,7 @@ The repository has no license file. The AUR draft uses the GitHub URL inferred f
 
 The user installed the package, imported the default image, and created `pkgtest`. Structured logging found and resolved the TAP parser issue: `ip tuntap show` returned the unrelated `tailscale0` line before the requested TAP. SDK debug output identified the Firecracker startup failure: the jailer reports `Failed to exec into Firecracker: No such file or directory`. The host's `/usr/bin/firecracker` is dynamically linked and requires `/lib64/ld-linux-x86-64.so.2`, which is absent from the jail. The official Firecracker jailer documentation requires a statically linked Firecracker binary paired with the same-version jailer. The package now bundles the official static v1.17.0 x86-64 pair. Host install and doctor now reject a dynamic Firecracker binary. The daemon now uses the package-installed paths under `/usr/lib/sandboxctl`.
 
-The latest live bootstrap test passed. It loaded MMDS data, verified networking, created the `dev` account, prepared host keys, configured key-only SSH, applied the hostname without D-Bus, and wrote the completion marker. The script checked SSH login on the first boot. It now also checks the same sandbox after a stop and restart. The next live run will verify persistence and host-key stability.
+The latest live bootstrap test passed on first boot and after a stop and restart. It loaded MMDS data, verified networking, created the `dev` account, prepared host keys, configured key-only SSH, applied the hostname without D-Bus, and wrote the completion marker. The second SSH login accepted the existing host key and used the persistent authorized key. This confirms that bootstrap state and host keys survive a VM restart.
 
 The current image-build iteration has started. `internal/imagebuild/buildkit` renders a deterministic BuildKit Dockerfile from a digest-pinned base image and builds a bounded context from the distro profile and provisioning renderer. `internal/imagebuild/guest` provides bounded SSH commands, atomic context uploads, and size-limited streaming downloads from a private build directory. Its fixed service accepts only the `build` operation. It runs BuildKit, checks the built guest's account and SSH policy, removes machine-specific files, and creates a deterministic SquashFS. `internal/imagebuild/builder.Runner` now coordinates context upload, the fixed service call, SquashFS download, and VM cleanup through a narrow factory interface. No production VM factory or pinned builder image exists yet. This environment has no `/dev/kvm`, `buildctl`, or `buildkitd`; it does have `mksquashfs`. Live builder validation needs the host terminal and a builder base image with the fixed build tools. The current `stage-overlay-image` target still packages the upstream SquashFS without provisioning, so do not expect the new image to fix guest SSH key login yet.
 
@@ -186,11 +186,10 @@ Added a static guest bootstrap binary to the Phase 1 initramfs. Before `switch_r
 
 ## Next tasks
 
-1. Run `make manual-bootstrap-test` to verify that the completion marker, host key, and public-key login survive a stop and restart.
-2. Create a pinned builder base image that contains the fixed service, BuildKit client and daemon, and SquashFS tools. Keep the build service inside the guest.
-3. Add a sandboxd-managed ephemeral builder lifecycle and implement the runner's VM factory. Start only the fixed builder image and service. Do not add a general command RPC.
-4. Export a validated image bundle through the bounded guest stream. Include kernel, initramfs, SquashFS, and manifest.
-5. Add `sandboxctl image build` and run the build on a KVM host.
-6. Add routed guest Internet access and firewall rules if the builder or guest cannot reach required network resources.
-7. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
-8. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.
+1. Create a pinned builder base image that contains the fixed service, BuildKit client and daemon, and SquashFS tools. Keep the build service inside the guest.
+2. Add a sandboxd-managed ephemeral builder lifecycle and implement the runner's VM factory. Start only the fixed builder image and service. Do not add a general command RPC.
+3. Export a validated image bundle through the bounded guest stream. Include kernel, initramfs, SquashFS, and manifest.
+4. Add `sandboxctl image build` and run the build on a KVM host.
+5. Add routed guest Internet access and firewall rules if the builder or guest cannot reach required network resources.
+6. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
+7. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.
