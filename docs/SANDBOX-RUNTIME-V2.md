@@ -553,6 +553,14 @@ Use a dedicated nftables table named sandboxctl.
 
 Do not change an unrelated table or chain.
 
+Some hosts have a separate IPv4 FORWARD chain managed by iptables-nft with a
+drop policy. Rules in the inet sandboxctl table cannot override a drop in that
+chain. On these hosts, add tagged sandboxctl rules to the existing IPv4
+FORWARD chain. Match only the sandboxctl TAP prefix and address pool. Keep the
+existing chain policy and unrelated rules unchanged. The rules must permit
+guest outbound traffic and established return traffic, and deny guest-to-guest
+and unsolicited inbound traffic.
+
 Rules must:
 
 - Permit host-to-guest SSH.

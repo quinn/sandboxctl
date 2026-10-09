@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/netip"
 	"os"
@@ -90,6 +91,9 @@ func Install(ctx context.Context, options InstallOptions) error {
 			return fmt.Errorf("required host command %q was not found", command)
 		}
 	}
+	if err := requireExecutable("/usr/bin/iptables"); err != nil {
+		return fmt.Errorf("required host command %q was not found", "/usr/bin/iptables")
+	}
 
 	for _, path := range []string{paths.firecracker, paths.jailer} {
 		if err := requireRegularExecutable(path); err != nil {
@@ -124,6 +128,17 @@ func requireRegularExecutable(path string) error {
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
 		return fmt.Errorf("executable %s must be a regular executable file", path)
+	}
+	return nil
+}
+
+func requireExecutable(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+		return fmt.Errorf("executable %s must resolve to a regular executable file", path)
 	}
 	return nil
 }
@@ -206,6 +221,9 @@ func apply(ctx context.Context, config HostConfig, operator string) error {
 		return fmt.Errorf("parse configured address pool: %w", err)
 	}
 	if err := ensureNFTTable(ctx, addressPool); err != nil {
+		return err
+	}
+	if err := ensureIPTablesForwarding(ctx, addressPool); err != nil {
 		return err
 	}
 	if err := run(ctx, "/usr/bin/sysctl", "-w", "net.ipv4.ip_forward=1"); err != nil {
@@ -338,6 +356,53 @@ func nftRules(pool netip.Prefix) string {
 		"add rule inet sandboxctl output oifname \"sc*\" ip daddr " + network + " tcp dport 22 accept\n" +
 		"add rule inet sandboxctl output oifname \"sc*\" ip daddr " + network + " drop\n" +
 		"add rule inet sandboxctl postrouting ip saddr " + network + " masquerade\n"
+}
+
+func ensureIPTablesForwarding(ctx context.Context, pool netip.Prefix) error {
+	if !pool.IsValid() || !pool.Addr().Is4() || pool.Bits() != 16 || pool.Masked() != pool {
+		return errors.New("sandboxctl forwarding address pool is invalid")
+	}
+	rules := iptablesForwardRules(pool)
+	for _, rule := range rules {
+		for attempt := 0; attempt < 64; attempt++ {
+			arguments := append([]string{"-C", "FORWARD"}, rule...)
+			if _, err := hostCommand(ctx, "/usr/bin/iptables", arguments...).CombinedOutput(); err != nil {
+				break
+			}
+			arguments[0] = "-D"
+			if err := run(ctx, "/usr/bin/iptables", arguments...); err != nil {
+				return fmt.Errorf("remove old sandboxctl forwarding rule: %w", err)
+			}
+			if attempt == 63 {
+				return errors.New("too many duplicate sandboxctl forwarding rules")
+			}
+		}
+	}
+	for index := len(rules) - 1; index >= 0; index-- {
+		arguments := append([]string{"-I", "FORWARD", "1"}, rules[index]...)
+		slog.Info("installing sandboxctl forwarding rule", "chain", "FORWARD", "arguments", arguments[3:])
+		if err := run(ctx, "/usr/bin/iptables", arguments...); err != nil {
+			return fmt.Errorf("install sandboxctl forwarding rule: %w", err)
+		}
+	}
+	slog.Info("configured sandboxctl forwarding rules", "address_pool", pool.String(), "chain", "FORWARD")
+	return nil
+}
+
+func iptablesForwardRules(pool netip.Prefix) [][]string {
+	comment := []string{"-m", "comment", "--comment", "sandboxctl-managed"}
+	rule := func(match []string, target string) []string {
+		arguments := append([]string{}, match...)
+		arguments = append(arguments, comment...)
+		return append(arguments, "-j", target)
+	}
+	network := pool.String()
+	return [][]string{
+		rule([]string{"-i", "sc+", "-s", network, "-d", network}, "DROP"),
+		rule([]string{"-o", "sc+", "-d", network, "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED"}, "ACCEPT"),
+		rule([]string{"-i", "sc+", "-s", network}, "ACCEPT"),
+		rule([]string{"-o", "sc+", "-d", network}, "DROP"),
+	}
 }
 
 func run(ctx context.Context, name string, arguments ...string) error {

@@ -140,6 +140,28 @@ func TestNFTRulesRouteSandboxTrafficWithoutChangingOtherPolicies(t *testing.T) {
 	}
 }
 
+func TestIPTablesForwardRulesAreNarrowAndPreserveDropPolicy(t *testing.T) {
+	pool, err := cmdutil.ParseAddressPool("172.30.0.0/16")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := iptablesForwardRules(pool)
+	if len(rules) != 4 {
+		t.Fatalf("got %d forwarding rules, want 4", len(rules))
+	}
+	wants := [][]string{
+		{"-i", "sc+", "-s", "172.30.0.0/16", "-d", "172.30.0.0/16", "-m", "comment", "--comment", "sandboxctl-managed", "-j", "DROP"},
+		{"-o", "sc+", "-d", "172.30.0.0/16", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-m", "comment", "--comment", "sandboxctl-managed", "-j", "ACCEPT"},
+		{"-i", "sc+", "-s", "172.30.0.0/16", "-m", "comment", "--comment", "sandboxctl-managed", "-j", "ACCEPT"},
+		{"-o", "sc+", "-d", "172.30.0.0/16", "-m", "comment", "--comment", "sandboxctl-managed", "-j", "DROP"},
+	}
+	for index := range wants {
+		if strings.Join(rules[index], "\x00") != strings.Join(wants[index], "\x00") {
+			t.Errorf("rule %d = %#v, want %#v", index, rules[index], wants[index])
+		}
+	}
+}
+
 func TestCopyFileAtomic(t *testing.T) {
 	directory := t.TempDir()
 	destination := filepath.Join(directory, "installed")
