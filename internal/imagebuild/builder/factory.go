@@ -169,27 +169,42 @@ func (factory DaemonVMFactory) Start(ctx context.Context) (VM, error) {
 	defer cancel()
 	target := instance.GetSshUser() + "@" + address.String()
 	var executor guest.GuestExecutor
+	var lastProbeErr error
+	slog.Info("waiting for builder SSH readiness", "name", name, "address", address.String(), "timeout", factory.ReadyTimeout)
 	for {
-		if err := factory.KeyScanner.Scan(readyCtx, address.String(), knownHostsPath); err == nil {
+		if err := factory.KeyScanner.Scan(readyCtx, address.String(), knownHostsPath); err != nil {
+			lastProbeErr = fmt.Errorf("scan guest host key: %w", err)
+			slog.Warn("builder host-key scan failed", "name", name, "address", address.String(), "error", err)
+		} else {
+			slog.Info("builder host key scanned", "name", name, "address", address.String())
 			executor, err = factory.NewSSHExecutor(guest.SSHConfig{
 				Target: target, PrivateKeyPath: factory.SSHPaths.PrivateKey(),
 				KnownHostsPath: knownHostsPath, SSHPath: factory.SSHPath,
 			})
-			if err == nil {
-				commandCtx, commandCancel := context.WithTimeout(readyCtx, 10*time.Second)
-				_, err = executor.Run(commandCtx, guest.Command{
-					Program: "/usr/bin/test", Args: []string{"-r", "/var/lib/sandboxctl/bootstrap-complete"},
-				})
-				commandCancel()
-				if err == nil {
-					vm.executor = executor
-					slog.Info("builder guest is ready", "name", name)
-					return vm, nil
-				}
+			if err != nil {
+				return vm, fmt.Errorf("configure builder SSH executor: %w", err)
 			}
+			commandCtx, commandCancel := context.WithTimeout(readyCtx, 10*time.Second)
+			result, probeErr := executor.Run(commandCtx, guest.Command{
+				Program: "/usr/bin/test", Args: []string{"-r", "/var/lib/sandboxctl/bootstrap-complete"},
+			})
+			commandCancel()
+			if probeErr == nil {
+				vm.executor = executor
+				slog.Info("builder guest is ready", "name", name)
+				return vm, nil
+			}
+			lastProbeErr = fmt.Errorf("SSH bootstrap-marker check: %w", probeErr)
+			if len(result.Stderr) > 0 {
+				lastProbeErr = fmt.Errorf("%w: %s", lastProbeErr, strings.TrimSpace(string(result.Stderr)))
+			}
+			slog.Warn("builder SSH readiness probe failed", "name", name, "address", address.String(), "error", lastProbeErr)
 		}
 		select {
 		case <-readyCtx.Done():
+			if lastProbeErr != nil {
+				return vm, fmt.Errorf("wait for builder guest readiness: %w; last probe: %v", readyCtx.Err(), lastProbeErr)
+			}
 			return vm, fmt.Errorf("wait for builder guest readiness: %w", readyCtx.Err())
 		case <-time.After(factory.PollInterval):
 		}
@@ -269,9 +284,14 @@ func (SSHKeyScanner) Scan(ctx context.Context, address, path string) error {
 	}
 	command := exec.CommandContext(ctx, "/usr/bin/ssh-keyscan", "-T", "5", parsed.String())
 	output := &limitedScanBuffer{}
+	stderr := &limitedScanBuffer{}
 	command.Stdout = output
+	command.Stderr = stderr
 	err = command.Run()
 	if err != nil {
+		if stderr.buffer.Len() > 0 {
+			return fmt.Errorf("ssh-keyscan failed: %w: %s", err, strings.TrimSpace(stderr.buffer.String()))
+		}
 		return fmt.Errorf("scan builder SSH host key: %w", err)
 	}
 	if output.exceeded || output.buffer.Len() == 0 {

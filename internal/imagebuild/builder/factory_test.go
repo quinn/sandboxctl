@@ -3,9 +3,11 @@ package builder
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -97,6 +99,33 @@ func TestDaemonVMFactoryCleansUpAfterUncertainStartFailure(t *testing.T) {
 	}
 }
 
+func TestDaemonVMFactoryReportsLastSSHReadinessFailure(t *testing.T) {
+	stateDir := t.TempDir()
+	service := &lifecycleServiceStub{
+		instance: &controlpb.Instance{GuestIp: "172.30.0.2", SshUser: "dev"},
+	}
+	factory := DaemonVMFactory{
+		Service: service, Image: "builder-image", ImageVersion: testBuilderVersion,
+		SSHPaths:     config.Paths{StateDir: stateDir, Keys: filepath.Join(stateDir, "keys")},
+		SSHPublicKey: "ssh-ed25519 AAAA", ReadyTimeout: 20 * time.Millisecond, PollInterval: time.Millisecond,
+		KeyScanner: readyKeyScannerStub{},
+		NewSSHExecutor: func(guest.SSHConfig) (guest.GuestExecutor, error) {
+			return failingExecutorStub{}, nil
+		},
+	}
+
+	vm, err := factory.Start(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "public key rejected") {
+		t.Fatalf("Start() error = %v, want final SSH probe error", err)
+	}
+	if err := vm.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if service.stopped != 1 || service.deleted != 1 {
+		t.Fatalf("cleanup calls: stopped=%d deleted=%d", service.stopped, service.deleted)
+	}
+}
+
 type lifecycleServiceStub struct {
 	create   *controlpb.CreateInstanceRequest
 	instance *controlpb.Instance
@@ -138,6 +167,18 @@ func (readyKeyScannerStub) Scan(context.Context, string, string) error { return 
 type readyExecutorStub struct {
 	command guest.Command
 	runs    int
+}
+
+type failingExecutorStub struct{}
+
+func (failingExecutorStub) Run(context.Context, guest.Command) (guest.Result, error) {
+	return guest.Result{Stderr: []byte("public key rejected")}, fmt.Errorf("ssh exited with status 255")
+}
+
+func (failingExecutorStub) Upload(context.Context, io.Reader, string, int64) error { return nil }
+
+func (failingExecutorStub) Download(context.Context, string, io.Writer, int64) (int64, error) {
+	return 0, nil
 }
 
 func (executor *readyExecutorStub) Run(_ context.Context, command guest.Command) (guest.Result, error) {
