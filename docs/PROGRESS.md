@@ -1,6 +1,6 @@
 # Implementation progress
 
-Last updated: 2026-10-08
+Last updated: 2026-10-09
 
 ## Authority and order
 
