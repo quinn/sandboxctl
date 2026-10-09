@@ -68,6 +68,38 @@ func TestBuildClosesVMAfterUploadFailure(t *testing.T) {
 	}
 }
 
+func TestBuildReportsBoundedGuestOutputOnServiceFailure(t *testing.T) {
+	executor := &testExecutor{
+		runResult: guest.Result{
+			Stderr: []byte("registry.example.test: network is unreachable"),
+			Stdout: []byte("build started"),
+		},
+		runErr: errors.New("exit status 1"),
+	}
+	vm := &testVM{executor: executor}
+	factory := &testFactory{vm: vm}
+	_, err := (Runner{Factory: factory}).Build(context.Background(), testRequest(t), &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("Build() error = nil, want guest service failure")
+	}
+	for _, want := range []string{"exit status 1", "stderr: registry.example.test: network is unreachable", "stdout: build started"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("Build() error %q does not contain %q", err, want)
+		}
+	}
+	if !vm.closed {
+		t.Fatal("builder VM was not closed after service failure")
+	}
+}
+
+func TestFormatCommandOutputBoundsEachStream(t *testing.T) {
+	result := guest.Result{Stderr: []byte(strings.Repeat("e", maxErrorOutputBytes+100))}
+	output := formatCommandOutput(result)
+	if !strings.Contains(output, "[truncated]") || len(output) > maxErrorOutputBytes+32 {
+		t.Fatalf("formatted output length=%d, truncated=%v", len(output), strings.Contains(output, "[truncated]"))
+	}
+}
+
 func TestBuildClosesPartiallyStartedVM(t *testing.T) {
 	vm := &testVM{executor: &testExecutor{}}
 	factory := &testFactory{vm: vm, startErr: errors.New("start failed")}
@@ -116,11 +148,13 @@ type testExecutor struct {
 	downloadLimit int64
 	artifact      string
 	uploadErr     error
+	runResult     guest.Result
+	runErr        error
 }
 
 func (executor *testExecutor) Run(_ context.Context, command guest.Command) (guest.Result, error) {
 	executor.command = command
-	return guest.Result{}, nil
+	return executor.runResult, executor.runErr
 }
 
 func (executor *testExecutor) Upload(_ context.Context, source io.Reader, destination string, size int64) error {

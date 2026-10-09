@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"sandboxctl/internal/imagebuild/buildkit"
@@ -91,11 +92,12 @@ func (runner Runner) Build(ctx context.Context, request Request, output io.Write
 			return 0, fmt.Errorf("upload builder input %s: %w", name, err)
 		}
 	}
-	if _, err := executor.Run(ctx, guest.Command{
+	result, err := executor.Run(ctx, guest.Command{
 		Program: "sudo",
 		Args:    []string{"-n", "/bin/sh", servicePath, "build"},
-	}); err != nil {
-		return 0, fmt.Errorf("run fixed image build service: %w", err)
+	})
+	if err != nil {
+		return 0, fmt.Errorf("run fixed image build service: %w%s", err, formatCommandOutput(result))
 	}
 	written, err = executor.Download(ctx, outputPath, output, maxArtifactBytes)
 	if err != nil {
@@ -105,4 +107,31 @@ func (runner Runner) Build(ctx context.Context, request Request, output io.Write
 		return 0, errors.New("builder returned an empty SquashFS")
 	}
 	return written, nil
+}
+
+const maxErrorOutputBytes = 8 << 10
+
+func formatCommandOutput(result guest.Result) string {
+	var output strings.Builder
+	for _, stream := range []struct {
+		name  string
+		value []byte
+	}{{name: "stderr", value: result.Stderr}, {name: "stdout", value: result.Stdout}} {
+		value := strings.TrimSpace(string(stream.value))
+		if value == "" {
+			continue
+		}
+		truncated := len(value) > maxErrorOutputBytes
+		if truncated {
+			value = value[:maxErrorOutputBytes]
+		}
+		output.WriteString("\n")
+		output.WriteString(stream.name)
+		output.WriteString(": ")
+		output.WriteString(value)
+		if truncated {
+			output.WriteString(" [truncated]")
+		}
+	}
+	return output.String()
 }
