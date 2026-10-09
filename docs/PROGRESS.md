@@ -196,10 +196,9 @@ Added `sandboxctl image build`. It validates the target name, distribution, gues
 
 The first live image-build attempt installed the builder image and started a builder VM. The factory did not observe SSH readiness within two minutes. It stopped and deleted the VM. That cleanup also removed the guest console log. The daemon journal confirms Firecracker started but does not contain guest console output. Added SSH probe logging. The next run showed that `ssh-keyscan` emitted OpenSSH comment lines before the host key. The parser rejected those comments. Updated it to skip comments and reject output with no validated key. Added parser tests.
 
-The latest live attempt passed SSH readiness and cleaned up the builder VM. The fixed image build service then exited with status 1. The runner discarded the guest command output, so the cause is not yet known. Updated `builder.Runner` to include bounded stderr and stdout in the returned error. Added tests for diagnostic output and VM cleanup. Run `make manual-image-build` again and inspect `tmp/logs/image-build-test.log`. Guest Internet access remains untested and may block the registry pull.
+The latest live attempt passed SSH readiness and cleaned up the builder VM. The guest output showed that DNS requests went to `::1`, where no resolver was listening. The BuildKit registry lookup therefore failed. Added sandboxctl-owned nftables forwarding, guest-to-guest denial, outbound address translation, established return traffic, host-to-guest SSH, and default inbound denial. The rules stay in the `inet sandboxctl` table and keep the host forward policy unchanged. The host installer refreshes only its own chains. Guest bootstrap now writes the initial Cloudflare resolver addresses and updates `/etc/hosts` with the sandbox hostname. Added tests for the generated firewall policy, DNS symlink replacement, and hostname mapping. `gofmt`, `go vet ./...`, `go test ./...`, and `git diff --check` pass. The live network path is not yet verified.
 
-1. Run `make manual-image-build` on the user's KVM host with the workspace CLI and installed daemon. Use the guest output to identify the build failure.
-2. Add routed guest Internet access and firewall rules if the output shows that the registry is unreachable.
-3. Verify the staged bundle by installing it and booting a guest.
-4. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
-5. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.
+1. Rebuild the workspace CLI and run host install to apply the sandboxctl firewall rules. Then run `make manual-image-build` to verify guest DNS and registry access.
+2. Verify the staged bundle by installing it and booting a guest.
+3. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
+4. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.

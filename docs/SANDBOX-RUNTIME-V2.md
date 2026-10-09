@@ -565,6 +565,11 @@ Rule creation and removal must be idempotent.
 
 Do not change the host-wide forward policy.
 
+The first guest network profile uses Cloudflare DNS at `1.1.1.1` and
+`1.0.0.1`. Guest bootstrap must write these addresses to `/etc/resolv.conf`.
+The host firewall must allow the guest to reach these resolvers through normal
+outbound rules.
+
 ### 9.3 Network state
 
 The instance record must contain:

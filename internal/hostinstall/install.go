@@ -201,7 +201,11 @@ func apply(ctx context.Context, config HostConfig, operator string) error {
 	if err := atomicWrite("/etc/sysctl.d/99-sandboxctl.conf", []byte("net.ipv4.ip_forward = 1\n"), 0o644); err != nil {
 		return fmt.Errorf("write IPv4 forwarding configuration: %w", err)
 	}
-	if err := ensureNFTTable(ctx); err != nil {
+	addressPool, err := netip.ParsePrefix(config.AddressPool)
+	if err != nil {
+		return fmt.Errorf("parse configured address pool: %w", err)
+	}
+	if err := ensureNFTTable(ctx, addressPool); err != nil {
 		return err
 	}
 	if err := run(ctx, "/usr/bin/sysctl", "-w", "net.ipv4.ip_forward=1"); err != nil {
@@ -272,20 +276,68 @@ func copyFileAtomic(destination string, source io.Reader, mode os.FileMode) erro
 	return nil
 }
 
-func ensureNFTTable(ctx context.Context) error {
+func ensureNFTTable(ctx context.Context, pool netip.Prefix) error {
 	output, err := hostCommand(ctx, "/usr/bin/nft", "list", "tables").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("list nftables tables: %w: %s", err, strings.TrimSpace(string(output)))
 	}
+	tableExists := false
 	for _, line := range strings.Split(string(output), "\n") {
 		if strings.TrimSpace(line) == "table inet sandboxctl" {
-			return nil
+			tableExists = true
+			break
 		}
 	}
-	if err := run(ctx, "/usr/bin/nft", "add", "table", "inet", "sandboxctl"); err != nil {
-		return fmt.Errorf("create sandboxctl nftables table: %w", err)
+	if !tableExists {
+		if err := run(ctx, "/usr/bin/nft", "add", "table", "inet", "sandboxctl"); err != nil {
+			return fmt.Errorf("create sandboxctl nftables table: %w", err)
+		}
+	}
+	for _, chain := range []struct {
+		name string
+		args []string
+	}{
+		{name: "forward", args: []string{"{", "type", "filter", "hook", "forward", "priority", "filter", ";", "policy", "accept", ";", "}"}},
+		{name: "output", args: []string{"{", "type", "filter", "hook", "output", "priority", "filter", ";", "policy", "accept", ";", "}"}},
+		{name: "postrouting", args: []string{"{", "type", "nat", "hook", "postrouting", "priority", "srcnat", ";", "policy", "accept", ";", "}"}},
+	} {
+		if _, err := hostCommand(ctx, "/usr/bin/nft", "list", "chain", "inet", "sandboxctl", chain.name).CombinedOutput(); err == nil {
+			continue
+		}
+		arguments := append([]string{"add", "chain", "inet", "sandboxctl", chain.name}, chain.args...)
+		if err := run(ctx, "/usr/bin/nft", arguments...); err != nil {
+			return fmt.Errorf("create sandboxctl %s chain: %w", chain.name, err)
+		}
+	}
+	return applyNFTRules(ctx, pool)
+}
+
+func applyNFTRules(ctx context.Context, pool netip.Prefix) error {
+	if !pool.IsValid() || !pool.Addr().Is4() || pool.Bits() != 16 || pool.Masked() != pool {
+		return errors.New("sandboxctl nftables address pool is invalid")
+	}
+	script := nftRules(pool)
+	command := hostCommand(ctx, "/usr/bin/nft", "-f", "-")
+	command.Stdin = strings.NewReader(script)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("configure sandboxctl nftables rules: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+func nftRules(pool netip.Prefix) string {
+	network := pool.String()
+	return "flush chain inet sandboxctl forward\n" +
+		"flush chain inet sandboxctl output\n" +
+		"flush chain inet sandboxctl postrouting\n" +
+		"add rule inet sandboxctl forward iifname \"sc*\" ip saddr " + network + " ip daddr " + network + " drop\n" +
+		"add rule inet sandboxctl forward iifname \"sc*\" ip saddr " + network + " accept\n" +
+		"add rule inet sandboxctl forward oifname \"sc*\" ip daddr " + network + " ct state established,related accept\n" +
+		"add rule inet sandboxctl forward oifname \"sc*\" ip daddr " + network + " drop\n" +
+		"add rule inet sandboxctl output oifname \"sc*\" ip daddr " + network + " tcp dport 22 accept\n" +
+		"add rule inet sandboxctl output oifname \"sc*\" ip daddr " + network + " drop\n" +
+		"add rule inet sandboxctl postrouting ip saddr " + network + " masquerade\n"
 }
 
 func run(ctx context.Context, name string, arguments ...string) error {

@@ -26,6 +26,7 @@ const (
 	metadataAddress = "http://169.254.169.254"
 	metadataLimit   = 64 << 10
 	commandLimit    = 1 << 20
+	guestResolver   = "nameserver 1.1.1.1\nnameserver 1.0.0.1\noptions timeout:2 attempts:2\n"
 )
 
 // Metadata contains the fixed guest configuration supplied by sandboxd.
@@ -178,6 +179,10 @@ func apply(ctx context.Context, metadata Metadata) error {
 		return err
 	}
 	slog.Info("guest network verified", "interface", guest.Network.Interface, "address", guest.Network.Address, "gateway", guest.Network.Gateway)
+	if err := configureDNS("/"); err != nil {
+		return err
+	}
+	slog.Info("guest DNS configured", "nameservers", "1.1.1.1,1.0.0.1")
 	firstBoot, err := firstBoot("/")
 	if err != nil {
 		return err
@@ -241,6 +246,35 @@ func apply(ctx context.Context, metadata Metadata) error {
 	return nil
 }
 
+func configureDNS(root string) error {
+	etc := filepath.Join(root, "etc")
+	file, err := os.CreateTemp(etc, ".sandboxctl-resolv-")
+	if err != nil {
+		return fmt.Errorf("create guest resolver configuration: %w", err)
+	}
+	path := file.Name()
+	defer os.Remove(path)
+	if _, err := io.WriteString(file, guestResolver); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("write guest resolver configuration: %w", err)
+	}
+	if err := file.Chmod(0o644); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("set guest resolver configuration mode: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("sync guest resolver configuration: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close guest resolver configuration: %w", err)
+	}
+	if err := os.Rename(path, filepath.Join(etc, "resolv.conf")); err != nil {
+		return fmt.Errorf("publish guest resolver configuration: %w", err)
+	}
+	return nil
+}
+
 func firstBoot(root string) (bool, error) {
 	path := filepath.Join(root, "var/lib/sandboxctl/bootstrap-complete")
 	info, err := os.Lstat(path)
@@ -298,7 +332,28 @@ func writeHostname(root, hostname string) error {
 	if err := os.Rename(path, filepath.Join(etc, "hostname")); err != nil {
 		return fmt.Errorf("publish hostname file: %w", err)
 	}
-	return nil
+	return writeHosts(root, hostname)
+}
+
+func writeHosts(root, hostname string) error {
+	path := filepath.Join(root, "etc/hosts")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read guest hosts file: %w", err)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	found := false
+	for index, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == "127.0.1.1" {
+			lines[index] = "127.0.1.1\t" + hostname
+			found = true
+		}
+	}
+	if !found {
+		lines = append(lines, "127.0.1.1\t"+hostname)
+	}
+	return writeGuestFile(path, ".sandboxctl-hosts-", strings.Join(lines, "\n")+"\n", 0o644, "guest hosts file")
 }
 
 func ensureAccount(ctx context.Context, name string) (int, int, error) {
@@ -469,6 +524,34 @@ func run(ctx context.Context, program string, args ...string) error {
 func executableFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
+}
+
+func writeGuestFile(destination, prefix, contents string, mode os.FileMode, label string) error {
+	file, err := os.CreateTemp(filepath.Dir(destination), prefix)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", label, err)
+	}
+	temporary := file.Name()
+	defer os.Remove(temporary)
+	if _, err := io.WriteString(file, contents); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("write %s: %w", label, err)
+	}
+	if err := file.Chmod(mode); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("set %s mode: %w", label, err)
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("sync %s: %w", label, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", label, err)
+	}
+	if err := os.Rename(temporary, destination); err != nil {
+		return fmt.Errorf("publish %s: %w", label, err)
+	}
+	return nil
 }
 
 func validHostname(value string) bool {

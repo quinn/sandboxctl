@@ -104,6 +104,9 @@ func TestFirstBootRemovesImageHostKeysAndWritesHostname(t *testing.T) {
 	if err := os.MkdirAll(sshDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, "etc/hosts"), []byte("127.0.0.1 localhost\n127.0.1.1 ubuntu-fc-uvm\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	keyPath := filepath.Join(sshDir, "ssh_host_ed25519_key")
 	if err := os.WriteFile(keyPath, []byte("image-key"), 0o600); err != nil {
 		t.Fatal(err)
@@ -125,6 +128,10 @@ func TestFirstBootRemovesImageHostKeysAndWritesHostname(t *testing.T) {
 	if err != nil || string(got) != "sandbox-test\n" {
 		t.Fatalf("hostname file = %q, %v", got, err)
 	}
+	hosts, err := os.ReadFile(filepath.Join(root, "etc/hosts"))
+	if err != nil || !strings.Contains(string(hosts), "127.0.1.1\tsandbox-test\n") {
+		t.Fatalf("hosts file = %q, %v", hosts, err)
+	}
 	if err := os.MkdirAll(filepath.Join(root, "var/lib/sandboxctl"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -134,6 +141,42 @@ func TestFirstBootRemovesImageHostKeysAndWritesHostname(t *testing.T) {
 	first, err = firstBoot(root)
 	if err != nil || first {
 		t.Fatalf("firstBoot() after marker = %t, %v; want false", first, err)
+	}
+}
+
+func TestConfigureDNSReplacesSystemdStubSymlink(t *testing.T) {
+	root := t.TempDir()
+	etc := filepath.Join(root, "etc")
+	stub := filepath.Join(root, "run/systemd/resolve/stub-resolv.conf")
+	if err := os.MkdirAll(filepath.Dir(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(etc, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stub, []byte("nameserver ::1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resolver := filepath.Join(etc, "resolv.conf")
+	if err := os.Symlink("../run/systemd/resolve/stub-resolv.conf", resolver); err != nil {
+		t.Fatal(err)
+	}
+	if err := configureDNS(root); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(resolver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm() != 0o644 {
+		t.Fatalf("resolver file mode = %v, want regular mode 0644", info.Mode())
+	}
+	data, err := os.ReadFile(resolver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != guestResolver {
+		t.Fatalf("resolver contents = %q, want %q", data, guestResolver)
 	}
 }
 

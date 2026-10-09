@@ -117,6 +117,29 @@ func TestFindRouteConflict(t *testing.T) {
 	}
 }
 
+func TestNFTRulesRouteSandboxTrafficWithoutChangingOtherPolicies(t *testing.T) {
+	pool, err := cmdutil.ParseAddressPool("172.30.0.0/16")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := nftRules(pool)
+	for _, want := range []string{
+		"flush chain inet sandboxctl forward",
+		"iifname \"sc*\" ip saddr 172.30.0.0/16 ip daddr 172.30.0.0/16 drop",
+		"iifname \"sc*\" ip saddr 172.30.0.0/16 accept",
+		"oifname \"sc*\" ip daddr 172.30.0.0/16 ct state established,related accept",
+		"oifname \"sc*\" ip daddr 172.30.0.0/16 tcp dport 22 accept",
+		"ip saddr 172.30.0.0/16 masquerade",
+	} {
+		if !strings.Contains(rules, want) {
+			t.Errorf("nftables rules do not contain %q", want)
+		}
+	}
+	if strings.Contains(rules, "flush ruleset") || strings.Contains(rules, "policy drop") {
+		t.Fatal("sandboxctl rules changed unrelated tables or the host forward policy")
+	}
+}
+
 func TestCopyFileAtomic(t *testing.T) {
 	directory := t.TempDir()
 	destination := filepath.Join(directory, "installed")
