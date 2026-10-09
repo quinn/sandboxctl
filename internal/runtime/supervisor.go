@@ -32,19 +32,23 @@ type ManagedMachine interface {
 	StopVMM() error
 }
 
-// GuestMetadata contains the per-instance data exposed to the guest through MMDS.
+// GuestMetadata contains the per-instance data under the MMDS latest/meta-data path.
 type GuestMetadata struct {
-	Sandboxctl struct {
-		SchemaVersion    int    `json:"schema_version"`
-		Hostname         string `json:"hostname"`
-		SSHUser          string `json:"ssh_user"`
-		SSHAuthorizedKey string `json:"ssh_authorized_key"`
-		Network          struct {
-			Address   string `json:"address"`
-			Gateway   string `json:"gateway"`
-			Interface string `json:"interface"`
-		} `json:"network"`
-	} `json:"sandboxctl"`
+	Latest struct {
+		MetaData struct {
+			Sandboxctl struct {
+				SchemaVersion    int    `json:"schema_version"`
+				Hostname         string `json:"hostname"`
+				SSHUser          string `json:"ssh_user"`
+				SSHAuthorizedKey string `json:"ssh_authorized_key"`
+				Network          struct {
+					Address   string `json:"address"`
+					Gateway   string `json:"gateway"`
+					Interface string `json:"interface"`
+				} `json:"network"`
+			} `json:"sandboxctl"`
+		} `json:"meta-data"`
+	} `json:"latest"`
 }
 
 // MachineFactory creates an SDK machine from a validated jailed configuration.

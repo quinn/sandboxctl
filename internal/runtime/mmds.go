@@ -34,13 +34,14 @@ func BuildGuestMetadata(instance hoststate.Instance, publicKey string) (GuestMet
 		return GuestMetadata{}, errors.New("host gateway does not match the sandbox allocation")
 	}
 	metadata := GuestMetadata{}
-	metadata.Sandboxctl.SchemaVersion = 1
-	metadata.Sandboxctl.Hostname = instance.Name
-	metadata.Sandboxctl.SSHUser = instance.SSHUser
-	metadata.Sandboxctl.SSHAuthorizedKey = key
-	metadata.Sandboxctl.Network.Address = fmt.Sprintf("%s/%d", guest, pool.Bits())
-	metadata.Sandboxctl.Network.Gateway = gateway.String()
-	metadata.Sandboxctl.Network.Interface = "eth0"
+	guestMetadata := &metadata.Latest.MetaData.Sandboxctl
+	guestMetadata.SchemaVersion = 1
+	guestMetadata.Hostname = instance.Name
+	guestMetadata.SSHUser = instance.SSHUser
+	guestMetadata.SSHAuthorizedKey = key
+	guestMetadata.Network.Address = fmt.Sprintf("%s/%d", guest, pool.Bits())
+	guestMetadata.Network.Gateway = gateway.String()
+	guestMetadata.Network.Interface = "eth0"
 	return metadata, nil
 }
 

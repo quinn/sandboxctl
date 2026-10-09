@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"testing"
 
 	firecracker "github.com/firecracker-microvm/firecracker-go-sdk"
@@ -14,7 +15,22 @@ func TestBuildGuestMetadataContainsInstanceKeyAndNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	guest := metadata.Sandboxctl
+	data, err := json.Marshal(metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tree struct {
+		Latest struct {
+			MetaData map[string]json.RawMessage `json:"meta-data"`
+		} `json:"latest"`
+	}
+	if err := json.Unmarshal(data, &tree); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := tree.Latest.MetaData["sandboxctl"]; !ok {
+		t.Fatalf("metadata document has no latest/meta-data/sandboxctl path: %s", data)
+	}
+	guest := metadata.Latest.MetaData.Sandboxctl
 	if guest.SchemaVersion != 1 || guest.Hostname != instance.Name || guest.SSHUser != "dev" {
 		t.Fatalf("guest identity = %#v", guest)
 	}

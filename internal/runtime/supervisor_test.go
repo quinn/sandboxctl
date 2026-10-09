@@ -111,7 +111,7 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 			if _, err := cfg.JailerCfg.Stdout.Write([]byte("guest serial test\n")); err != nil {
 				t.Fatalf("write guest console: %v", err)
 			}
-			if metadata.Sandboxctl.Hostname != instance.Name || metadata.Sandboxctl.SSHUser != "dev" || metadata.Sandboxctl.Network.Address != "172.30.0.2/30" {
+			if metadata.Latest.MetaData.Sandboxctl.Hostname != instance.Name || metadata.Latest.MetaData.Sandboxctl.SSHUser != "dev" || metadata.Latest.MetaData.Sandboxctl.Network.Address != "172.30.0.2/30" {
 				t.Fatalf("factory received invalid guest metadata: %#v", metadata)
 			}
 			return machine, nil
