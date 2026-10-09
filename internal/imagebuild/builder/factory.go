@@ -297,20 +297,15 @@ func (SSHKeyScanner) Scan(ctx context.Context, address, path string) error {
 	if output.exceeded || output.buffer.Len() == 0 {
 		return errors.New("builder SSH host-key response is empty or too large")
 	}
-	for _, line := range strings.Split(strings.TrimSpace(output.buffer.String()), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) != 3 || fields[0] != parsed.String() {
-			return errors.New("builder SSH host-key response is invalid")
-		}
-		if _, err := base64.StdEncoding.DecodeString(fields[2]); err != nil {
-			return errors.New("builder SSH host-key response is invalid")
-		}
+	validatedOutput, err := validateSSHKeyScanOutput(parsed.String(), output.buffer.Bytes())
+	if err != nil {
+		return err
 	}
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("open private builder known-hosts file: %w", err)
 	}
-	if _, err := file.Write(output.buffer.Bytes()); err != nil {
+	if _, err := file.Write(validatedOutput); err != nil {
 		_ = file.Close()
 		return fmt.Errorf("write private builder known-hosts file: %w", err)
 	}
@@ -322,6 +317,28 @@ func (SSHKeyScanner) Scan(ctx context.Context, address, path string) error {
 		return fmt.Errorf("close private builder known-hosts file: %w", err)
 	}
 	return nil
+}
+
+func validateSSHKeyScanOutput(address string, output []byte) ([]byte, error) {
+	var keys []string
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 3 || fields[0] != address {
+			return nil, errors.New("builder SSH host-key response is invalid")
+		}
+		if _, err := base64.StdEncoding.DecodeString(fields[2]); err != nil {
+			return nil, errors.New("builder SSH host-key response is invalid")
+		}
+		keys = append(keys, strings.Join(fields, " "))
+	}
+	if len(keys) == 0 {
+		return nil, errors.New("builder SSH host-key response contains no keys")
+	}
+	return []byte(strings.Join(keys, "\n") + "\n"), nil
 }
 
 type limitedScanBuffer struct {

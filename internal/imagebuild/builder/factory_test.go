@@ -126,6 +126,23 @@ func TestDaemonVMFactoryReportsLastSSHReadinessFailure(t *testing.T) {
 	}
 }
 
+func TestValidateSSHKeyScanOutputSkipsOpenSSHComments(t *testing.T) {
+	input := []byte("# 172.30.0.2:22 SSH-2.0-OpenSSH_9.6p1 Ubuntu\n172.30.0.2 ssh-ed25519 YWJj\n")
+	got, err := validateSSHKeyScanOutput("172.30.0.2", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "172.30.0.2 ssh-ed25519 YWJj\n" {
+		t.Fatalf("validated known-hosts data = %q", got)
+	}
+	if _, err := validateSSHKeyScanOutput("172.30.0.2", []byte("# SSH-2.0-OpenSSH_9.6p1 Ubuntu\n")); err == nil {
+		t.Fatal("parser accepted output without a host key")
+	}
+	if _, err := validateSSHKeyScanOutput("172.30.0.2", []byte("172.30.0.3 ssh-ed25519 YWJj\n")); err == nil {
+		t.Fatal("parser accepted a key for a different host")
+	}
+}
+
 type lifecycleServiceStub struct {
 	create   *controlpb.CreateInstanceRequest
 	instance *controlpb.Instance
