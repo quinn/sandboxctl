@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -94,10 +95,12 @@ func Validate(metadata Metadata) error {
 
 // Run fetches MMDS data and applies the fixed guest setup.
 func Run(ctx context.Context) error {
+	slog.Info("guest bootstrap started")
 	metadata, err := fetchMetadata(ctx)
 	if err != nil {
 		return err
 	}
+	slog.Info("guest metadata loaded", "hostname", metadata.Sandboxctl.Hostname, "ssh_user", metadata.Sandboxctl.SSHUser, "interface", metadata.Sandboxctl.Network.Interface)
 	return apply(ctx, metadata)
 }
 
@@ -173,6 +176,7 @@ func apply(ctx context.Context, metadata Metadata) error {
 	if err := verifyNetwork(ctx, guest.Network); err != nil {
 		return err
 	}
+	slog.Info("guest network verified", "interface", guest.Network.Interface, "address", guest.Network.Address, "gateway", guest.Network.Gateway)
 	firstBoot, err := firstBoot("/")
 	if err != nil {
 		return err
@@ -181,6 +185,7 @@ func apply(ctx context.Context, metadata Metadata) error {
 	if err != nil {
 		return err
 	}
+	slog.Info("guest account ready", "user", guest.SSHUser, "uid", uid, "gid", gid)
 	if err := ensureGuestSudo(ctx); err != nil {
 		return err
 	}
@@ -192,15 +197,18 @@ func apply(ctx context.Context, metadata Metadata) error {
 	if err := run(ctx, "/usr/bin/ssh-keygen", "-A"); err != nil {
 		return fmt.Errorf("create guest SSH host keys: %w", err)
 	}
+	slog.Info("guest SSH host keys ready", "first_boot", firstBoot)
 	if err := configureSSH(ctx, guest.SSHAuthorizedKey, uid, gid); err != nil {
 		return err
 	}
+	slog.Info("guest SSH access configured", "user", guest.SSHUser, "authentication", "public-key-only")
 	if err := writeHostname("/", guest.Hostname); err != nil {
 		return err
 	}
 	if err := run(ctx, "/usr/bin/hostnamectl", "set-hostname", guest.Hostname); err != nil {
 		return fmt.Errorf("set guest hostname: %w", err)
 	}
+	slog.Info("guest hostname configured", "hostname", guest.Hostname)
 	if err := os.MkdirAll("/var/lib/sandboxctl", 0o755); err != nil {
 		return fmt.Errorf("create guest state directory: %w", err)
 	}
@@ -228,6 +236,7 @@ func apply(ctx context.Context, metadata Metadata) error {
 	if err := os.Rename(markerPath, "/var/lib/sandboxctl/bootstrap-complete"); err != nil {
 		return fmt.Errorf("publish bootstrap marker: %w", err)
 	}
+	slog.Info("guest bootstrap completed", "hostname", guest.Hostname)
 	return nil
 }
 

@@ -79,6 +79,7 @@ if [[ $ready != true ]]; then
   cat "$ssh_output"
   printf 'Guest bootstrap did not complete within 120 seconds.\n' >&2
   printf 'Sandbox %s remains available for diagnosis.\n' "$name" >&2
+  printf 'Guest console log: /var/lib/sandboxctl/instances/%s/console.log\n' "$name" >&2
   exit 1
 fi
 

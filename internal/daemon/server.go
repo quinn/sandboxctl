@@ -109,7 +109,11 @@ func streamInterceptor(server any, stream grpc.ServerStream, info *grpc.StreamSe
 	if err := grpc.SetHeader(ctx, metadata.Pairs(RequestIDMetadataKey, requestIDs[0])); err != nil {
 		return status.Error(codes.Internal, "cannot set response request identifier")
 	}
-	return handler(server, &contextServerStream{ServerStream: stream, ctx: ctx})
+	started := time.Now()
+	slog.Info("RPC started", "method", info.FullMethod, "request_id", requestIDs[0])
+	err := handler(server, &contextServerStream{ServerStream: stream, ctx: ctx})
+	logRPCResult(info.FullMethod, requestIDs[0], started, err)
+	return err
 }
 
 type contextServerStream struct {
@@ -148,7 +152,20 @@ func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerIn
 	if err := grpc.SetHeader(ctx, metadata.Pairs(RequestIDMetadataKey, requestIDs[0])); err != nil {
 		return nil, status.Error(codes.Internal, "cannot set response request identifier")
 	}
-	return handler(ctx, request)
+	started := time.Now()
+	slog.Info("RPC started", "method", info.FullMethod, "request_id", requestIDs[0])
+	response, err := handler(ctx, request)
+	logRPCResult(info.FullMethod, requestIDs[0], started, err)
+	return response, err
+}
+
+func logRPCResult(method, requestID string, started time.Time, err error) {
+	attributes := []any{"method", method, "request_id", requestID, "duration", time.Since(started), "status", status.Code(err).String()}
+	if err != nil {
+		slog.Error("RPC failed", attributes...)
+		return
+	}
+	slog.Info("RPC completed", attributes...)
 }
 
 type service struct {

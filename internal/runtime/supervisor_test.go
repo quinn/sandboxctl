@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -104,6 +105,12 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 			if cfg.JailerCfg == nil || *cfg.JailerCfg.UID != 200001 {
 				t.Fatalf("factory received an unjailed configuration: %#v", cfg.JailerCfg)
 			}
+			if cfg.JailerCfg.Stdout == nil || cfg.JailerCfg.Stderr == nil {
+				t.Fatal("factory configuration has no guest console capture")
+			}
+			if _, err := cfg.JailerCfg.Stdout.Write([]byte("guest serial test\n")); err != nil {
+				t.Fatalf("write guest console: %v", err)
+			}
 			if metadata.Sandboxctl.Hostname != instance.Name || metadata.Sandboxctl.SSHUser != "dev" || metadata.Sandboxctl.Network.Address != "172.30.0.2/30" {
 				t.Fatalf("factory received invalid guest metadata: %#v", metadata)
 			}
@@ -132,6 +139,13 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 	}
 	if supervisor.Running(instance.Name) {
 		t.Fatal("supervisor still reports the stopped VM")
+	}
+	console, err := os.ReadFile(filepath.Join(paths.Instances, instance.Name, "console.log"))
+	if err != nil {
+		t.Fatalf("read guest console log: %v", err)
+	}
+	if !strings.Contains(string(console), "guest serial test") {
+		t.Fatalf("guest console log = %q", console)
 	}
 	if networkManager.removed != 1 {
 		t.Fatalf("TAP remove calls = %d, want 1", networkManager.removed)

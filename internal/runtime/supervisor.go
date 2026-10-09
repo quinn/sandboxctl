@@ -72,6 +72,7 @@ type supervisedMachine struct {
 	record   hoststate.RuntimeRecord
 	instance hoststate.Instance
 	path     string
+	console  *boundedConsoleLog
 	done     chan struct{}
 	err      error
 }
@@ -220,6 +221,19 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) (st
 	if err != nil {
 		return err
 	}
+	console, consolePath, err := openConsoleLog(s.StatePaths.Instances, instance.Name)
+	if err != nil {
+		return fmt.Errorf("prepare guest console log: %w", err)
+	}
+	keepConsole := false
+	defer func() {
+		if !keepConsole {
+			_ = console.Close()
+		}
+	}()
+	config.JailerCfg.Stdout = console
+	config.JailerCfg.Stderr = console
+	slog.Info("guest console capture ready", "name", instance.Name, "path", consolePath, "limit_bytes", consoleLogLimit)
 	publicKey, err := store.LoadPublicKey(instance.Name)
 	if err != nil {
 		return fmt.Errorf("load guest SSH public key: %w", err)
@@ -335,13 +349,14 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) (st
 		cleanupErr := s.cleanupFailedStart(machine, jailPath, instance)
 		return errors.Join(fmt.Errorf("save Firecracker process identity: %w", err), cleanupErr)
 	}
-	entry := &supervisedMachine{machine: machine, cancel: cancel, process: processRecord, record: runtimeRecord, instance: instance, path: jailPath, done: make(chan struct{})}
+	entry := &supervisedMachine{machine: machine, cancel: cancel, process: processRecord, record: runtimeRecord, instance: instance, path: jailPath, console: console, done: make(chan struct{})}
 	s.mu.Lock()
 	if s.running == nil {
 		s.running = make(map[string]*supervisedMachine)
 	}
 	s.running[instance.Name] = entry
 	s.mu.Unlock()
+	keepConsole = true
 	go s.wait(instance.Name, entry, runContext)
 	return nil
 }
@@ -402,6 +417,11 @@ func (s *Supervisor) Stop(ctx context.Context, name string, force bool) (stopErr
 func (s *Supervisor) wait(name string, entry *supervisedMachine, ctx context.Context) {
 	entry.err = entry.machine.Wait(ctx)
 	entry.cancel()
+	consoleBytes, consoleTruncated := entry.console.Stats()
+	if err := entry.console.Close(); err != nil {
+		entry.err = errors.Join(entry.err, fmt.Errorf("close guest console log: %w", err))
+	}
+	slog.Info("guest console capture closed", "name", name, "bytes", consoleBytes, "truncated", consoleTruncated)
 	tapErr := s.removeTap(entry.instance)
 	if tapErr != nil {
 		entry.err = errors.Join(entry.err, fmt.Errorf("remove stopped TAP device: %w", tapErr))

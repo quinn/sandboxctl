@@ -3,19 +3,34 @@ package cmdutil
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
+	"time"
 )
 
 // MainDispatch replaces the current process with the selected external command.
 func MainDispatch(prefix string) {
+	if len(os.Args) > 1 {
+		slog.Info("dispatching command", "command", prefix+os.Args[1])
+	}
 	ExitOnError(Dispatch(prefix, os.Args[1:]))
 }
 
 // Main runs a command handler and reports an error with a nonzero exit status.
 func Main(run func([]string) error) {
-	ExitOnError(run(os.Args[1:]))
+	command := filepath.Base(os.Args[0])
+	started := time.Now()
+	slog.Info("command started", "command", command)
+	err := run(os.Args[1:])
+	if err != nil {
+		slog.Error("command failed", "command", command, "duration", time.Since(started), "error", err)
+	} else {
+		slog.Info("command completed", "command", command, "duration", time.Since(started))
+	}
+	ExitOnError(err)
 }
 
 // ExitOnError reports err and exits with status 1 when err is not nil.

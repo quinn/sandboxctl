@@ -2,8 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -14,8 +13,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	if err := guestbootstrap.Run(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "sandboxctl-bootstrap:", err)
+		slog.Error("guest bootstrap failed", "error", err)
 		os.Exit(1)
 	}
-	log.Print("sandboxctl-bootstrap: guest configuration is complete")
 }
