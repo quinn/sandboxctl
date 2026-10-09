@@ -206,6 +206,37 @@ func TestServerCreatesStoppedInstance(t *testing.T) {
 	}
 }
 
+func TestServerDeletesOnlyStoppedInstances(t *testing.T) {
+	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
+	store := hoststate.Store{Paths: paths}
+	id, err := hoststate.NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := daemonTestInstance(id, "dev1")
+	if err := store.Save(instance); err != nil {
+		t.Fatal(err)
+	}
+	manager := &deleteTestInstanceManager{Manager: hoststate.Manager{Store: store}}
+	runtime := &deleteTestRuntimeController{testRuntimeController: testRuntimeController{running: map[string]bool{"dev1": true}}}
+	server := daemon.NewServerWithInstanceManager("test-version", runtime, manager)
+	connection := startServerWithGRPCServer(t, server)
+	service := controlpb.NewControlServiceClient(connection)
+	ctx, cancel := callContext(daemon.APIVersion, "adadadadadadadadadadadadadadadad")
+	_, err = service.DeleteInstance(ctx, &controlpb.DeleteInstanceRequest{Name: "dev1"})
+	cancel()
+	if status.Code(err) != codes.FailedPrecondition || manager.deleted {
+		t.Fatalf("DeleteInstance() for running sandbox = %v, deleted=%t", err, manager.deleted)
+	}
+	runtime.running["dev1"] = false
+	ctx, cancel = callContext(daemon.APIVersion, "aeaeaeaeaeaeaeaeaeaeaeaeaeaeaeae")
+	response, err := service.DeleteInstance(ctx, &controlpb.DeleteInstanceRequest{Name: "dev1"})
+	cancel()
+	if err != nil || response.GetName() != "dev1" || !manager.deleted {
+		t.Fatalf("DeleteInstance() for stopped sandbox = %v, response=%v, deleted=%t", err, response, manager.deleted)
+	}
+}
+
 func TestServerImportsVerifiedImageStream(t *testing.T) {
 	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
 	manager := hoststate.Manager{
@@ -365,6 +396,25 @@ type testRuntimeController struct {
 	running  map[string]bool
 	force    bool
 	startErr error
+}
+
+type deleteTestRuntimeController struct{ testRuntimeController }
+
+func (r *deleteTestRuntimeController) DeleteStopped(_ context.Context, _ hoststate.Instance, remove func() error) error {
+	if r.Running("dev1") {
+		return fmt.Errorf("sandbox is running")
+	}
+	return remove()
+}
+
+type deleteTestInstanceManager struct {
+	hoststate.Manager
+	deleted bool
+}
+
+func (manager *deleteTestInstanceManager) Delete(hoststate.Instance) error {
+	manager.deleted = true
+	return nil
 }
 
 func (r *testRuntimeController) Ready() bool { return true }

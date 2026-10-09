@@ -33,6 +33,7 @@ const (
 	MaxCreateDuration     = 2 * time.Minute
 	MaxStartDuration      = 2 * time.Minute
 	MaxStopDuration       = 30 * time.Second
+	MaxDeleteDuration     = 30 * time.Second
 	MaxInstallDuration    = 30 * time.Minute
 )
 
@@ -79,7 +80,8 @@ func newServerConfigured(version string, runtime RuntimeStatus, instances Instan
 		grpc.StreamInterceptor(streamInterceptor),
 	)
 	controller, _ := runtime.(RuntimeController)
-	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, controller: controller, instances: instances, creator: creator, imagePaths: imagePaths, imageSlot: make(chan struct{}, 1)})
+	deleter, _ := creator.(InstanceDeleter)
+	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, controller: controller, instances: instances, creator: creator, deleter: deleter, imagePaths: imagePaths, imageSlot: make(chan struct{}, 1)})
 	return server
 }
 
@@ -146,6 +148,8 @@ func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerIn
 		duration = MaxStartDuration
 	} else if info.FullMethod == controlpb.ControlService_StopInstance_FullMethodName {
 		duration = MaxStopDuration
+	} else if info.FullMethod == controlpb.ControlService_DeleteInstance_FullMethodName {
+		duration = MaxDeleteDuration
 	}
 	ctx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
@@ -175,6 +179,7 @@ type service struct {
 	controller RuntimeController
 	instances  InstanceStore
 	creator    InstanceCreator
+	deleter    InstanceDeleter
 	imagePaths *hoststate.Paths
 	imageSlot  chan struct{}
 }
@@ -196,11 +201,21 @@ type InstanceManager interface {
 	InstanceCreator
 }
 
+// InstanceDeleter removes a stopped instance and releases its allocation.
+type InstanceDeleter interface {
+	Delete(hoststate.Instance) error
+}
+
 // RuntimeController starts and stops jailed Firecracker machines.
 type RuntimeController interface {
 	Start(context.Context, hoststate.Instance) error
 	Stop(context.Context, string, bool) error
 	Running(string) bool
+}
+
+// RuntimeDeleter proves runtime resources are gone before removing instance state.
+type RuntimeDeleter interface {
+	DeleteStopped(context.Context, hoststate.Instance, func() error) error
 }
 
 // RuntimeStateReporter reports persisted runtime state after daemon restart.
@@ -337,6 +352,37 @@ func (s *service) StopInstance(ctx context.Context, request *controlpb.StopInsta
 		return nil, status.Error(codes.FailedPrecondition, "cannot stop sandbox")
 	}
 	return &controlpb.StopInstanceResponse{Instance: s.protocolInstance(instance)}, nil
+}
+
+func (s *service) DeleteInstance(ctx context.Context, request *controlpb.DeleteInstanceRequest) (*controlpb.DeleteInstanceResponse, error) {
+	if s.instances == nil || s.deleter == nil {
+		return nil, status.Error(codes.FailedPrecondition, "instance deletion is unavailable")
+	}
+	runtimeDeleter, ok := s.controller.(RuntimeDeleter)
+	if !ok {
+		return nil, status.Error(codes.FailedPrecondition, "runtime cleanup is unavailable")
+	}
+	instance, err := s.instances.Load(request.GetName())
+	if errors.Is(err, hoststate.ErrInvalidName) {
+		return nil, status.Error(codes.InvalidArgument, "invalid sandbox name")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, status.Error(codes.NotFound, "sandbox does not exist")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "cannot read sandbox state")
+	}
+	if err := runtimeDeleter.DeleteStopped(ctx, instance, func() error { return s.deleter.Delete(instance) }); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, status.Error(codes.Canceled, "delete request was canceled")
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, status.Error(codes.DeadlineExceeded, "delete request exceeded its time limit")
+		}
+		slog.Error("delete sandbox failed", "name", instance.Name, "error", err)
+		return nil, status.Error(codes.FailedPrecondition, "cannot delete sandbox")
+	}
+	return &controlpb.DeleteInstanceResponse{Name: instance.Name}, nil
 }
 
 func (s *service) InstallImage(stream controlpb.ControlService_InstallImageServer) error {

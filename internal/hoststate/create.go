@@ -18,6 +18,7 @@ var (
 	ErrImageLookupUnavailable = errors.New("installed image lookup is unavailable")
 	ErrAlreadyStarting        = errors.New("sandbox start is already in progress")
 	ErrAlreadyRunning         = errors.New("sandbox is already running")
+	ErrInstanceChanged        = errors.New("sandbox state changed during deletion")
 )
 
 // ImageVersions provides the pinned version for an installed image name.
@@ -153,3 +154,22 @@ func (m Manager) List() ([]Instance, error) { return m.Store.List() }
 
 // Load returns the saved instance named name.
 func (m Manager) Load(name string) (Instance, error) { return m.Store.Load(name) }
+
+// Delete removes the instance files and releases host resources after the
+// runtime has proved that the VM and its jail are gone.
+func (m Manager) Delete(instance Instance) error {
+	current, err := m.Store.Load(instance.Name)
+	if err != nil {
+		return err
+	}
+	if current.ID != instance.ID {
+		return ErrInstanceChanged
+	}
+	proof := ReleaseProof{
+		VMStopped: true, JailRemoved: true, IdentityProcessesStopped: true,
+		RuntimeFilesRemoved: true, InstanceDeleted: true,
+	}
+	return m.Allocator.ReleaseAfter(instance.Name, proof, func() error {
+		return m.Store.RemoveInstance(current)
+	})
+}

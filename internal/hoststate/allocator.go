@@ -123,6 +123,13 @@ func (a Allocator) WithAllocation(name string, use func(Allocation) error) error
 
 // Release removes an assignment after the caller proves all required resources are gone.
 func (a Allocator) Release(name string, proof ReleaseProof) error {
+	return a.ReleaseAfter(name, proof, nil)
+}
+
+// ReleaseAfter removes an allocation only after remove succeeds while holding
+// the allocation registry lock. This prevents a new instance from reusing the
+// identity while the old instance directory is still being removed.
+func (a Allocator) ReleaseAfter(name string, proof ReleaseProof, remove func() error) error {
 	if !safeName.MatchString(name) {
 		return ErrInvalidName
 	}
@@ -143,6 +150,11 @@ func (a Allocator) Release(name string, proof ReleaseProof) error {
 	}
 	if _, ok := registry.Allocations[name]; !ok {
 		return fmt.Errorf("allocation for sandbox %q does not exist", name)
+	}
+	if remove != nil {
+		if err := remove(); err != nil {
+			return err
+		}
 	}
 	delete(registry.Allocations, name)
 	return a.writeRegistry(registry)

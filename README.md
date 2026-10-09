@@ -14,6 +14,8 @@ sandboxctl image install default --version sha256:DIGEST
 sandboxctl create dev1 --cpus 4 --memory 8192
 sandboxctl start dev1
 ssh sandbox-dev1
+sandboxctl stop dev1
+sandboxctl delete dev1
 ```
 
 The user can include the managed configuration in the main SSH configuration.
@@ -30,6 +32,7 @@ The current implementation can do these operations:
 - Create a sparse ext4 state disk for a stopped instance.
 - Generate the OpenSSH configuration fragment from daemon state.
 - Create and configure a per-instance TAP, then start and stop a jailed VM through sandboxd.
+- Delete a stopped sandbox after sandboxd verifies that its process, jail, TAP, and allocated identity are clear.
 
 The create operation needs an installed image manifest and the host service.
 Image installation uses a verified local image bundle.
@@ -38,7 +41,7 @@ The current implementation cannot yet do these operations:
 
 - Build a user guest image through `sandboxctl image build`.
 - Configure routed guest networking and firewall rules.
-- Delete or reset a sandbox.
+- Reset a sandbox.
 
 The jailed runtime and guest bootstrap passed a live boot test on a KVM host.
 The test confirmed key login and bootstrap state after a stop and restart.

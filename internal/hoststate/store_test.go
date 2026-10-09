@@ -235,6 +235,74 @@ func TestStoreSavesAndRemovesRuntimeRecordByIdentity(t *testing.T) {
 	}
 }
 
+func TestStoreRemoveInstanceDeletesOnlyPrivateManagedFiles(t *testing.T) {
+	if os.Getuid() == 0 || os.Getgid() == 0 {
+		t.Skip("test requires an unprivileged owner")
+	}
+	paths := PathsAt(filepath.Join(t.TempDir(), "state"))
+	store := Store{Paths: paths}
+	id, err := NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := testInstance(id)
+	instance.HostUID = os.Getuid()
+	instance.HostGID = os.Getgid()
+	if err := store.SaveWithPublicKey(instance, testPublicKey()); err != nil {
+		t.Fatal(err)
+	}
+	disk := filepath.Join(paths.Instances, instance.Name, "state.ext4")
+	if err := os.WriteFile(disk, []byte("disk"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RemoveInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(paths.Instances, instance.Name)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("instance directory remains: %v", err)
+	}
+}
+
+func TestStoreRemoveInstanceRefusesUnknownFilesAndRuntimeRecords(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		file string
+	}{
+		{name: "unknown", file: "unmanaged.data"},
+		{name: "runtime", file: "runtime.json"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if os.Getuid() == 0 || os.Getgid() == 0 {
+				t.Skip("test requires an unprivileged owner")
+			}
+			paths := PathsAt(filepath.Join(t.TempDir(), "state"))
+			store := Store{Paths: paths}
+			id, err := NewID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			instance := testInstance(id)
+			instance.HostUID = os.Getuid()
+			instance.HostGID = os.Getgid()
+			if err := store.SaveWithPublicKey(instance, testPublicKey()); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(paths.Instances, instance.Name, "state.ext4"), []byte("disk"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(paths.Instances, instance.Name, test.file), []byte("data"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.RemoveInstance(instance); err == nil {
+				t.Fatal("removed an instance with an unsafe file")
+			}
+			if _, err := store.Load(instance.Name); err != nil {
+				t.Fatalf("instance record was removed after refusal: %v", err)
+			}
+		})
+	}
+}
+
 func testInstance(id string) Instance {
 	return Instance{
 		SchemaVersion:  InstanceSchemaVersion,

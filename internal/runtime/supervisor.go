@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -83,18 +84,20 @@ type supervisedMachine struct {
 
 // Supervisor owns SDK machine lifecycles started by sandboxd.
 type Supervisor struct {
-	StatePaths     hoststate.Paths
-	Images         BootImageResolver
-	Paths          JailedRuntimePaths
-	Factory        MachineFactory
-	Network        NetworkManager
-	ForceStop      func(process.Record) error
-	WaitProcess    func(context.Context, process.Record) error
-	VerifyIdentity func(int, uint32, uint32) error
+	StatePaths      hoststate.Paths
+	Images          BootImageResolver
+	Paths           JailedRuntimePaths
+	Factory         MachineFactory
+	Network         NetworkManager
+	InterfaceExists func(string) (bool, error)
+	ForceStop       func(process.Record) error
+	WaitProcess     func(context.Context, process.Record) error
+	VerifyIdentity  func(int, uint32, uint32) error
 
 	mu       sync.Mutex
 	starting map[string]bool
 	stopping map[string]bool
+	deleting map[string]bool
 	running  map[string]*supervisedMachine
 }
 
@@ -177,7 +180,7 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) (st
 		s.mu.Unlock()
 		return nil
 	}
-	if s.stopping[instance.Name] {
+	if s.stopping[instance.Name] || s.deleting[instance.Name] {
 		s.mu.Unlock()
 		return hoststate.ErrAlreadyStarting
 	}
@@ -376,7 +379,7 @@ func (s *Supervisor) Stop(ctx context.Context, name string, force bool) (stopErr
 		slog.Info("sandbox stopped", "name", name, "force", force)
 	}()
 	s.mu.Lock()
-	if s.starting[name] || s.stopping[name] {
+	if s.starting[name] || s.stopping[name] || s.deleting[name] {
 		s.mu.Unlock()
 		return hoststate.ErrAlreadyStarting
 	}
@@ -416,6 +419,106 @@ func (s *Supervisor) Stop(ctx context.Context, name string, force bool) (stopErr
 	case <-ctx.Done():
 		return fmt.Errorf("wait for Firecracker machine to stop: %w", ctx.Err())
 	}
+}
+
+// DeleteStopped proves that the instance has no runtime resources, then calls
+// remove while blocking concurrent start and stop operations.
+func (s *Supervisor) DeleteStopped(ctx context.Context, instance hoststate.Instance, remove func() error) (deleteErr error) {
+	slog.Info("checking sandbox for deletion", "name", instance.Name, "instance_id", instance.ID, "host_uid", instance.HostUID, "host_gid", instance.HostGID)
+	defer func() {
+		if deleteErr != nil {
+			slog.Error("sandbox deletion check failed", "name", instance.Name, "instance_id", instance.ID, "error", deleteErr)
+			return
+		}
+		slog.Info("sandbox deletion completed", "name", instance.Name, "instance_id", instance.ID)
+	}()
+	if remove == nil {
+		return errors.New("instance removal callback is required")
+	}
+	s.mu.Lock()
+	if s.starting[instance.Name] || s.stopping[instance.Name] || s.deleting[instance.Name] || s.running[instance.Name] != nil {
+		s.mu.Unlock()
+		return errors.New("cannot delete a running or changing sandbox")
+	}
+	if s.deleting == nil {
+		s.deleting = make(map[string]bool)
+	}
+	s.deleting[instance.Name] = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.deleting, instance.Name)
+		s.mu.Unlock()
+	}()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	store := hoststate.Store{Paths: s.StatePaths}
+	record, err := store.LoadRuntime(instance.Name)
+	if err == nil {
+		live, checkErr := s.recordLive(instance, record)
+		if checkErr != nil {
+			return fmt.Errorf("check sandbox process identity: %w", checkErr)
+		}
+		if live {
+			return errors.New("cannot delete a running sandbox")
+		}
+		if err := s.stopRecorded(ctx, instance.Name, false); err != nil {
+			return fmt.Errorf("remove stopped runtime resources: %w", err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect sandbox runtime state: %w", err)
+	}
+	if _, err := os.Lstat(filepath.Join(s.StatePaths.Instances, instance.Name, "runtime.json")); !errors.Is(err, os.ErrNotExist) {
+		if err == nil {
+			return errors.New("runtime record remains after cleanup")
+		}
+		return fmt.Errorf("inspect runtime record: %w", err)
+	}
+	jailPath := filepath.Join(s.Paths.JailRoot, filepath.Base(s.Paths.FirecrackerBinary), instance.ID)
+	if _, err := os.Lstat(jailPath); !errors.Is(err, os.ErrNotExist) {
+		if err == nil {
+			return errors.New("jail remains after cleanup")
+		}
+		return fmt.Errorf("inspect jail: %w", err)
+	}
+	interfaceExists := s.InterfaceExists
+	if interfaceExists == nil {
+		interfaceExists = func(name string) (bool, error) {
+			_, err := net.InterfaceByName(name)
+			if errors.Is(err, syscall.ENODEV) || errors.Is(err, syscall.ENXIO) {
+				return false, nil
+			}
+			return err == nil, err
+		}
+	}
+	present, err := interfaceExists(instance.TapDevice)
+	if err != nil {
+		return fmt.Errorf("inspect TAP device: %w", err)
+	}
+	if present {
+		if removeErr := s.removeTap(instance); removeErr != nil {
+			return fmt.Errorf("remove stopped TAP device: %w", removeErr)
+		}
+		present, err = interfaceExists(instance.TapDevice)
+		if err != nil {
+			return fmt.Errorf("inspect TAP device after cleanup: %w", err)
+		}
+		if present {
+			return errors.New("TAP device remains after cleanup")
+		}
+	}
+	active, err := process.HasIdentity(uint32(instance.HostUID), uint32(instance.HostGID))
+	if err != nil {
+		return fmt.Errorf("inspect allocated host identity: %w", err)
+	}
+	if active {
+		return errors.New("a process still uses the allocated host identity")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return remove()
 }
 
 func (s *Supervisor) wait(name string, entry *supervisedMachine, ctx context.Context) {

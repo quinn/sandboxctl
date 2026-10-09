@@ -381,6 +381,84 @@ func (s Store) List() ([]Instance, error) {
 	return instances, nil
 }
 
+// RemoveInstance removes a stopped instance directory after checking every file.
+// The state disk must be owned by the instance UID and GID. Other files must be
+// owned by the daemon. Unknown files and runtime records prevent deletion.
+func (s Store) RemoveInstance(instance Instance) error {
+	if err := validate(instance); err != nil {
+		return err
+	}
+	if err := s.Paths.Ensure(); err != nil {
+		return err
+	}
+	directory := filepath.Join(s.Paths.Instances, instance.Name)
+	info, err := os.Lstat(directory)
+	if err != nil {
+		return fmt.Errorf("inspect instance directory: %w", err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || !ok || int(stat.Uid) != os.Geteuid() || info.Mode().Perm() != 0o700 {
+		return errors.New("instance directory must be private and owned by sandboxd")
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return fmt.Errorf("read instance directory: %w", err)
+	}
+	allowed := map[string]bool{"instance.json": true, "authorized_key": true, "state.ext4": true, "console.log": true, "runtime.json": true}
+	if len(entries) > len(allowed) {
+		return errors.New("instance directory contains unexpected files")
+	}
+	seen := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		if !allowed[name] {
+			return fmt.Errorf("instance directory contains unexpected file %q", name)
+		}
+		seen[name] = true
+		path := filepath.Join(directory, name)
+		fileInfo, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("inspect instance file %s: %w", name, err)
+		}
+		fileStat, ok := fileInfo.Sys().(*syscall.Stat_t)
+		if !fileInfo.Mode().IsRegular() || fileInfo.Mode()&os.ModeSymlink != 0 || !ok {
+			return fmt.Errorf("instance file %s must be a regular file", name)
+		}
+		if name == "state.ext4" {
+			if uint32(fileStat.Uid) != uint32(instance.HostUID) || uint32(fileStat.Gid) != uint32(instance.HostGID) || fileInfo.Mode().Perm() != 0o600 {
+				return errors.New("state disk ownership or permissions do not match the instance")
+			}
+		} else if int(fileStat.Uid) != os.Geteuid() || fileInfo.Mode().Perm() != 0o600 {
+			return fmt.Errorf("instance file %s must be private and owned by sandboxd", name)
+		}
+		if name == "runtime.json" {
+			return errors.New("runtime record must be removed before instance deletion")
+		}
+	}
+	for _, required := range []string{"instance.json", "authorized_key", "state.ext4"} {
+		if !seen[required] {
+			return fmt.Errorf("instance directory is missing %s", required)
+		}
+	}
+	for _, entry := range entries {
+		if err := os.Remove(filepath.Join(directory, entry.Name())); err != nil {
+			return fmt.Errorf("remove instance file %s: %w", entry.Name(), err)
+		}
+	}
+	if err := os.Remove(directory); err != nil {
+		return fmt.Errorf("remove instance directory: %w", err)
+	}
+	parent, err := os.Open(s.Paths.Instances)
+	if err != nil {
+		return fmt.Errorf("open instances directory: %w", err)
+	}
+	defer parent.Close()
+	if err := parent.Sync(); err != nil {
+		return fmt.Errorf("sync instances directory: %w", err)
+	}
+	return nil
+}
+
 func validate(instance Instance) error {
 	if !safeName.MatchString(instance.Name) {
 		return errors.New("invalid sandbox name")
@@ -397,7 +475,7 @@ func validate(instance Instance) error {
 	if instance.VCPUs < 1 || instance.MemoryMiB < 1 || instance.StateDiskBytes < 1 {
 		return errors.New("instance resource limits must be positive")
 	}
-	if instance.HostUID < 1 || instance.HostGID < 1 {
+	if instance.HostUID < 1 || instance.HostGID < 1 || uint64(instance.HostUID) > uint64(^uint32(0)) || uint64(instance.HostGID) > uint64(^uint32(0)) {
 		return errors.New("instance host UID and GID must be positive")
 	}
 	if instance.Image == "" || instance.ImageVersion == "" || instance.TapDevice == "" || instance.GuestIP == "" {

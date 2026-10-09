@@ -123,6 +123,10 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 	if !supervisor.Running(instance.Name) {
 		t.Fatal("supervisor does not report the started VM")
 	}
+	removed := false
+	if err := supervisor.DeleteStopped(context.Background(), instance, func() error { removed = true; return nil }); err == nil || removed {
+		t.Fatalf("DeleteStopped() removed a running sandbox: error=%v removed=%t", err, removed)
+	}
 	if err := supervisor.Start(context.Background(), instance); err != nil {
 		t.Fatalf("repeated Start(): %v", err)
 	}
@@ -154,6 +158,41 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 	defer machine.mu.Unlock()
 	if !machine.shutdownCall || machine.forceCall {
 		t.Fatalf("stop calls: graceful=%t force=%t", machine.shutdownCall, machine.forceCall)
+	}
+}
+
+func TestSupervisorDeleteStoppedRequiresCleanRuntimeResources(t *testing.T) {
+	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
+	instance := supervisorTestInstance()
+	if err := saveSupervisorTestInstance(paths, instance); err != nil {
+		t.Fatal(err)
+	}
+	supervisor := &Supervisor{
+		StatePaths:      paths,
+		InterfaceExists: func(string) (bool, error) { return false, nil },
+		Paths: JailedRuntimePaths{
+			FirecrackerBinary: "/usr/bin/firecracker", JailerBinary: "/usr/bin/jailer",
+			JailRoot: paths.Jails, APISocket: "firecracker.socket",
+		},
+	}
+	removed := false
+	if err := supervisor.DeleteStopped(context.Background(), instance, func() error { removed = true; return nil }); err != nil {
+		t.Fatalf("DeleteStopped() for stopped sandbox: %v", err)
+	}
+	if !removed {
+		t.Fatal("DeleteStopped() did not remove the instance")
+	}
+
+	if err := saveSupervisorTestInstance(paths, instance); err != nil {
+		t.Fatal(err)
+	}
+	jail := filepath.Join(paths.Jails, "firecracker", instance.ID)
+	if err := os.MkdirAll(jail, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	removed = false
+	if err := supervisor.DeleteStopped(context.Background(), instance, func() error { removed = true; return nil }); err == nil || removed {
+		t.Fatalf("DeleteStopped() ignored a leftover jail: error=%v removed=%t", err, removed)
 	}
 }
 

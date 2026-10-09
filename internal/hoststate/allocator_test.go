@@ -107,6 +107,29 @@ func TestAllocatorReleaseRequiresAllConditionsAndMakesIDsReusable(t *testing.T) 
 	}
 }
 
+func TestAllocatorReleaseAfterKeepsReservationWhenRemovalFails(t *testing.T) {
+	allocator := testAllocator(t)
+	initial, err := allocator.Allocate("dev1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	removalErr := fmt.Errorf("disk removal failed")
+	err = allocator.ReleaseAfter("dev1", ReleaseProof{
+		VMStopped: true, JailRemoved: true, IdentityProcessesStopped: true,
+		RuntimeFilesRemoved: true, InstanceDeleted: true,
+	}, func() error { return removalErr })
+	if err != removalErr {
+		t.Fatalf("ReleaseAfter() error = %v, want %v", err, removalErr)
+	}
+	next, err := allocator.Allocate("dev2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.UID == initial.UID || next.GID == initial.GID || next.Subnet == initial.Subnet || next.Tap == initial.Tap {
+		t.Fatalf("failed removal released the allocation: initial=%+v next=%+v", initial, next)
+	}
+}
+
 func TestAllocatorSerializesConcurrentRequests(t *testing.T) {
 	allocator := testAllocator(t)
 	const count = 24

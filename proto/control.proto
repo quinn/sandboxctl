@@ -26,6 +26,9 @@ service ControlService {
   // Stops a running sandbox instance.
   rpc StopInstance(StopInstanceRequest) returns (StopInstanceResponse);
 
+  // Deletes a stopped sandbox instance and releases its host allocation.
+  rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse);
+
   // Imports a pinned image manifest and its fixed boot artifacts.
   rpc InstallImage(stream InstallImageRequest) returns (InstallImageResponse);
 }
@@ -104,6 +107,16 @@ message StopInstanceRequest {
 message StopInstanceResponse {
   // Contains the stopped sandbox state.
   Instance instance = 1;
+}
+
+message DeleteInstanceRequest {
+  // Names the stopped sandbox to delete.
+  string name = 1;
+}
+
+message DeleteInstanceResponse {
+  // Names the deleted sandbox.
+  string name = 1;
 }
 
 message InstallImageRequest {

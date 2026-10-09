@@ -32,6 +32,7 @@ Usage:
   sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]
   sandboxctl start NAME [--dry-run]
   sandboxctl stop NAME [--force]
+  sandboxctl delete NAME [--yes]
   sandboxctl list
   sandboxctl ssh NAME [COMMAND ...]
   sandboxctl paths
@@ -43,6 +44,7 @@ Connect with ssh sandbox-NAME after you add the block.
 Image install reads a verified image bundle from the XDG data directory.
 Create requires an installed image.
 Start requires an installed image, a prepared TAP device, and KVM access.
+Delete removes a stopped sandbox and its writable state disk.
 Guest networking is not configured yet.
 Read docs/CONTINUE.md before you use it with important data.`)
 }

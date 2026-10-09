@@ -72,6 +72,31 @@ func Owner(pid int) (uint32, uint32, error) {
 	return uid, gid, nil
 }
 
+// HasIdentity reports whether any process uses the effective UID or GID.
+func HasIdentity(uid, gid uint32) (bool, error) {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return false, fmt.Errorf("read process table: %w", err)
+	}
+	for _, entry := range entries {
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil || pid < 1 || !entry.IsDir() {
+			continue
+		}
+		processUID, processGID, err := Owner(pid)
+		if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ESRCH) {
+			continue
+		}
+		if err != nil {
+			return false, fmt.Errorf("inspect process %d identity: %w", pid, err)
+		}
+		if processUID == uid || processGID == gid {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // BootID returns the identifier for the current Linux boot.
 func BootID() (string, error) {
 	data, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
