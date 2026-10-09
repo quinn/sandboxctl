@@ -26,6 +26,7 @@ func TestDaemonVMFactoryCreatesWaitsAndDeletesBuilder(t *testing.T) {
 	factory := DaemonVMFactory{
 		Service:      service,
 		Image:        "builder-image",
+		ImageVersion: testBuilderVersion,
 		SSHPaths:     config.Paths{StateDir: stateDir, Keys: filepath.Join(stateDir, "keys")},
 		SSHPublicKey: "ssh-ed25519 AAAA",
 		ReadyTimeout: time.Second,
@@ -80,7 +81,7 @@ func TestDaemonVMFactoryCleansUpAfterUncertainStartFailure(t *testing.T) {
 		startErr: errors.New("start response was lost"),
 	}
 	factory := DaemonVMFactory{
-		Service: service, Image: "builder-image", SSHPaths: config.Paths{StateDir: stateDir, Keys: filepath.Join(stateDir, "keys")},
+		Service: service, Image: "builder-image", ImageVersion: testBuilderVersion, SSHPaths: config.Paths{StateDir: stateDir, Keys: filepath.Join(stateDir, "keys")},
 		SSHPublicKey: "ssh-ed25519 AAAA",
 	}
 
@@ -104,9 +105,11 @@ type lifecycleServiceStub struct {
 	deleted  int
 }
 
+const testBuilderVersion = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 func (service *lifecycleServiceStub) CreateInstance(_ context.Context, request *controlpb.CreateInstanceRequest, _ ...grpc.CallOption) (*controlpb.CreateInstanceResponse, error) {
 	service.create = request
-	return &controlpb.CreateInstanceResponse{Instance: &controlpb.Instance{Name: request.GetName()}}, nil
+	return &controlpb.CreateInstanceResponse{Instance: &controlpb.Instance{Name: request.GetName(), ImageVersion: testBuilderVersion}}, nil
 }
 
 func (service *lifecycleServiceStub) StartInstance(_ context.Context, request *controlpb.StartInstanceRequest, _ ...grpc.CallOption) (*controlpb.StartInstanceResponse, error) {

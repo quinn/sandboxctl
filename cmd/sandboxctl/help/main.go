@@ -29,6 +29,7 @@ Usage:
   sandboxctl doctor
   sandboxctl init
   sandboxctl image install NAME --version sha256:DIGEST
+  sandboxctl image build NAME --base-image IMAGE@sha256:DIGEST --builder-version sha256:DIGEST --guest-version VERSION [--builder-image NAME] [--distribution debian|ubuntu]
   sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]
   sandboxctl start NAME [--dry-run]
   sandboxctl stop NAME [--force]
@@ -42,6 +43,7 @@ Use sandboxctl ssh-config to print the block for your SSH configuration.
 Connect with ssh sandbox-NAME after you add the block.
 
 Image install reads a verified image bundle from the XDG data directory.
+Image build runs a fixed build service in a temporary builder VM and stages a verified bundle.
 Create requires an installed image.
 Start requires an installed image, a prepared TAP device, and KVM access.
 Delete removes a stopped sandbox and its writable state disk.

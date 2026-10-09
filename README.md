@@ -161,8 +161,21 @@ make stage-builder-image
 
 The target prints a `sandboxctl image install builder` command by default. This
 target only prepares the image-builder VM. It does not build a user guest image.
-The future `sandboxctl image build` command will run user image builds inside
-the isolated builder VM.
+
+Build a guest image from a digest-pinned base image with:
+
+```sh
+sandboxctl image build dev-image \
+  --base-image ubuntu:24.04@sha256:DIGEST \
+  --builder-image builder \
+  --builder-version sha256:BUILDER_DIGEST \
+  --distribution ubuntu \
+  --guest-version 24.04
+```
+
+The builder image must be installed. The command stages a private image bundle
+and prints the `sandboxctl image install` command. Guest Internet access is not
+available yet, so registry pulls may fail until routed networking is added.
 
 Run the live boot test with:
 

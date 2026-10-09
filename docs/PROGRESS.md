@@ -190,10 +190,12 @@ Added a static guest bootstrap binary to the Phase 1 initramfs. Before `switch_r
 
 ## Next tasks
 
-Added `internal/imagebuild/builder.DaemonVMFactory`. It creates a uniquely named builder with the installed sandboxd lifecycle API, scans its SSH host key into a private temporary known-hosts file, waits for the guest bootstrap marker, and removes the builder on close. The factory starts only the fixed builder image. It adds no daemon RPC and requires no package reinstall. Unit tests cover readiness and cleanup after an uncertain start result. The factory is not connected to `sandboxctl image build` yet, so it has no live end-to-end test.
+Added `internal/imagebuild/builder.DaemonVMFactory`. It creates a uniquely named builder with the installed sandboxd lifecycle API, checks that the installed image version matches the local bundle, scans the guest host key into a private temporary known-hosts file, waits for the bootstrap marker, and removes the builder on close. The factory starts only the fixed builder image. It adds no daemon RPC and requires no package reinstall.
 
-1. Add `sandboxctl image build`. Validate the installed builder image and pinned base image. Run `builder.Runner` through `DaemonVMFactory`. Stage a validated image manifest bundle under the XDG data directory. Build and run CLI changes from the workspace against the installed daemon. Reinstall the Arch package only when daemon code or installed daemon assets change.
-2. Run the image build on the user's KVM host. Confirm builder cleanup and validate the staged artifact bundle.
-3. Add routed guest Internet access and firewall rules if the builder cannot reach the required image registry.
+Added `sandboxctl image build`. It validates the target name, distribution, guest version, pinned OCI base image, and builder version. It runs `builder.Runner` through the daemon-managed VM factory. The finalizer verifies the builder artifacts, writes the new SquashFS and manifest to a private staging directory, and publishes the bundle atomically. The command prints the install command. Unit tests cover builder cleanup, manifest integrity, bundle permissions, and input validation. The command has not had a live build test. Guest Internet routing is still absent, so registry access is the expected blocker for the first build.
+
+1. Run `sandboxctl image build` on the user's KVM host with the workspace CLI and installed daemon. Confirm builder cleanup and observe registry access.
+2. Add routed guest Internet access and firewall rules if the build cannot reach the required image registry.
+3. Verify the staged bundle by installing it and booting a guest.
 4. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
 5. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.

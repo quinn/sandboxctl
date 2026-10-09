@@ -37,6 +37,7 @@ const (
 
 var (
 	builderImageNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+	imageVersionPattern     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	builderSSHUserPattern   = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
 )
 
@@ -57,6 +58,7 @@ type KeyScanner interface {
 type DaemonVMFactory struct {
 	Service        LifecycleService
 	Image          string
+	ImageVersion   string
 	SSHPaths       config.Paths
 	SSHPublicKey   string
 	SSHPath        string
@@ -68,7 +70,7 @@ type DaemonVMFactory struct {
 
 // Start creates a builder sandbox, starts it, and waits for guest bootstrap.
 func (factory DaemonVMFactory) Start(ctx context.Context) (VM, error) {
-	if factory.Service == nil || !builderImageNamePattern.MatchString(factory.Image) || factory.SSHPublicKey == "" {
+	if factory.Service == nil || !builderImageNamePattern.MatchString(factory.Image) || !imageVersionPattern.MatchString(factory.ImageVersion) || factory.SSHPublicKey == "" {
 		return nil, errors.New("builder lifecycle configuration is incomplete")
 	}
 	if factory.ReadyTimeout <= 0 {
@@ -123,7 +125,7 @@ func (factory DaemonVMFactory) Start(ctx context.Context) (VM, error) {
 
 	vm := &daemonVM{service: factory.Service, name: name, knownHostsDir: instanceDir}
 	createCtx, cancel := context.WithTimeout(ctx, daemon.MaxCreateDuration)
-	_, err = factory.Service.CreateInstance(createCtx, &controlpb.CreateInstanceRequest{
+	createResponse, err := factory.Service.CreateInstance(createCtx, &controlpb.CreateInstanceRequest{
 		Name: name, Vcpus: defaultBuilderVCPUs, MemoryMib: defaultBuilderMemoryMiB,
 		StateDiskBytes: defaultBuilderDiskBytes, Image: factory.Image, SshPublicKey: factory.SSHPublicKey,
 	})
@@ -133,6 +135,12 @@ func (factory DaemonVMFactory) Start(ctx context.Context) (VM, error) {
 		return nil, fmt.Errorf("create builder sandbox: %w", err)
 	}
 	vm.created = true
+	if createResponse == nil || createResponse.GetInstance() == nil {
+		return vm, errors.New("sandboxd returned no builder create response")
+	}
+	if createResponse.GetInstance().GetImageVersion() != factory.ImageVersion {
+		return vm, errors.New("installed builder image version does not match the selected bundle")
+	}
 	slog.Info("builder sandbox created", "name", name, "image", factory.Image,
 		"vcpus", defaultBuilderVCPUs, "memory_mib", defaultBuilderMemoryMiB,
 		"state_disk_bytes", defaultBuilderDiskBytes)
