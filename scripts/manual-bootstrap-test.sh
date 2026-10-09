@@ -3,7 +3,7 @@ set -Eeuo pipefail
 umask 077
 
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-image_dir="$repo_dir/tmp/test-data/sandboxctl/images/default"
+image_root="$repo_dir/tmp/test-data/sandboxctl/images/default"
 log_dir="$repo_dir/tmp/logs"
 mkdir -p "$log_dir"
 chmod 0700 "$log_dir"
@@ -23,10 +23,12 @@ done
   printf 'Firecracker needs read and write access to /dev/kvm.\n' >&2
   exit 1
 }
-[[ -f $image_dir/manifest.json ]] || {
+manifest=$(find "$image_root" -mindepth 2 -maxdepth 2 -type f -name manifest.json -printf '%T@ %p\n' 2>/dev/null | sort -nr | sed -n '1s/^[^ ]* //p')
+[[ -n $manifest ]] || {
   printf 'The staged guest image is missing. Run make manual-bootstrap-test.\n' >&2
   exit 1
 }
+image_dir=${manifest%/manifest.json}
 
 version=$(python3 - "$image_dir/manifest.json" <<'PY'
 import json
