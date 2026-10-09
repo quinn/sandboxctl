@@ -3,6 +3,7 @@ set -Eeuo pipefail
 umask 077
 
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+export PATH="$repo_dir/bin:$PATH"
 log_dir="$repo_dir/tmp/logs"
 mkdir -p "$log_dir"
 chmod 0700 "$log_dir"
@@ -17,6 +18,11 @@ for program in sandboxctl ssh timeout; do
     exit 1
   }
 done
+
+if [[ ! -x $repo_dir/bin/sandboxctl ]]; then
+  printf 'Build the workspace CLI first with make build.\n' >&2
+  exit 1
+fi
 
 name="builder-$(date +%s)-$$"
 alias="sandbox-$name"

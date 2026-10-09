@@ -71,7 +71,7 @@ stage-overlay-image: download-overlay-assets overlay-initramfs
 stage-builder-image: download-overlay-assets overlay-initramfs download-builder-tools
 	./scripts/stage-builder-image.sh
 
-manual-builder-test:
+manual-builder-test: build
 	./scripts/manual-builder-test.sh
 
 manual-delete-test: build

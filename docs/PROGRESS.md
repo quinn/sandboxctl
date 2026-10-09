@@ -12,7 +12,7 @@ Section 18 now records this gate.
 
 The live guest bootstrap test passed on 2026-10-09. It confirmed the completion marker, runtime hostname, and public-key SSH login on first boot and after stopping and restarting the same VM. The SSH login after restart also confirmed that the guest host key remained stable. The test log is `tmp/logs/guest-bootstrap-test.log`.
 
-The live builder seed VM test passed on 2026-10-09. The first boot exposed an interactive `systemd-firstboot` prompt. The image recipe now masks `systemd-firstboot.service`. The next test reached guest bootstrap and verified BuildKit v0.34.0 and SquashFS 4.6.1 over public-key SSH. The passing image version was `sha256:b939e76287883d113f12f7702d4f09ec5c24c2a16500e3220848a266225bc420`; the VM was `builder-1791558598-670462`. The log is `tmp/logs/builder-test.log`. The user stopped the VM. Each test uses a unique image name because sandboxd does not replace installed images. Safe stopped-instance deletion is implemented and covered by Go and RPC tests. The package upgrade and daemon restart exposed a host-only deletion bug: Go's `net.InterfaceByName` missing-device error was treated as a hard failure. Deletion must accept an absent TAP, which is normal for a stopped sandbox. The lookup now enumerates interfaces and has a regression test. Rebuild and reinstall the package, then rerun `make manual-delete-test`.
+The live builder seed VM test passed on 2026-10-09. The first boot exposed an interactive `systemd-firstboot` prompt. The image recipe now masks `systemd-firstboot.service`. The next test reached guest bootstrap and verified BuildKit v0.34.0 and SquashFS 4.6.1 over public-key SSH. The passing image version was `sha256:b939e76287883d113f12f7702d4f09ec5c24c2a16500e3220848a266225bc420`; the VM was `builder-1791558598-670462`. The log is `tmp/logs/builder-test.log`. The user stopped the VM. Each test uses a unique image name because sandboxd does not replace installed images. Safe stopped-instance deletion is implemented and covered by Go and RPC tests. The installed-daemon test passed on 2026-10-09. It created and deleted `delete-test-1791562050-734105` and verified that the instance was absent from the list. The test log is `tmp/logs/delete-test.log`. The test exposed a host-only deletion bug: Go's `net.InterfaceByName` missing-interface error was treated as a hard failure. The supervisor now enumerates interfaces, accepts an absent TAP, and has a regression test.
 
 Added private guest serial capture at `/var/lib/sandboxctl/instances/NAME/console.log`. The log is limited to 4 MiB and uses mode `0600`. Added `slog` events for CLI command and daemon RPC lifecycles. The guest bootstrap logs each setup stage without logging the key. The first metadata lookup failed because the daemon stored metadata at the MMDS root while the guest requested `/latest/meta-data/`. The daemon now nests the document under `latest/meta-data`, and a unit test checks this tree shape. The bootstrap service sends its logs to the serial console. The latest live run confirms that metadata lookup now succeeds and locates the next blocker at hostname setup.
 
@@ -190,10 +190,9 @@ Added a static guest bootstrap binary to the Phase 1 initramfs. Before `switch_r
 
 ## Next tasks
 
-1. Run `make install`, restart `sandboxd.service`, and verify stopped-instance deletion with `make manual-delete-test`.
-2. Add a sandboxd-managed ephemeral builder lifecycle and implement the runner's VM factory. Start only the fixed builder image and service. Do not add a general command RPC.
-3. Export a validated image bundle through the bounded guest stream. Include kernel, initramfs, SquashFS, and manifest.
-4. Add `sandboxctl image build` and run the build on a KVM host.
-5. Add routed guest Internet access and firewall rules if the builder or guest cannot reach required network resources.
-6. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
-7. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.
+1. Add a sandboxd-managed ephemeral builder lifecycle and implement the runner's VM factory. Start only the fixed builder image and service. Do not add a general command RPC. Build and run CLI changes from the workspace against the installed daemon. Reinstall the Arch package only when daemon code or installed daemon assets change.
+2. Export a validated image bundle through the bounded guest stream. Include kernel, initramfs, SquashFS, and manifest.
+3. Add `sandboxctl image build` and run the build on a KVM host.
+4. Add routed guest Internet access and firewall rules if the builder or guest cannot reach required network resources.
+5. Move the remaining CLI instance operations from XDG records when their daemon RPCs are implemented.
+6. Test host installation and doctor on a disposable Arch host before publication. Confirm the public Git source URL and project license before publishing the AUR package.
