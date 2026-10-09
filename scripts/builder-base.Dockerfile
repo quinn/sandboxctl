@@ -31,4 +31,5 @@ COPY --chown=0:0 buildkit/bin/buildkit-runc /usr/local/bin/buildkit-runc
 
 RUN chmod 0755 /usr/local/bin/buildctl /usr/local/bin/buildkitd /usr/local/bin/buildkit-runc \
     && systemctl --root=/ set-default multi-user.target \
-    && systemctl --root=/ enable ssh.socket
+    && systemctl --root=/ enable ssh.socket \
+    && systemctl --root=/ mask systemd-firstboot.service
