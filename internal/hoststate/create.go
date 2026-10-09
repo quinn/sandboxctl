@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -172,4 +175,82 @@ func (m Manager) Delete(instance Instance) error {
 	return m.Allocator.ReleaseAfter(instance.Name, proof, func() error {
 		return m.Store.RemoveInstance(current)
 	})
+}
+
+// Reset replaces only the writable state disk for the same stopped instance.
+// The caller must prove that the VM is stopped before it calls Reset.
+func (m Manager) Reset(ctx context.Context, expected Instance) error {
+	if !safeName.MatchString(expected.Name) {
+		return ErrInvalidName
+	}
+	current, err := m.Store.Load(expected.Name)
+	if err != nil {
+		return err
+	}
+	if current.ID != expected.ID || current.StateDiskBytes != expected.StateDiskBytes {
+		return ErrInstanceChanged
+	}
+	directory := filepath.Join(m.Store.Paths.Instances, current.Name)
+	diskPath := filepath.Join(directory, "state.ext4")
+	oldInfo, oldStat, err := inspectStateDisk(diskPath, current.StateDiskBytes, current.HostUID, current.HostGID)
+	if err != nil {
+		return fmt.Errorf("inspect current state disk: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	token, err := NewID()
+	if err != nil {
+		return err
+	}
+	temporaryPath := filepath.Join(directory, ".state.ext4.reset-"+token)
+	diskBuilder := m.StateDisks
+	if diskBuilder == nil {
+		diskBuilder = Ext4StateDiskBuilder{}
+	}
+	slog.Info("creating replacement state disk", "name", current.Name, "instance_id", current.ID, "size_bytes", current.StateDiskBytes)
+	defer os.Remove(temporaryPath)
+	if err := diskBuilder.Build(ctx, temporaryPath, current.StateDiskBytes, uint32(current.HostUID), uint32(current.HostGID)); err != nil {
+		return fmt.Errorf("build replacement state disk: %w", err)
+	}
+	if _, _, err := inspectStateDisk(temporaryPath, current.StateDiskBytes, current.HostUID, current.HostGID); err != nil {
+		return fmt.Errorf("validate replacement state disk: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	latest, err := m.Store.Load(expected.Name)
+	if err != nil {
+		return err
+	}
+	if latest.ID != current.ID || latest.StateDiskBytes != current.StateDiskBytes {
+		return ErrInstanceChanged
+	}
+	latestInfo, latestStat, err := inspectStateDisk(diskPath, current.StateDiskBytes, current.HostUID, current.HostGID)
+	if err != nil {
+		return fmt.Errorf("recheck current state disk: %w", err)
+	}
+	if latestStat.Dev != oldStat.Dev || latestStat.Ino != oldStat.Ino || latestInfo.ModTime() != oldInfo.ModTime() {
+		return ErrInstanceChanged
+	}
+	if err := os.Rename(temporaryPath, diskPath); err != nil {
+		return fmt.Errorf("replace state disk: %w", err)
+	}
+	if err := syncDirectory(directory); err != nil {
+		return fmt.Errorf("sync instance directory after reset: %w", err)
+	}
+	slog.Info("sandbox state disk reset", "name", current.Name, "instance_id", current.ID, "size_bytes", current.StateDiskBytes)
+	return nil
+}
+
+func inspectStateDisk(path string, size int64, uid, gid int) (os.FileInfo, *syscall.Stat_t, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || !ok || info.Size() != size || info.Mode().Perm() != 0o600 || int(stat.Uid) != uid || int(stat.Gid) != gid || stat.Nlink != 1 {
+		return nil, nil, errors.New("state disk has an unexpected type, size, mode, owner, or link count")
+	}
+	return info, stat, nil
 }

@@ -237,6 +237,35 @@ func TestServerDeletesOnlyStoppedInstances(t *testing.T) {
 	}
 }
 
+func TestServerResetsOnlyStoppedInstance(t *testing.T) {
+	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
+	store := hoststate.Store{Paths: paths}
+	id, err := hoststate.NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(daemonTestInstance(id, "dev1")); err != nil {
+		t.Fatal(err)
+	}
+	manager := &resetTestInstanceManager{Manager: hoststate.Manager{Store: store}}
+	runtime := &resetTestRuntimeController{testRuntimeController: testRuntimeController{running: map[string]bool{"dev1": true}}}
+	connection := startServerWithGRPCServer(t, daemon.NewServerWithInstanceManager("test-version", runtime, manager))
+	service := controlpb.NewControlServiceClient(connection)
+	ctx, cancel := callContext(daemon.APIVersion, "afafafafafafafafafafafafafafafaf")
+	_, err = service.ResetInstance(ctx, &controlpb.ResetInstanceRequest{Name: "dev1"})
+	cancel()
+	if status.Code(err) != codes.FailedPrecondition || manager.reset {
+		t.Fatalf("ResetInstance() for running sandbox = %v, reset=%t", err, manager.reset)
+	}
+	runtime.running["dev1"] = false
+	ctx, cancel = callContext(daemon.APIVersion, "bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf")
+	response, err := service.ResetInstance(ctx, &controlpb.ResetInstanceRequest{Name: "dev1"})
+	cancel()
+	if err != nil || response.GetInstance().GetName() != "dev1" || !manager.reset {
+		t.Fatalf("ResetInstance() for stopped sandbox = %v, response=%v, reset=%t", err, response, manager.reset)
+	}
+}
+
 func TestServerImportsVerifiedImageStream(t *testing.T) {
 	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
 	manager := hoststate.Manager{
@@ -410,6 +439,25 @@ func (r *deleteTestRuntimeController) DeleteStopped(_ context.Context, _ hoststa
 type deleteTestInstanceManager struct {
 	hoststate.Manager
 	deleted bool
+}
+
+type resetTestInstanceManager struct {
+	hoststate.Manager
+	reset bool
+}
+
+func (manager *resetTestInstanceManager) Reset(context.Context, hoststate.Instance) error {
+	manager.reset = true
+	return nil
+}
+
+type resetTestRuntimeController struct{ testRuntimeController }
+
+func (runtime *resetTestRuntimeController) ResetStopped(_ context.Context, instance hoststate.Instance, reset func() error) error {
+	if runtime.Running(instance.Name) {
+		return fmt.Errorf("sandbox is running")
+	}
+	return reset()
 }
 
 func (manager *deleteTestInstanceManager) Delete(hoststate.Instance) error {

@@ -26,6 +26,9 @@ service ControlService {
   // Stops a running sandbox instance.
   rpc StopInstance(StopInstanceRequest) returns (StopInstanceResponse);
 
+  // Replaces the writable state disk for a stopped sandbox.
+  rpc ResetInstance(ResetInstanceRequest) returns (ResetInstanceResponse);
+
   // Deletes a stopped sandbox instance and releases its host allocation.
   rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse);
 
@@ -106,6 +109,16 @@ message StopInstanceRequest {
 
 message StopInstanceResponse {
   // Contains the stopped sandbox state.
+  Instance instance = 1;
+}
+
+message ResetInstanceRequest {
+  // Names the stopped sandbox to reset.
+  string name = 1;
+}
+
+message ResetInstanceResponse {
+  // Contains the sandbox state after its writable disk was replaced.
   Instance instance = 1;
 }
 

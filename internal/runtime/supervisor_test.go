@@ -169,6 +169,7 @@ func TestSupervisorDeleteStoppedRequiresCleanRuntimeResources(t *testing.T) {
 	}
 	supervisor := &Supervisor{
 		StatePaths:      paths,
+		Images:          testImageResolver{},
 		InterfaceExists: func(string) (bool, error) { return false, nil },
 		Paths: JailedRuntimePaths{
 			FirecrackerBinary: "/usr/bin/firecracker", JailerBinary: "/usr/bin/jailer",
@@ -193,6 +194,53 @@ func TestSupervisorDeleteStoppedRequiresCleanRuntimeResources(t *testing.T) {
 	removed = false
 	if err := supervisor.DeleteStopped(context.Background(), instance, func() error { removed = true; return nil }); err == nil || removed {
 		t.Fatalf("DeleteStopped() ignored a leftover jail: error=%v removed=%t", err, removed)
+	}
+}
+
+func TestSupervisorResetStoppedBlocksRunningSandbox(t *testing.T) {
+	instance := supervisorTestInstance()
+	supervisor := &Supervisor{running: map[string]*supervisedMachine{instance.Name: {}}}
+	reset := false
+	err := supervisor.ResetStopped(context.Background(), instance, func() error { reset = true; return nil })
+	if err == nil || reset {
+		t.Fatalf("ResetStopped() reset a running sandbox: error=%v reset=%t", err, reset)
+	}
+}
+
+func TestSupervisorResetStoppedChecksResourcesAndSerializesOperations(t *testing.T) {
+	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
+	instance := supervisorTestInstance()
+	if err := saveSupervisorTestInstance(paths, instance); err != nil {
+		t.Fatal(err)
+	}
+	supervisor := &Supervisor{
+		StatePaths:      paths,
+		Images:          testImageResolver{},
+		InterfaceExists: func(string) (bool, error) { return false, nil },
+		Paths: JailedRuntimePaths{
+			FirecrackerBinary: "/usr/bin/firecracker", JailerBinary: "/usr/bin/jailer",
+			JailRoot: paths.Jails, APISocket: "firecracker.socket",
+		},
+	}
+	called := false
+	err := supervisor.ResetStopped(context.Background(), instance, func() error {
+		called = true
+		if err := supervisor.Start(context.Background(), instance); !errors.Is(err, hoststate.ErrAlreadyStarting) {
+			t.Errorf("Start() during reset = %v, want operation-in-progress", err)
+		}
+		return nil
+	})
+	if err != nil || !called {
+		t.Fatalf("ResetStopped() for stopped sandbox = %v, callback called=%t", err, called)
+	}
+
+	jail := filepath.Join(paths.Jails, "firecracker", instance.ID)
+	if err := os.MkdirAll(jail, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	called = false
+	if err := supervisor.ResetStopped(context.Background(), instance, func() error { called = true; return nil }); err == nil || called {
+		t.Fatalf("ResetStopped() ignored leftover jail: error=%v callback called=%t", err, called)
 	}
 }
 

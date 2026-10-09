@@ -33,6 +33,7 @@ Usage:
   sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]
   sandboxctl start NAME [--dry-run]
   sandboxctl stop NAME [--force]
+  sandboxctl reset NAME
   sandboxctl delete NAME [--yes]
   sandboxctl list
   sandboxctl ssh NAME [COMMAND ...]
@@ -47,6 +48,6 @@ Image build runs a fixed build service in a temporary builder VM and stages a ve
 Create requires an installed image.
 Start requires an installed image, a prepared TAP device, and KVM access.
 Delete removes a stopped sandbox and its writable state disk.
-Guest networking is not configured yet.
+Reset replaces only a stopped sandbox's writable state disk.
 Read docs/CONTINUE.md before you use it with important data.`)
 }

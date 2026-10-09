@@ -37,11 +37,11 @@ The current implementation can do these operations:
 The create operation needs an installed image manifest and the host service.
 Image installation uses a verified local image bundle.
 
-The current implementation cannot yet do these operations:
+The current implementation can do these operations:
 
-- Build a user guest image through `sandboxctl image build`.
+- Build a guest image through `sandboxctl image build`.
 - Configure routed guest networking and firewall rules.
-- Reset a sandbox.
+- Reset a stopped sandbox without changing its image or allocation.
 
 The jailed runtime and guest bootstrap passed a live boot test on a KVM host.
 The test confirmed key login and bootstrap state after a stop and restart.

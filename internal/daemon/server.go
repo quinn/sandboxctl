@@ -33,6 +33,7 @@ const (
 	MaxCreateDuration     = 2 * time.Minute
 	MaxStartDuration      = 2 * time.Minute
 	MaxStopDuration       = 30 * time.Second
+	MaxResetDuration      = 3 * time.Minute
 	MaxDeleteDuration     = 30 * time.Second
 	MaxInstallDuration    = 30 * time.Minute
 )
@@ -81,7 +82,8 @@ func newServerConfigured(version string, runtime RuntimeStatus, instances Instan
 	)
 	controller, _ := runtime.(RuntimeController)
 	deleter, _ := creator.(InstanceDeleter)
-	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, controller: controller, instances: instances, creator: creator, deleter: deleter, imagePaths: imagePaths, imageSlot: make(chan struct{}, 1)})
+	resetter, _ := creator.(InstanceResetter)
+	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, controller: controller, instances: instances, creator: creator, deleter: deleter, resetter: resetter, imagePaths: imagePaths, imageSlot: make(chan struct{}, 1)})
 	return server
 }
 
@@ -148,6 +150,8 @@ func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerIn
 		duration = MaxStartDuration
 	} else if info.FullMethod == controlpb.ControlService_StopInstance_FullMethodName {
 		duration = MaxStopDuration
+	} else if info.FullMethod == controlpb.ControlService_ResetInstance_FullMethodName {
+		duration = MaxResetDuration
 	} else if info.FullMethod == controlpb.ControlService_DeleteInstance_FullMethodName {
 		duration = MaxDeleteDuration
 	}
@@ -180,6 +184,7 @@ type service struct {
 	instances  InstanceStore
 	creator    InstanceCreator
 	deleter    InstanceDeleter
+	resetter   InstanceResetter
 	imagePaths *hoststate.Paths
 	imageSlot  chan struct{}
 }
@@ -206,6 +211,11 @@ type InstanceDeleter interface {
 	Delete(hoststate.Instance) error
 }
 
+// InstanceResetter replaces the writable disk for an existing stopped instance.
+type InstanceResetter interface {
+	Reset(context.Context, hoststate.Instance) error
+}
+
 // RuntimeController starts and stops jailed Firecracker machines.
 type RuntimeController interface {
 	Start(context.Context, hoststate.Instance) error
@@ -216,6 +226,11 @@ type RuntimeController interface {
 // RuntimeDeleter proves runtime resources are gone before removing instance state.
 type RuntimeDeleter interface {
 	DeleteStopped(context.Context, hoststate.Instance, func() error) error
+}
+
+// RuntimeResetter proves the VM is stopped before it calls reset.
+type RuntimeResetter interface {
+	ResetStopped(context.Context, hoststate.Instance, func() error) error
 }
 
 // RuntimeStateReporter reports persisted runtime state after daemon restart.
@@ -352,6 +367,40 @@ func (s *service) StopInstance(ctx context.Context, request *controlpb.StopInsta
 		return nil, status.Error(codes.FailedPrecondition, "cannot stop sandbox")
 	}
 	return &controlpb.StopInstanceResponse{Instance: s.protocolInstance(instance)}, nil
+}
+
+func (s *service) ResetInstance(ctx context.Context, request *controlpb.ResetInstanceRequest) (*controlpb.ResetInstanceResponse, error) {
+	if s.instances == nil || s.resetter == nil {
+		return nil, status.Error(codes.FailedPrecondition, "state disk reset is unavailable")
+	}
+	runtimeResetter, ok := s.controller.(RuntimeResetter)
+	if !ok {
+		return nil, status.Error(codes.FailedPrecondition, "runtime reset checks are unavailable")
+	}
+	instance, err := s.instances.Load(request.GetName())
+	if errors.Is(err, hoststate.ErrInvalidName) {
+		return nil, status.Error(codes.InvalidArgument, "invalid sandbox name")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, status.Error(codes.NotFound, "sandbox does not exist")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "cannot read sandbox state")
+	}
+	slog.Info("resetting sandbox state disk", "name", instance.Name, "instance_id", instance.ID, "size_bytes", instance.StateDiskBytes)
+	if err := runtimeResetter.ResetStopped(ctx, instance, func() error {
+		return s.resetter.Reset(ctx, instance)
+	}); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, status.Error(codes.Canceled, "reset request was canceled")
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, status.Error(codes.DeadlineExceeded, "reset request exceeded its time limit")
+		}
+		slog.Error("reset sandbox failed", "name", instance.Name, "error", err)
+		return nil, status.Error(codes.FailedPrecondition, "cannot reset sandbox")
+	}
+	return &controlpb.ResetInstanceResponse{Instance: s.protocolInstance(instance)}, nil
 }
 
 func (s *service) DeleteInstance(ctx context.Context, request *controlpb.DeleteInstanceRequest) (*controlpb.DeleteInstanceResponse, error) {

@@ -94,11 +94,12 @@ type Supervisor struct {
 	WaitProcess     func(context.Context, process.Record) error
 	VerifyIdentity  func(int, uint32, uint32) error
 
-	mu       sync.Mutex
-	starting map[string]bool
-	stopping map[string]bool
-	deleting map[string]bool
-	running  map[string]*supervisedMachine
+	mu        sync.Mutex
+	starting  map[string]bool
+	stopping  map[string]bool
+	resetting map[string]bool
+	deleting  map[string]bool
+	running   map[string]*supervisedMachine
 }
 
 // Ready reports whether Firecracker, jailer, and KVM are available.
@@ -180,7 +181,7 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) (st
 		s.mu.Unlock()
 		return nil
 	}
-	if s.stopping[instance.Name] || s.deleting[instance.Name] {
+	if s.stopping[instance.Name] || s.resetting[instance.Name] || s.deleting[instance.Name] {
 		s.mu.Unlock()
 		return hoststate.ErrAlreadyStarting
 	}
@@ -379,7 +380,7 @@ func (s *Supervisor) Stop(ctx context.Context, name string, force bool) (stopErr
 		slog.Info("sandbox stopped", "name", name, "force", force)
 	}()
 	s.mu.Lock()
-	if s.starting[name] || s.stopping[name] || s.deleting[name] {
+	if s.starting[name] || s.stopping[name] || s.resetting[name] || s.deleting[name] {
 		s.mu.Unlock()
 		return hoststate.ErrAlreadyStarting
 	}
@@ -421,6 +422,94 @@ func (s *Supervisor) Stop(ctx context.Context, name string, force bool) (stopErr
 	}
 }
 
+// ResetStopped proves that the VM cannot use its state disk, then calls reset
+// while blocking concurrent start, stop, reset, and delete operations.
+func (s *Supervisor) ResetStopped(ctx context.Context, instance hoststate.Instance, reset func() error) (resetErr error) {
+	slog.Info("checking sandbox for reset", "name", instance.Name, "instance_id", instance.ID, "host_uid", instance.HostUID, "host_gid", instance.HostGID)
+	defer func() {
+		if resetErr != nil {
+			slog.Error("sandbox reset check failed", "name", instance.Name, "instance_id", instance.ID, "error", resetErr)
+			return
+		}
+		slog.Info("sandbox reset completed", "name", instance.Name, "instance_id", instance.ID)
+	}()
+	if reset == nil {
+		return errors.New("state disk reset callback is required")
+	}
+	s.mu.Lock()
+	if s.starting[instance.Name] || s.stopping[instance.Name] || s.resetting[instance.Name] || s.deleting[instance.Name] || s.running[instance.Name] != nil {
+		s.mu.Unlock()
+		return errors.New("cannot reset a running or changing sandbox")
+	}
+	if s.resetting == nil {
+		s.resetting = make(map[string]bool)
+	}
+	s.resetting[instance.Name] = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.resetting, instance.Name)
+		s.mu.Unlock()
+	}()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	store := hoststate.Store{Paths: s.StatePaths}
+	record, err := store.LoadRuntime(instance.Name)
+	if err == nil {
+		live, checkErr := s.recordLive(instance, record)
+		if checkErr != nil {
+			return fmt.Errorf("check sandbox process identity: %w", checkErr)
+		}
+		if live {
+			return errors.New("cannot reset a running sandbox")
+		}
+		if err := s.stopRecorded(ctx, instance.Name, false); err != nil {
+			return fmt.Errorf("remove stopped runtime resources: %w", err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect sandbox runtime state: %w", err)
+	}
+	jailPath := filepath.Join(s.Paths.JailRoot, filepath.Base(s.Paths.FirecrackerBinary), instance.ID)
+	if _, err := os.Lstat(jailPath); !errors.Is(err, os.ErrNotExist) {
+		if err == nil {
+			return errors.New("jail remains; cannot prove that the sandbox is stopped")
+		}
+		return fmt.Errorf("inspect jail: %w", err)
+	}
+	active, err := process.HasIdentity(uint32(instance.HostUID), uint32(instance.HostGID))
+	if err != nil {
+		return fmt.Errorf("inspect allocated host identity: %w", err)
+	}
+	if active {
+		return errors.New("a process still uses the allocated host identity")
+	}
+	interfaceExists := s.InterfaceExists
+	if interfaceExists == nil {
+		interfaceExists = networkInterfaceExists
+	}
+	present, err := interfaceExists(instance.TapDevice)
+	if err != nil {
+		return fmt.Errorf("inspect TAP device: %w", err)
+	}
+	if present {
+		if err := s.removeTap(instance); err != nil {
+			return fmt.Errorf("remove stopped TAP device: %w", err)
+		}
+		present, err = interfaceExists(instance.TapDevice)
+		if err != nil {
+			return fmt.Errorf("inspect TAP device after cleanup: %w", err)
+		}
+		if present {
+			return errors.New("TAP device remains; cannot prove that the sandbox is stopped")
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return reset()
+}
+
 // DeleteStopped proves that the instance has no runtime resources, then calls
 // remove while blocking concurrent start and stop operations.
 func (s *Supervisor) DeleteStopped(ctx context.Context, instance hoststate.Instance, remove func() error) (deleteErr error) {
@@ -436,7 +525,7 @@ func (s *Supervisor) DeleteStopped(ctx context.Context, instance hoststate.Insta
 		return errors.New("instance removal callback is required")
 	}
 	s.mu.Lock()
-	if s.starting[instance.Name] || s.stopping[instance.Name] || s.deleting[instance.Name] || s.running[instance.Name] != nil {
+	if s.starting[instance.Name] || s.stopping[instance.Name] || s.resetting[instance.Name] || s.deleting[instance.Name] || s.running[instance.Name] != nil {
 		s.mu.Unlock()
 		return errors.New("cannot delete a running or changing sandbox")
 	}

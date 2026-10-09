@@ -26,6 +26,7 @@ const (
 	ControlService_CreateInstance_FullMethodName  = "/sandboxctl.ControlService/CreateInstance"
 	ControlService_StartInstance_FullMethodName   = "/sandboxctl.ControlService/StartInstance"
 	ControlService_StopInstance_FullMethodName    = "/sandboxctl.ControlService/StopInstance"
+	ControlService_ResetInstance_FullMethodName   = "/sandboxctl.ControlService/ResetInstance"
 	ControlService_DeleteInstance_FullMethodName  = "/sandboxctl.ControlService/DeleteInstance"
 	ControlService_InstallImage_FullMethodName    = "/sandboxctl.ControlService/InstallImage"
 )
@@ -48,6 +49,8 @@ type ControlServiceClient interface {
 	StartInstance(ctx context.Context, in *StartInstanceRequest, opts ...grpc.CallOption) (*StartInstanceResponse, error)
 	// Stops a running sandbox instance.
 	StopInstance(ctx context.Context, in *StopInstanceRequest, opts ...grpc.CallOption) (*StopInstanceResponse, error)
+	// Replaces the writable state disk for a stopped sandbox.
+	ResetInstance(ctx context.Context, in *ResetInstanceRequest, opts ...grpc.CallOption) (*ResetInstanceResponse, error)
 	// Deletes a stopped sandbox instance and releases its host allocation.
 	DeleteInstance(ctx context.Context, in *DeleteInstanceRequest, opts ...grpc.CallOption) (*DeleteInstanceResponse, error)
 	// Imports a pinned image manifest and its fixed boot artifacts.
@@ -132,6 +135,16 @@ func (c *controlServiceClient) StopInstance(ctx context.Context, in *StopInstanc
 	return out, nil
 }
 
+func (c *controlServiceClient) ResetInstance(ctx context.Context, in *ResetInstanceRequest, opts ...grpc.CallOption) (*ResetInstanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResetInstanceResponse)
+	err := c.cc.Invoke(ctx, ControlService_ResetInstance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlServiceClient) DeleteInstance(ctx context.Context, in *DeleteInstanceRequest, opts ...grpc.CallOption) (*DeleteInstanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteInstanceResponse)
@@ -173,6 +186,8 @@ type ControlServiceServer interface {
 	StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResponse, error)
 	// Stops a running sandbox instance.
 	StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error)
+	// Replaces the writable state disk for a stopped sandbox.
+	ResetInstance(context.Context, *ResetInstanceRequest) (*ResetInstanceResponse, error)
 	// Deletes a stopped sandbox instance and releases its host allocation.
 	DeleteInstance(context.Context, *DeleteInstanceRequest) (*DeleteInstanceResponse, error)
 	// Imports a pinned image manifest and its fixed boot artifacts.
@@ -207,6 +222,9 @@ func (UnimplementedControlServiceServer) StartInstance(context.Context, *StartIn
 }
 func (UnimplementedControlServiceServer) StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopInstance not implemented")
+}
+func (UnimplementedControlServiceServer) ResetInstance(context.Context, *ResetInstanceRequest) (*ResetInstanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResetInstance not implemented")
 }
 func (UnimplementedControlServiceServer) DeleteInstance(context.Context, *DeleteInstanceRequest) (*DeleteInstanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteInstance not implemented")
@@ -361,6 +379,24 @@ func _ControlService_StopInstance_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlService_ResetInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResetInstanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServiceServer).ResetInstance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlService_ResetInstance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServiceServer).ResetInstance(ctx, req.(*ResetInstanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlService_DeleteInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteInstanceRequest)
 	if err := dec(in); err != nil {
@@ -420,6 +456,10 @@ var ControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopInstance",
 			Handler:    _ControlService_StopInstance_Handler,
+		},
+		{
+			MethodName: "ResetInstance",
+			Handler:    _ControlService_ResetInstance_Handler,
 		},
 		{
 			MethodName: "DeleteInstance",
