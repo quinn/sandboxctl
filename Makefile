@@ -1,4 +1,4 @@
-.PHONY: build install sandboxctl test check generate proto-lint download-test-assets download-overlay-assets download-builder-tools manual-test manual-test-prepare manual-bootstrap-test overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof stage-overlay-image clean
+.PHONY: build install sandboxctl test check generate proto-lint download-test-assets download-overlay-assets download-builder-tools manual-test manual-test-prepare manual-bootstrap-test manual-builder-test overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof stage-overlay-image stage-builder-image clean
 
 SANDBOXCTL_COMMANDS = create doctor help host host/install image image/install init list paths ssh ssh-config start stop version vmrun
 
@@ -67,6 +67,12 @@ overlay-proof: download-overlay-assets overlay-initramfs overlay-state-disk
 
 stage-overlay-image: download-overlay-assets overlay-initramfs
 	./scripts/stage-overlay-image.sh
+
+stage-builder-image: download-overlay-assets overlay-initramfs download-builder-tools
+	./scripts/stage-builder-image.sh
+
+manual-builder-test:
+	./scripts/manual-builder-test.sh
 
 clean:
 	rm -rf bin dist

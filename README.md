@@ -36,11 +36,12 @@ Image installation uses a verified local image bundle.
 
 The current implementation cannot yet do these operations:
 
-- Build a base image.
+- Build a user guest image through `sandboxctl image build`.
 - Configure routed guest networking and firewall rules.
 - Delete or reset a sandbox.
 
-The jailed runtime has unit tests. It has not passed a live boot test on a KVM host.
+The jailed runtime and guest bootstrap passed a live boot test on a KVM host.
+The test confirmed key login and bootstrap state after a stop and restart.
 
 ## Build
 
@@ -143,6 +144,32 @@ The CLI verifies each artifact before it sends the bytes.
 The daemon verifies the sizes and SHA-256 digests again.
 The daemon publishes the image only after all checks pass.
 The daemon stores the image under `/var/lib/sandboxctl/images/default`.
+
+## Stage the image-builder seed image
+
+The image-builder seed image provides a fixed guest with BuildKit and SquashFS
+tools. It uses a pinned Ubuntu 24.04 container image and Ubuntu package
+snapshot. The Make target uses Podman to build the seed root file system and
+stage it as a sandboxctl image bundle:
+
+```sh
+make stage-builder-image
+```
+
+The target prints a `sandboxctl image install builder` command. This target
+only prepares the image-builder VM. It does not build a user guest image.
+The future `sandboxctl image build` command will run user image builds inside
+the isolated builder VM.
+
+Run the live boot test with:
+
+```sh
+make manual-builder-test
+```
+
+The test stages and installs the seed image, creates a builder VM, and checks
+SSH, BuildKit, and SquashFS tools. The test leaves the VM running for manual
+inspection.
 
 ## Temporary single-root VM test
 
