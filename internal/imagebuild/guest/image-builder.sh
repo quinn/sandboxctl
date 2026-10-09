@@ -15,6 +15,7 @@ buildkit_socket_dir=/run/sandboxctl-buildkit
 buildkit_socket=$buildkit_socket_dir/buildkitd.sock
 buildkit_log=$build_root/buildkitd.log
 build_log=$build_root/build.log
+squashfs_log=$build_root/mksquashfs.log
 buildkit_version=v0.34.0
 
 if [ ! -d "$build_root" ] || [ -L "$build_root" ]; then
@@ -151,12 +152,20 @@ find "$rootfs/tmp" -mindepth 1 -delete 2>/dev/null || true
 find "$rootfs/var/tmp" -mindepth 1 -delete 2>/dev/null || true
 rm -f -- "$rootfs/dev/null"
 sync
-/usr/bin/mksquashfs "$rootfs" "$output/root.squashfs" \
+if ! /usr/bin/mksquashfs "$rootfs" "$output/root.squashfs" \
     -noappend \
     -comp xz \
     -b 1M \
     -no-xattrs \
     -no-progress \
-    -repro-time 0
+    -all-time 0 \
+    >"$squashfs_log" 2>&1; then
+    echo 'sandboxctl-image-builder: mksquashfs failed; first 60 log lines follow' >&2
+    sed -n '1,60p' "$squashfs_log" >&2 || true
+    exit 1
+fi
+echo 'sandboxctl-image-builder: SquashFS creation completed'
 test -s "$output/root.squashfs"
+chmod 0644 "$output/root.squashfs"
+chmod 0711 "$output"
 printf '%s\n' "$output/root.squashfs"

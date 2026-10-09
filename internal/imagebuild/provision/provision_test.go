@@ -31,12 +31,15 @@ func TestRenderCreatesSecureDebianAndUbuntuScripts(t *testing.T) {
 				"PubkeyAuthentication yes",
 				"sandboxctl-bootstrap.service",
 				"ssh-keygen -A",
-				"rm -f /etc/machine-id /etc/ssh/ssh_host_*",
+				"rm -f /etc/machine-id",
 				"/usr/local/share/sandboxctl/image-build.env",
 			} {
 				if !strings.Contains(script, required) {
 					t.Errorf("rendered %s script does not contain %q", id, required)
 				}
+			}
+			if strings.Contains(script, "/etc/ssh/ssh_host_*") {
+				t.Error("provision script removed host keys before final SSH configuration validation")
 			}
 			for _, forbidden := range []string{"e2b_", "envd", "ToExt4", "unsquashfs", "mount -o loop", "mount -t overlay"} {
 				if strings.Contains(strings.ToLower(script), strings.ToLower(forbidden)) {

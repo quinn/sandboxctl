@@ -246,4 +246,4 @@ SANDBOXCTL_ADMIN_GROUP='$ADMIN_GROUP'
 EOF
 chmod 0600 /usr/local/share/sandboxctl/image-build.env
 
-rm -f /etc/machine-id /etc/ssh/ssh_host_*
+rm -f /etc/machine-id

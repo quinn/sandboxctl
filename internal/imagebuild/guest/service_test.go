@@ -28,12 +28,15 @@ func TestImageBuilderServiceUsesFixedBuildAndFinalizationSteps(t *testing.T) {
 		"--frontend dockerfile.v0",
 		"--output \"type=local,dest=$rootfs\"",
 		"BuildKit image build failed; last 80 log lines follow",
+		"mksquashfs failed; first 60 log lines follow",
 		"chroot \"$rootfs\" /usr/sbin/sshd -T",
 		"rm -f -- \"$rootfs/etc/machine-id\"",
 		"rm -f -- \"$rootfs/var/lib/sandboxctl/bootstrap-complete\"",
 		"SSH server or bootstrap service is not executable",
 		"/usr/bin/mksquashfs",
-		"-repro-time 0",
+		"-all-time 0",
+		"chmod 0644 \"$output/root.squashfs\"",
+		"chmod 0711 \"$output\"",
 	} {
 		if !strings.Contains(string(script), required) {
 			t.Errorf("image builder service is missing required step %q", required)
