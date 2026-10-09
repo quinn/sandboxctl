@@ -123,7 +123,9 @@ func formatCommandOutput(result guest.Result) string {
 		}
 		truncated := len(value) > maxErrorOutputBytes
 		if truncated {
-			value = value[:maxErrorOutputBytes]
+			marker := "[earlier output truncated]\n"
+			remaining := maxErrorOutputBytes - len(marker)
+			value = marker + value[len(value)-remaining:]
 		}
 		output.WriteString("\n")
 		output.WriteString(stream.name)

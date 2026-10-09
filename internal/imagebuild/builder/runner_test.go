@@ -93,10 +93,13 @@ func TestBuildReportsBoundedGuestOutputOnServiceFailure(t *testing.T) {
 }
 
 func TestFormatCommandOutputBoundsEachStream(t *testing.T) {
-	result := guest.Result{Stderr: []byte(strings.Repeat("e", maxErrorOutputBytes+100))}
+	result := guest.Result{Stderr: []byte(strings.Repeat("e", maxErrorOutputBytes+100) + "final-error-marker")}
 	output := formatCommandOutput(result)
-	if !strings.Contains(output, "[truncated]") || len(output) > maxErrorOutputBytes+32 {
-		t.Fatalf("formatted output length=%d, truncated=%v", len(output), strings.Contains(output, "[truncated]"))
+	if !strings.Contains(output, "[earlier output truncated]") || len(output) > maxErrorOutputBytes+32 {
+		t.Fatalf("formatted output length=%d, truncated=%v", len(output), strings.Contains(output, "[earlier output truncated]"))
+	}
+	if !strings.Contains(output, "final-error-marker") {
+		t.Fatalf("formatted output omitted the end of the stream: %q", output[len(output)-64:])
 	}
 }
 

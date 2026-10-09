@@ -14,6 +14,7 @@ buildkit_root=$build_root/buildkit
 buildkit_socket_dir=/run/sandboxctl-buildkit
 buildkit_socket=$buildkit_socket_dir/buildkitd.sock
 buildkit_log=$build_root/buildkitd.log
+build_log=$build_root/build.log
 buildkit_version=v0.34.0
 
 if [ ! -d "$build_root" ] || [ -L "$build_root" ]; then
@@ -82,13 +83,19 @@ if [ "$attempt" -eq 30 ]; then
     exit 1
 fi
 
-/usr/local/bin/buildctl \
+if ! /usr/local/bin/buildctl \
     --addr "unix://$buildkit_socket" \
     build \
     --frontend dockerfile.v0 \
     --local "context=$context" \
     --local "dockerfile=$context" \
-    --output "type=local,dest=$rootfs"
+    --output "type=local,dest=$rootfs" \
+    >"$build_log" 2>&1; then
+    echo 'sandboxctl-image-builder: BuildKit image build failed; last 80 log lines follow' >&2
+    tail -n 80 "$build_log" >&2 || true
+    exit 1
+fi
+echo 'sandboxctl-image-builder: BuildKit image build completed'
 
 for path in \
     "$rootfs/etc/os-release" \
