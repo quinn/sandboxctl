@@ -3,9 +3,14 @@ set -euo pipefail
 
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
+image_name=${IMAGE_NAME:-default}
 source_dir="$repo_dir/tmp/config/images/default"
 initramfs="$repo_dir/tmp/config/initramfs/overlay-initramfs.cpio.gz"
-image_root="$data_home/sandboxctl/images/default"
+[[ $image_name =~ ^[a-z][a-z0-9-]{0,31}$ ]] || {
+  printf 'Invalid image name: %s\n' "$image_name" >&2
+  exit 1
+}
+image_root="$data_home/sandboxctl/images/$image_name"
 
 for file in "$source_dir/vmlinux" "$source_dir/ubuntu.squashfs" "$initramfs"; do
   [[ -f $file && -s $file ]] || {
@@ -28,7 +33,7 @@ install -m 0600 "$source_dir/vmlinux" "$stage/vmlinux"
 install -m 0600 "$initramfs" "$stage/initramfs.cpio.gz"
 install -m 0600 "$source_dir/ubuntu.squashfs" "$stage/root.squashfs"
 
-version=$(python3 - "$stage" <<'PY'
+version=$(python3 - "$stage" "$image_name" <<'PY'
 import hashlib
 import json
 import pathlib
@@ -36,6 +41,7 @@ import struct
 import sys
 
 directory = pathlib.Path(sys.argv[1])
+image_name = sys.argv[2]
 artifacts = {}
 for name in ("vmlinux", "initramfs.cpio.gz", "root.squashfs"):
     path = directory / name
@@ -49,7 +55,7 @@ for name in ("vmlinux", "initramfs.cpio.gz", "root.squashfs"):
     artifacts[name] = {"size": size, "sha256": digest}
 manifest = {
     "schema_version": 1,
-    "name": "default",
+    "name": image_name,
     "architecture": "x86_64",
     "firecracker_compatibility": "1.17.x",
     "kernel_version": "6.1.155",
@@ -92,7 +98,7 @@ destination="$image_root/$version"
 if [[ -e $destination ]]; then
   if [[ -d $destination && ! -L $destination ]] && cmp -s "$stage/manifest.json" "$destination/manifest.json" && cmp -s "$stage/vmlinux" "$destination/vmlinux" && cmp -s "$stage/initramfs.cpio.gz" "$destination/initramfs.cpio.gz" && cmp -s "$stage/root.squashfs" "$destination/root.squashfs"; then
     printf 'Image bundle is already staged at %s\n' "$destination"
-    printf 'Install it with: sandboxctl image install default --version %s\n' "$version"
+    printf 'Install it with: sandboxctl image install %s --version %s\n' "$image_name" "$version"
     exit 0
   fi
   printf 'An image bundle already exists with different files: %s\n' "$destination" >&2
@@ -102,4 +108,4 @@ mv -- "$stage" "$destination"
 trap - EXIT
 chmod 0700 "$destination"
 printf 'Staged image bundle at %s\n' "$destination"
-printf 'Install it with: sandboxctl image install default --version %s\n' "$version"
+printf 'Install it with: sandboxctl image install %s --version %s\n' "$image_name" "$version"

@@ -3,7 +3,6 @@ set -Eeuo pipefail
 umask 077
 
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-image_root="$repo_dir/tmp/test-data/sandboxctl/images/default"
 log_dir="$repo_dir/tmp/logs"
 mkdir -p "$log_dir"
 chmod 0700 "$log_dir"
@@ -18,6 +17,11 @@ for program in sandboxctl ssh python3; do
     exit 1
   }
 done
+
+name="bootstrap-$(date +%s)-$$"
+alias="sandbox-$name"
+XDG_DATA_HOME="$repo_dir/tmp/test-data" IMAGE_NAME="$name" make -C "$repo_dir" stage-overlay-image
+image_root="$repo_dir/tmp/test-data/sandboxctl/images/$name"
 
 [[ -r /dev/kvm && -w /dev/kvm ]] || {
   printf 'Firecracker needs read and write access to /dev/kvm.\n' >&2
@@ -43,12 +47,10 @@ print(version)
 PY
 )
 
-name="bootstrap-$(date +%s)-$$"
-alias="sandbox-$name"
 printf 'Guest bootstrap test log: %s\n' "$log_file"
 printf 'Installing image version %s.\n' "$version"
-XDG_DATA_HOME="$repo_dir/tmp/test-data" sandboxctl image install default --version "$version"
-sandboxctl create "$name" --cpus 2 --memory 2048 --disk-size 1
+XDG_DATA_HOME="$repo_dir/tmp/test-data" sandboxctl image install "$name" --version "$version"
+sandboxctl create "$name" --cpus 2 --memory 2048 --disk-size 1 --image "$name"
 sandboxctl start "$name"
 
 ssh_output=$(mktemp "$repo_dir/tmp/logs/.guest-bootstrap-ssh.XXXXXX")

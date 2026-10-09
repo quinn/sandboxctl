@@ -48,7 +48,6 @@ manual-test-prepare: build
 	./scripts/prepare-manual-test-guest.sh "$(if $(NAME),$(NAME),manualtest)"
 
 manual-bootstrap-test:
-	XDG_DATA_HOME="$(CURDIR)/tmp/test-data" $(MAKE) stage-overlay-image
 	./scripts/manual-bootstrap-test.sh
 
 overlay-initramfs:
