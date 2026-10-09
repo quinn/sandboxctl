@@ -74,6 +74,15 @@ must have a Git remote. The local development remote is the bare repository
 running this target. This target does not use GitHub. The AUR draft in
 `packaging/aur` uses the configured GitHub `main` branch.
 
+Apply host configuration from the workspace without reinstalling the package:
+
+```sh
+make host-install
+```
+
+This target builds the workspace command helpers and sets `PATH` for the
+external-subcommand dispatcher before it runs the privileged host installer.
+
 ## Initialize and inspect
 
 Run these commands first:
@@ -174,8 +183,8 @@ sandboxctl image build dev-image \
 ```
 
 The builder image must be installed. The command stages a private image bundle
-and prints the `sandboxctl image install` command. Guest Internet access is not
-available yet, so registry pulls may fail until routed networking is added.
+and prints the `sandboxctl image install` command. Run `make host-install`
+before this test to apply sandbox network rules.
 
 Run the isolated build iteration with:
 
