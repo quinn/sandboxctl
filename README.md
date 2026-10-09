@@ -156,8 +156,8 @@ stage it as a sandboxctl image bundle:
 make stage-builder-image
 ```
 
-The target prints a `sandboxctl image install builder` command. This target
-only prepares the image-builder VM. It does not build a user guest image.
+The target prints a `sandboxctl image install builder` command by default. This
+target only prepares the image-builder VM. It does not build a user guest image.
 The future `sandboxctl image build` command will run user image builds inside
 the isolated builder VM.
 
@@ -169,7 +169,8 @@ make manual-builder-test
 
 The test stages and installs the seed image, creates a builder VM, and checks
 SSH, BuildKit, and SquashFS tools. The test leaves the VM running for manual
-inspection.
+inspection. It uses a unique image name for each run because installed image
+names cannot be replaced.
 
 ## Temporary single-root VM test
 

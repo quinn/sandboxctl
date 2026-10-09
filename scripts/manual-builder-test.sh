@@ -21,8 +21,8 @@ done
 name="builder-$(date +%s)-$$"
 alias="sandbox-$name"
 data_home="$repo_dir/tmp/test-data"
-XDG_DATA_HOME="$data_home" make -C "$repo_dir" stage-builder-image
-image_root="$data_home/sandboxctl/images/builder"
+XDG_DATA_HOME="$data_home" IMAGE_NAME="$name" make -C "$repo_dir" stage-builder-image
+image_root="$data_home/sandboxctl/images/$name"
 manifest=$(find "$image_root" -mindepth 2 -maxdepth 2 -type f -name manifest.json -printf '%T@ %p\n' | sort -nr | sed -n '1s/^[^ ]* //p')
 if [[ -z $manifest ]]; then
   printf 'The staged builder image is missing. Run make stage-builder-image.\n' >&2
@@ -43,8 +43,8 @@ PY
 
 printf 'Builder VM test log: %s\n' "$log_file"
 printf 'Installing builder image %s.\n' "$version"
-XDG_DATA_HOME="$data_home" sandboxctl image install builder --version "$version"
-sandboxctl create "$name" --cpus 2 --memory 2048 --disk-size 1 --image builder
+XDG_DATA_HOME="$data_home" sandboxctl image install "$name" --version "$version"
+sandboxctl create "$name" --cpus 2 --memory 2048 --disk-size 1 --image "$name"
 sandboxctl start "$name"
 
 ssh_output=$(mktemp "$log_dir/.builder-ssh.XXXXXX")

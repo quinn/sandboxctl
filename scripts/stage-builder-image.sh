@@ -6,7 +6,8 @@ repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source_dir="$repo_dir/tmp/config/images/default"
 tools_dir="$repo_dir/tmp/config/builder/tools/v0.34.0"
 data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
-image_root="$data_home/sandboxctl/images/builder"
+image_name=${IMAGE_NAME:-builder}
+image_root="$data_home/sandboxctl/images/$image_name"
 apt_snapshot=20261009T000000Z
 ubuntu_index_digest=sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254
 buildkit_archive_sha256=14813b1fb2a40082114e6d386c6fc5e7dd5298176ce7ee1a18bc33e73e109ac3
@@ -20,6 +21,11 @@ done
 
 if [[ $(uname -m) != x86_64 ]]; then
   printf 'Builder images support x86_64 hosts only.\n' >&2
+  exit 1
+fi
+
+if [[ ! $image_name =~ ^[a-z][a-z0-9-]{0,31}$ ]]; then
+  printf 'Invalid builder image name: %s\n' "$image_name" >&2
   exit 1
 fi
 
@@ -115,7 +121,7 @@ for required_path in \
   fi
 done
 
-python3 - "$bundle" "$ubuntu_index_digest" "$apt_snapshot" "$buildkit_archive_sha256" <<'PY'
+python3 - "$bundle" "$image_name" "$ubuntu_index_digest" "$apt_snapshot" "$buildkit_archive_sha256" <<'PY'
 import hashlib
 import json
 import pathlib
@@ -123,7 +129,7 @@ import struct
 import sys
 
 directory = pathlib.Path(sys.argv[1])
-ubuntu_digest, apt_snapshot, buildkit_digest = sys.argv[2:]
+image_name, ubuntu_digest, apt_snapshot, buildkit_digest = sys.argv[2:]
 artifact_names = ("vmlinux", "initramfs.cpio.gz", "root.squashfs")
 artifacts = {}
 for name in artifact_names:
@@ -138,7 +144,7 @@ for name in artifact_names:
 
 image = {
     "schema_version": 1,
-    "name": "builder",
+    "name": image_name,
     "architecture": "x86_64",
     "firecracker_compatibility": "1.17.x",
     "kernel_version": "6.1.155",
@@ -196,10 +202,10 @@ if [[ -e $destination ]]; then
   done
   rm -rf -- "$stage"
   printf 'Builder image already staged at %s\n' "$destination"
-  printf 'Install it with: sandboxctl image install builder --version %s\n' "$version"
+  printf 'Install it with: sandboxctl image install %s --version %s\n' "$image_name" "$version"
   exit 0
 fi
 mv -- "$bundle" "$destination"
 chmod 0700 "$destination"
 printf 'Staged pinned builder image at %s\n' "$destination"
-printf 'Install it with: sandboxctl image install builder --version %s\n' "$version"
+printf 'Install it with: sandboxctl image install %s --version %s\n' "$image_name" "$version"
