@@ -14,6 +14,7 @@ buildkit_root=$build_root/buildkit
 buildkit_socket_dir=/run/sandboxctl-buildkit
 buildkit_socket=$buildkit_socket_dir/buildkitd.sock
 buildkit_log=$build_root/buildkitd.log
+buildkit_version=v0.34.0
 
 if [ ! -d "$build_root" ] || [ -L "$build_root" ]; then
     echo 'sandboxctl-image-builder: build directory is missing or unsafe' >&2
@@ -33,6 +34,13 @@ if [ ! -x /usr/local/bin/buildctl ] || [ ! -x /usr/local/bin/buildkitd ]; then
 fi
 if [ ! -x /usr/bin/mksquashfs ]; then
     echo 'sandboxctl-image-builder: mksquashfs is missing' >&2
+    exit 1
+fi
+actual_buildctl_version=$(/usr/local/bin/buildctl --version | awk '{print $3}')
+actual_buildkitd_version=$(/usr/local/bin/buildkitd --version | awk '{print $3}')
+if [ "$actual_buildctl_version" != "$buildkit_version" ] || [ "$actual_buildkitd_version" != "$buildkit_version" ]; then
+    printf 'sandboxctl-image-builder: BuildKit tools must both be %s (buildctl=%s, buildkitd=%s)\n' \
+        "$buildkit_version" "$actual_buildctl_version" "$actual_buildkitd_version" >&2
     exit 1
 fi
 
