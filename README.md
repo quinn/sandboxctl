@@ -43,6 +43,10 @@ The current implementation can do these operations:
 - Configure routed guest networking and firewall rules.
 - Reset a stopped sandbox without changing its image or allocation.
 
+After installing the updated `sandboxd` package, run `make manual-reset-test`
+to test reset on a disposable sandbox. Set `IMAGE` to use another installed
+image name.
+
 The jailed runtime and guest bootstrap passed a live boot test on a KVM host.
 The test confirmed key login and bootstrap state after a stop and restart.
 
