@@ -50,8 +50,9 @@ ssh -G sandbox-NAME
 
 ## Build and install a guest image
 
-First, stage and install the builder image. The build needs Podman and uses the
-pinned BuildKit tools:
+First, create and install the builder image. It is a reusable build
+environment. `make stage-builder-image` uses Podman and the pinned BuildKit
+tools to create it:
 
 ```sh
 make stage-builder-image
@@ -59,7 +60,9 @@ sandboxctl image install builder --version sha256:BUILDER_DIGEST
 ```
 
 Use the digest printed by `make stage-builder-image` in the install command.
-Then build a guest image from a digest-pinned Ubuntu or Debian base image:
+The installed builder image runs as a temporary virtual machine for each image
+build. It is not the operating system image for the guest. The `--base-image`
+value below selects that guest operating system:
 
 ```sh
 sandboxctl image build dev-image \
