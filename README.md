@@ -66,17 +66,18 @@ value below selects that guest operating system:
 
 ```sh
 sandboxctl image build dev-image \
-  --base-image ubuntu:24.04@sha256:BASE_IMAGE_DIGEST \
+  --base-image ubuntu:24.04@sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254 \
   --builder-version sha256:BUILDER_DIGEST \
   --guest-version 24.04
 ```
 
 The build supports Ubuntu and Debian. It uses the installed `builder` image by
 default. Use `--distribution debian` for a Debian base image. The base image
-must include a valid Secure Hash Algorithm 256-bit (SHA-256) digest. The
-command prints the digest and install command for the finished image. Run the
-printed install command. It reads the image bundle from your user data
-directory.
+reference uses the image name and an immutable Secure Hash Algorithm 256-bit
+(SHA-256) digest from its container registry. The example digest is the pinned
+Ubuntu image used by this repository's live build test. The command prints the
+digest and install command for the finished image. Run the printed install
+command. It reads the image bundle from your user data directory.
 
 ```sh
 sandboxctl image install dev-image --version sha256:IMAGE_DIGEST
