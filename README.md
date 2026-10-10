@@ -17,11 +17,7 @@ Install the local Arch package from this checkout:
 make install
 ```
 
-The target uses `yay`. The local package source needs a Git remote. This
-project uses the bare repository `../sandboxctl-remote.git` as the `local`
-remote. Commit your changes and push the branch to that remote before you run
-the target. The package uses this checkout for sandboxctl source. It downloads
-the pinned Firecracker release from GitHub.
+The target uses `yay`. It downloads the pinned Firecracker release from GitHub.
 
 Install the host service and network rules:
 
