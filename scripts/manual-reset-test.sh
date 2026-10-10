@@ -23,7 +23,9 @@ instance_name="reset-test-$(date +%s)-$$"
 ssh_alias="sandbox-$instance_name"
 image_name=${RESET_TEST_IMAGE:-default}
 ssh_output=$(mktemp "$log_dir/.reset-test-ssh.XXXXXX")
-trap 'rm -f -- "$ssh_output"' EXIT
+ssh_known_hosts=$(mktemp "$log_dir/.reset-test-known-hosts.XXXXXX")
+ssh_options=(-o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$ssh_known_hosts")
+trap 'rm -f -- "$ssh_output" "$ssh_known_hosts"' EXIT
 trap 'result=$?; printf "Reset test failed. Sandbox %s remains for diagnosis.\n" "$instance_name" >&2; printf "Guest console log: /var/lib/sandboxctl/instances/%s/console.log\n" "$instance_name" >&2; exit "$result"' ERR
 
 printf 'Create reset test sandbox %s from image %s.\n' "$instance_name" "$image_name"
@@ -33,7 +35,7 @@ printf 'Create reset test sandbox %s from image %s.\n' "$instance_name" "$image_
 wait_for_ssh() {
 	local deadline=$((SECONDS + 120))
 	while (( SECONDS < deadline )); do
-		if timeout --foreground --kill-after=1s 5s ssh -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=accept-new \
+		if timeout --foreground --kill-after=1s 5s ssh "${ssh_options[@]}" \
 			"$ssh_alias" 'test -r /var/lib/sandboxctl/bootstrap-complete && test "$(id -un)" = dev' \
 			>"$ssh_output" 2>&1; then
 			return 0
@@ -46,14 +48,15 @@ wait_for_ssh() {
 }
 
 wait_for_ssh
-ssh -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=accept-new "$ssh_alias" \
+ssh "${ssh_options[@]}" "$ssh_alias" \
 	"printf retained > /home/dev/reset-test-marker"
 printf 'Stop and reset sandbox %s.\n' "$instance_name"
 "$repo_dir/bin/sandboxctl" stop "$instance_name"
 "$repo_dir/bin/sandboxctl" reset "$instance_name"
+: >"$ssh_known_hosts"
 "$repo_dir/bin/sandboxctl" start "$instance_name"
 wait_for_ssh
-if ssh -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=accept-new "$ssh_alias" \
+if ssh "${ssh_options[@]}" "$ssh_alias" \
 	'test ! -e /home/dev/reset-test-marker'; then
 	printf 'PASS reset removed writable guest state for %s.\n' "$instance_name"
 else
