@@ -431,8 +431,8 @@ func TestRemoveJailerLogFIFORefusesActiveIdentity(t *testing.T) {
 	if err := syscall.Mkfifo(path, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := removeJailerLogFIFO(root, instanceID, os.Geteuid(), os.Getegid()); err == nil {
-		t.Fatal("removeJailerLogFIFO() removed a FIFO while its identity was active")
+	if err := removeJailerLogFIFO(root, instanceID, os.Geteuid(), os.Getegid()); err == nil || !strings.Contains(err.Error(), "process still uses") {
+		t.Fatalf("removeJailerLogFIFO() error = %v, want active identity refusal", err)
 	}
 	if _, err := os.Lstat(path); err != nil {
 		t.Fatalf("active identity FIFO was removed: %v", err)

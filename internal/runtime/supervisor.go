@@ -899,8 +899,10 @@ func removeJailerLogFIFO(root, instanceID string, uid, gid int) error {
 		return errors.New("Firecracker log path is not a FIFO")
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || int(stat.Uid) != os.Geteuid() {
-		return errors.New("Firecracker log FIFO is not owned by sandboxd")
+	ownedBySandboxd := ok && int(stat.Uid) == os.Geteuid() && int(stat.Gid) == os.Getegid()
+	ownedByVM := ok && int(stat.Uid) == uid && int(stat.Gid) == gid
+	if !ownedBySandboxd && !ownedByVM {
+		return errors.New("Firecracker log FIFO owner does not match sandboxd or the allocated VM identity")
 	}
 	active, err := process.HasIdentity(uint32(uid), uint32(gid))
 	if err != nil {
