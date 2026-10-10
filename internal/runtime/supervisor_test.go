@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -88,6 +89,10 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 	if err := saveSupervisorTestInstance(paths, instance); err != nil {
 		t.Fatal(err)
 	}
+	logFIFO := filepath.Join(paths.Jails, ".sandboxctl-"+instance.ID+".firecracker.log.fifo")
+	if err := syscall.Mkfifo(logFIFO, 0o600); err != nil {
+		t.Fatalf("create stale Firecracker log FIFO: %v", err)
+	}
 	machine := &testManagedMachine{stop: make(chan struct{})}
 	networkManager := &testNetworkManager{}
 	factoryCalls := 0
@@ -119,6 +124,9 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 	}
 	if err := supervisor.Start(context.Background(), instance); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.Lstat(logFIFO); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stale Firecracker log FIFO remains after start: %v", err)
 	}
 	if !supervisor.Running(instance.Name) {
 		t.Fatal("supervisor does not report the started VM")
@@ -380,4 +388,53 @@ func supervisorTestInstance() hoststate.Instance {
 
 func saveSupervisorTestInstance(paths hoststate.Paths, instance hoststate.Instance) error {
 	return (hoststate.Store{Paths: paths}).SaveWithPublicKey(instance, supervisorTestPublicKey())
+}
+
+func TestRemoveJailerLogFIFORejectsUnexpectedPaths(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		setup func(string) error
+	}{
+		{
+			name: "regular file",
+			setup: func(path string) error {
+				return os.WriteFile(path, []byte("keep"), 0o600)
+			},
+		},
+		{
+			name: "symlink",
+			setup: func(path string) error {
+				return os.Symlink("target", path)
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, ".sandboxctl-"+supervisorTestInstance().ID+".firecracker.log.fifo")
+			if err := test.setup(path); err != nil {
+				t.Fatal(err)
+			}
+			if err := removeJailerLogFIFO(root, supervisorTestInstance().ID, 200001, 200001); err == nil {
+				t.Fatal("removeJailerLogFIFO() accepted an unexpected path type")
+			}
+			if _, err := os.Lstat(path); err != nil {
+				t.Fatalf("unexpected path was removed: %v", err)
+			}
+		})
+	}
+}
+
+func TestRemoveJailerLogFIFORefusesActiveIdentity(t *testing.T) {
+	root := t.TempDir()
+	instanceID := supervisorTestInstance().ID
+	path := filepath.Join(root, ".sandboxctl-"+instanceID+".firecracker.log.fifo")
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeJailerLogFIFO(root, instanceID, os.Geteuid(), os.Getegid()); err == nil {
+		t.Fatal("removeJailerLogFIFO() removed a FIFO while its identity was active")
+	}
+	if _, err := os.Lstat(path); err != nil {
+		t.Fatalf("active identity FIFO was removed: %v", err)
+	}
 }

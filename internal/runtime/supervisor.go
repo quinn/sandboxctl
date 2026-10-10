@@ -225,6 +225,9 @@ func (s *Supervisor) Start(ctx context.Context, instance hoststate.Instance) (st
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("read existing runtime record: %w", err)
 	}
+	if err := removeJailerLogFIFO(s.Paths.JailRoot, instance.ID, instance.HostUID, instance.HostGID); err != nil {
+		return fmt.Errorf("remove stale Firecracker log FIFO: %w", err)
+	}
 	config, jailPath, apiSocket, err := s.configuration(instance)
 	if err != nil {
 		return err
@@ -629,8 +632,12 @@ func (s *Supervisor) wait(name string, entry *supervisedMachine, ctx context.Con
 	if tapErr != nil {
 		entry.err = errors.Join(entry.err, fmt.Errorf("remove stopped TAP device: %w", tapErr))
 	}
+	logFIFOErr := removeJailerLogFIFO(s.Paths.JailRoot, entry.instance.ID, entry.instance.HostUID, entry.instance.HostGID)
+	if logFIFOErr != nil {
+		entry.err = errors.Join(entry.err, fmt.Errorf("remove stopped Firecracker log FIFO: %w", logFIFOErr))
+	}
 	store := hoststate.Store{Paths: s.StatePaths}
-	if tapErr == nil {
+	if tapErr == nil && logFIFOErr == nil {
 		if err := store.RemoveRuntime(name, entry.record); err != nil {
 			entry.err = errors.Join(entry.err, fmt.Errorf("remove runtime record: %w", err))
 		}
@@ -693,6 +700,9 @@ func (s *Supervisor) stopRecorded(ctx context.Context, name string, force bool) 
 		if err := s.removeTap(instance); err != nil {
 			return fmt.Errorf("remove stopped TAP device: %w", err)
 		}
+		if err := removeJailerLogFIFO(s.Paths.JailRoot, instance.ID, instance.HostUID, instance.HostGID); err != nil {
+			return fmt.Errorf("remove stopped Firecracker log FIFO: %w", err)
+		}
 		if err := store.RemoveRuntime(name, record); err != nil {
 			return fmt.Errorf("remove stopped runtime record: %w", err)
 		}
@@ -736,6 +746,9 @@ func (s *Supervisor) stopRecorded(ctx context.Context, name string, force bool) 
 	}
 	if err := s.removeTap(instance); err != nil {
 		return fmt.Errorf("remove stopped TAP device: %w", err)
+	}
+	if err := removeJailerLogFIFO(s.Paths.JailRoot, instance.ID, instance.HostUID, instance.HostGID); err != nil {
+		return fmt.Errorf("remove stopped Firecracker log FIFO: %w", err)
 	}
 	if err := store.RemoveRuntime(name, record); err != nil {
 		return fmt.Errorf("remove stopped runtime record: %w", err)
@@ -857,7 +870,46 @@ func (s *Supervisor) cleanupFailedStart(machine ManagedMachine, jailPath string,
 	if err := s.removeTap(instance); err != nil {
 		return fmt.Errorf("remove TAP after failed start: %w", err)
 	}
+	if err := removeJailerLogFIFO(s.Paths.JailRoot, instance.ID, instance.HostUID, instance.HostGID); err != nil {
+		return fmt.Errorf("remove Firecracker log FIFO after failed start: %w", err)
+	}
 	return removeJail(jailPath, s.Paths.JailRoot)
+}
+
+func removeJailerLogFIFO(root, instanceID string, uid, gid int) error {
+	if !jailIDPattern.MatchString(instanceID) {
+		return errors.New("instance identifier is invalid for the Firecracker log FIFO")
+	}
+	rootInfo, err := os.Lstat(root)
+	if err != nil {
+		return fmt.Errorf("inspect jail root: %w", err)
+	}
+	if !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 {
+		return errors.New("jail root is not a real directory")
+	}
+	path := filepath.Join(root, ".sandboxctl-"+instanceID+".firecracker.log.fifo")
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect Firecracker log FIFO: %w", err)
+	}
+	if info.Mode()&os.ModeNamedPipe == 0 || info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("Firecracker log path is not a FIFO")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || int(stat.Uid) != os.Geteuid() {
+		return errors.New("Firecracker log FIFO is not owned by sandboxd")
+	}
+	active, err := process.HasIdentity(uint32(uid), uint32(gid))
+	if err != nil {
+		return fmt.Errorf("inspect allocated host identity: %w", err)
+	}
+	if active {
+		return errors.New("a process still uses the allocated host identity")
+	}
+	return os.Remove(path)
 }
 
 func removeJail(path, root string) error {

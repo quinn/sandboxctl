@@ -23,7 +23,7 @@ The latest host `doctor` run found that managed TAP routes looked like address-p
 
 The clean-host Section 19 check is deferred until a clean supported Arch host is available. Section 18 cleanup review found no direct Herdr commands, SSH or SCP wrappers, or firectl runtime code.
 
-The `sandboxd` service now has systemd filesystem and process restrictions. `systemd-analyze verify` passes. The live service reports exposure 7.4. A fresh VM started and accepted public-key SSH after the package upgrade and daemon restart. `sandboxctl doctor` passed. The disposable VM was stopped and deleted. Restarting an older acceptance VM failed because its previous jail contains a stale Firecracker log FIFO; the fresh-VM smoke test passed, so this is limited to restarting that old instance.
+The `sandboxd` service now has systemd filesystem and process restrictions. `systemd-analyze verify` passes. The live service reports exposure 7.4. A fresh VM started and accepted public-key SSH after the package upgrade and daemon restart. `sandboxctl doctor` passed. The disposable VM was stopped and deleted. Restarting an older acceptance VM exposed a stale Firecracker log FIFO. The supervisor now removes a verified stale FIFO only after it confirms that no process uses the VM's allocated UID or GID. Runtime tests cover cleanup and refusal to remove unexpected paths. Install this daemon change and test stop/start on one VM.
 
 The seed image is built by `make stage-builder-image`. The manual test uses a unique image name each time because installed images cannot be replaced. The recipe enables SSH and installs the fixed tools. It does not provide guest Internet access.
 
