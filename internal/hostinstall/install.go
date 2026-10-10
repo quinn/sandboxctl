@@ -439,6 +439,9 @@ func findRouteConflict(pool netip.Prefix, output string) error {
 		if len(fields) == 0 || fields[0] == "default" {
 			continue
 		}
+		if managedTapRoute(fields) {
+			continue
+		}
 		route, err := parseIPv4Route(fields[0])
 		if err != nil || route.IP.To4() == nil {
 			continue
@@ -449,6 +452,24 @@ func findRouteConflict(pool netip.Prefix, output string) error {
 		}
 	}
 	return nil
+}
+
+func managedTapRoute(fields []string) bool {
+	for index := 0; index+1 < len(fields); index++ {
+		if fields[index] == "dev" {
+			name := fields[index+1]
+			if len(name) != 8 || !strings.HasPrefix(name, "sc") {
+				return false
+			}
+			for _, char := range name[2:] {
+				if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f')) {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	return false
 }
 
 func parseIPv4Route(value string) (*net.IPNet, error) {

@@ -319,6 +319,12 @@ func TestServerImportsVerifiedImageStream(t *testing.T) {
 	if _, err := (hoststate.InstalledImages{Paths: paths}).ResolveBootImage("default", version); err != nil {
 		t.Fatalf("resolve imported image: %v", err)
 	}
+	listContext, listCancel := callContext(daemon.APIVersion, "88888888888888888888888888888888")
+	listed, err := service.ListImages(listContext, &controlpb.ListImagesRequest{})
+	listCancel()
+	if err != nil || len(listed.GetImages()) != 1 || listed.GetImages()[0].GetName() != "default" || listed.GetImages()[0].GetVersion() != version {
+		t.Fatalf("ListImages() = %v, %v", listed, err)
+	}
 }
 
 func TestServerStartsAndStopsInstanceThroughRuntimeController(t *testing.T) {

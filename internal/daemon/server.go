@@ -261,6 +261,22 @@ func (s *service) ListInstances(context.Context, *controlpb.ListInstancesRequest
 	return response, nil
 }
 
+func (s *service) ListImages(context.Context, *controlpb.ListImagesRequest) (*controlpb.ListImagesResponse, error) {
+	if s.imagePaths == nil {
+		return nil, status.Error(codes.FailedPrecondition, "image state is unavailable")
+	}
+	images, err := (hoststate.InstalledImages{Paths: *s.imagePaths}).List()
+	if err != nil {
+		slog.Error("installed image validation failed", "error", err)
+		return nil, status.Error(codes.FailedPrecondition, "installed image state is invalid")
+	}
+	response := &controlpb.ListImagesResponse{Images: make([]*controlpb.InstalledImage, 0, len(images))}
+	for _, image := range images {
+		response.Images = append(response.Images, &controlpb.InstalledImage{Name: image.Name, Version: image.Version})
+	}
+	return response, nil
+}
+
 func (s *service) InspectInstance(_ context.Context, request *controlpb.InspectInstanceRequest) (*controlpb.InspectInstanceResponse, error) {
 	if s.instances == nil {
 		return nil, status.Error(codes.FailedPrecondition, "instance state is unavailable")

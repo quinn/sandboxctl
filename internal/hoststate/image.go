@@ -17,6 +17,12 @@ type InstalledImages struct {
 	Paths Paths
 }
 
+// InstalledImage is a validated image name and pinned version.
+type InstalledImage struct {
+	Name    string
+	Version string
+}
+
 // BootImage contains the installed files required to start a V2 guest.
 type BootImage struct {
 	Version       string
@@ -71,6 +77,35 @@ func (images InstalledImages) ResolveVersion(name string) (string, error) {
 		return "", errors.New("image manifest identity or schema is invalid")
 	}
 	return manifest.Version, nil
+}
+
+// List validates each installed image and returns its pinned version.
+func (images InstalledImages) List() ([]InstalledImage, error) {
+	entries, err := os.ReadDir(images.Paths.Images)
+	if errors.Is(err, os.ErrNotExist) {
+		return []InstalledImage{}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read installed image directory: %w", err)
+	}
+	result := make([]InstalledImage, 0, len(entries))
+	for _, entry := range entries {
+		if !safeName.MatchString(entry.Name()) {
+			continue
+		}
+		if !entry.IsDir() {
+			return nil, fmt.Errorf("installed image %q is not a directory", entry.Name())
+		}
+		version, err := images.ResolveVersion(entry.Name())
+		if err != nil {
+			return nil, fmt.Errorf("validate installed image %q: %w", entry.Name(), err)
+		}
+		if _, err := images.ResolveBootImage(entry.Name(), version); err != nil {
+			return nil, fmt.Errorf("validate installed image %q: %w", entry.Name(), err)
+		}
+		result = append(result, InstalledImage{Name: entry.Name(), Version: version})
+	}
+	return result, nil
 }
 
 // ResolveBootImage returns the fixed boot artifacts for an installed image version.

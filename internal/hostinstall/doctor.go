@@ -45,7 +45,7 @@ func Doctor(ctx context.Context, output io.Writer, paths config.Paths) error {
 		checkTUN(),
 		checkAddressPool(ctx),
 		checkSSHInclude(ctx, paths),
-		checkInstalledImages(),
+		checkInstalledImages(ctx),
 	}
 	failed := 0
 	for _, item := range results {
@@ -232,14 +232,20 @@ func checkSSHInclude(ctx context.Context, paths config.Paths) result {
 	return result{name: "SSH Include resolution"}
 }
 
-func checkInstalledImages() result {
-	directory := filepath.Join(stateRoot, "images")
-	entries, err := os.ReadDir(directory)
-	if os.IsNotExist(err) || (err == nil && len(entries) == 0) {
-		return result{name: "installed image integrity (no images installed)"}
-	}
+func checkInstalledImages(ctx context.Context) result {
+	connection, service, err := client.Dial(ctx, controlSocket)
 	if err != nil {
 		return result{"installed image integrity", err}
 	}
-	return result{"installed image integrity", fmt.Errorf("image manifests are not available for validation")}
+	defer connection.Close()
+	callContext, cancel := context.WithTimeout(ctx, client.DialTimeout)
+	defer cancel()
+	response, err := service.ListImages(callContext, &controlpb.ListImagesRequest{})
+	if err != nil {
+		return result{"installed image integrity", err}
+	}
+	if len(response.GetImages()) == 0 {
+		return result{name: "installed image integrity (no images installed)"}
+	}
+	return result{name: "installed image integrity"}
 }

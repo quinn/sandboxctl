@@ -101,6 +101,8 @@ func TestFindRouteConflict(t *testing.T) {
 		{name: "nested route", route: "172.30.12.0/24 dev eth0", wantError: true},
 		{name: "host route", route: "172.30.4.9 dev eth0 scope link", wantError: true},
 		{name: "covering route", route: "172.16.0.0/12 dev eth0", wantError: true},
+		{name: "sandbox TAP route", route: "172.30.0.40/30 dev sc00000b proto kernel scope link", wantError: false},
+		{name: "unmanaged interface with sandbox name", route: "172.30.0.40/30 dev sc00000x", wantError: true},
 		{name: "default route", route: "default via 192.168.1.1 dev eth0", wantError: false},
 	}
 	for _, test := range testCases {

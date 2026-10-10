@@ -1,9 +1,12 @@
 package hoststate
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"sandboxctl/internal/imagebuild/manifest"
 )
 
 func TestInstalledImagesResolvePinnedManifest(t *testing.T) {
@@ -76,6 +79,45 @@ func TestInstalledImagesResolveAndValidateBootArtifacts(t *testing.T) {
 	}
 	if _, err := (InstalledImages{Paths: paths}).ResolveBootImage("default", "sha256:different"); err == nil {
 		t.Fatal("accepted a different pinned image version")
+	}
+}
+
+func TestInstalledImagesListValidatesAndOrdersImages(t *testing.T) {
+	paths := PathsAt(filepath.Join(t.TempDir(), "state"))
+	if err := paths.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"zeta", "alpha"} {
+		directory := filepath.Join(paths.Images, name)
+		if err := os.Mkdir(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		manifestData, artifacts, _ := imageFixture(t)
+		var image manifest.Manifest
+		if err := json.Unmarshal(manifestData, &image); err != nil {
+			t.Fatal(err)
+		}
+		image.Name = name
+		image.Version = manifest.VersionForManifest(image)
+		manifestData, err := json.Marshal(image)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, "manifest.json"), manifestData, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for artifactName, data := range artifacts {
+			if err := os.WriteFile(filepath.Join(directory, artifactName), data, 0o444); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	images, err := (InstalledImages{Paths: paths}).List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(images) != 2 || images[0].Name != "alpha" || images[1].Name != "zeta" || images[0].Version == images[1].Version {
+		t.Fatalf("List() = %#v", images)
 	}
 }
 

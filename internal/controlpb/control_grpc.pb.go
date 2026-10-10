@@ -22,6 +22,7 @@ const (
 	ControlService_Ping_FullMethodName            = "/sandboxctl.ControlService/Ping"
 	ControlService_HostStatus_FullMethodName      = "/sandboxctl.ControlService/HostStatus"
 	ControlService_ListInstances_FullMethodName   = "/sandboxctl.ControlService/ListInstances"
+	ControlService_ListImages_FullMethodName      = "/sandboxctl.ControlService/ListImages"
 	ControlService_InspectInstance_FullMethodName = "/sandboxctl.ControlService/InspectInstance"
 	ControlService_CreateInstance_FullMethodName  = "/sandboxctl.ControlService/CreateInstance"
 	ControlService_StartInstance_FullMethodName   = "/sandboxctl.ControlService/StartInstance"
@@ -41,6 +42,8 @@ type ControlServiceClient interface {
 	HostStatus(ctx context.Context, in *HostStatusRequest, opts ...grpc.CallOption) (*HostStatusResponse, error)
 	// Lists the saved sandbox instances.
 	ListInstances(ctx context.Context, in *ListInstancesRequest, opts ...grpc.CallOption) (*ListInstancesResponse, error)
+	// Lists and validates the installed images.
+	ListImages(ctx context.Context, in *ListImagesRequest, opts ...grpc.CallOption) (*ListImagesResponse, error)
 	// Reports the saved state for one sandbox instance.
 	InspectInstance(ctx context.Context, in *InspectInstanceRequest, opts ...grpc.CallOption) (*InspectInstanceResponse, error)
 	// Creates a stopped sandbox instance.
@@ -89,6 +92,16 @@ func (c *controlServiceClient) ListInstances(ctx context.Context, in *ListInstan
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListInstancesResponse)
 	err := c.cc.Invoke(ctx, ControlService_ListInstances_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlServiceClient) ListImages(ctx context.Context, in *ListImagesRequest, opts ...grpc.CallOption) (*ListImagesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListImagesResponse)
+	err := c.cc.Invoke(ctx, ControlService_ListImages_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -178,6 +191,8 @@ type ControlServiceServer interface {
 	HostStatus(context.Context, *HostStatusRequest) (*HostStatusResponse, error)
 	// Lists the saved sandbox instances.
 	ListInstances(context.Context, *ListInstancesRequest) (*ListInstancesResponse, error)
+	// Lists and validates the installed images.
+	ListImages(context.Context, *ListImagesRequest) (*ListImagesResponse, error)
 	// Reports the saved state for one sandbox instance.
 	InspectInstance(context.Context, *InspectInstanceRequest) (*InspectInstanceResponse, error)
 	// Creates a stopped sandbox instance.
@@ -210,6 +225,9 @@ func (UnimplementedControlServiceServer) HostStatus(context.Context, *HostStatus
 }
 func (UnimplementedControlServiceServer) ListInstances(context.Context, *ListInstancesRequest) (*ListInstancesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListInstances not implemented")
+}
+func (UnimplementedControlServiceServer) ListImages(context.Context, *ListImagesRequest) (*ListImagesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListImages not implemented")
 }
 func (UnimplementedControlServiceServer) InspectInstance(context.Context, *InspectInstanceRequest) (*InspectInstanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InspectInstance not implemented")
@@ -303,6 +321,24 @@ func _ControlService_ListInstances_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlServiceServer).ListInstances(ctx, req.(*ListInstancesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlService_ListImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListImagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServiceServer).ListImages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlService_ListImages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServiceServer).ListImages(ctx, req.(*ListImagesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -440,6 +476,10 @@ var ControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListInstances",
 			Handler:    _ControlService_ListInstances_Handler,
+		},
+		{
+			MethodName: "ListImages",
+			Handler:    _ControlService_ListImages_Handler,
 		},
 		{
 			MethodName: "InspectInstance",

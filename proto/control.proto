@@ -14,6 +14,9 @@ service ControlService {
   // Lists the saved sandbox instances.
   rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse);
 
+  // Lists and validates the installed images.
+  rpc ListImages(ListImagesRequest) returns (ListImagesResponse);
+
   // Reports the saved state for one sandbox instance.
   rpc InspectInstance(InspectInstanceRequest) returns (InspectInstanceResponse);
 
@@ -58,6 +61,20 @@ message ListInstancesRequest {}
 message ListInstancesResponse {
   // Contains the saved instances in name order.
   repeated Instance instances = 1;
+}
+
+message ListImagesRequest {}
+
+message ListImagesResponse {
+  // Contains validated images in name order.
+  repeated InstalledImage images = 1;
+}
+
+message InstalledImage {
+  // Names the installed image.
+  string name = 1;
+  // Gives the pinned image version.
+  string version = 2;
 }
 
 message InspectInstanceRequest {
