@@ -52,7 +52,6 @@ The base image must contain these items:
 - An OpenSSH server.
 - A `dev` user.
 - A first-boot service for `sandboxctl` metadata.
-- The Herdr runtime, or a supported path for Herdr installation.
 
 The first-boot service must install the SSH public key. It must also set the guest host name.
 
@@ -101,7 +100,6 @@ Earlier matching settings can take precedence over the included settings.
 The first phase provides sandbox lifecycle commands and a managed SSH configuration.
 Applications can use the sandbox aliases through the user's manual include.
 Application-specific connection management is outside this phase.
-Existing instance records retain `herdr_label` for schema compatibility.
 
 ## State
 

@@ -23,5 +23,4 @@ type Instance struct {
 	GatewayIP     string    `json:"gateway_ip"`
 	SSHUser       string    `json:"ssh_user"`
 	SSHPort       int       `json:"ssh_port"`
-	HerdrLabel    string    `json:"herdr_label"`
 }

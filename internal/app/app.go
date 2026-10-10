@@ -121,7 +121,6 @@ func (c *Context) Create(options CreateOptions) error {
 		GatewayIP:     "172.30.0.1",
 		SSHUser:       options.SSHUser,
 		SSHPort:       22,
-		HerdrLabel:    options.Name,
 	}
 	if err := c.paths.Ensure(); err != nil {
 		return err

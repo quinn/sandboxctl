@@ -12,7 +12,6 @@
   "guest_ip": "172.30.0.10",
   "gateway_ip": "172.30.0.1",
   "ssh_user": "dev",
-  "ssh_port": 22,
-  "herdr_label": "dev1"
+  "ssh_port": 22
 }
 
