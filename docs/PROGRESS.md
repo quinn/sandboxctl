@@ -4,7 +4,9 @@
 
 Implemented `sandboxctl image build` with local Dockerfile and context input.
 BuildKit runs the Dockerfile inside the existing temporary builder VM. The
-command supports stage selection and explicit build arguments. It applies
+command infers `<context>/Dockerfile` when the user sets `--context` without
+`--dockerfile`. Dockerfile mode defaults the context to `.`. The command
+supports stage selection and explicit build arguments. It applies
 Docker ignore rules, validates and hashes the context snapshot, and records
 input digests in image provenance. Required sandboxctl provisioning follows
 the selected build stage. `CMD` and `ENTRYPOINT` do not control VM startup.

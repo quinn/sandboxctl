@@ -87,15 +87,16 @@ Build a custom image from a local Dockerfile and context:
 
 ```sh
 sandboxctl image build app-image \
-  --dockerfile ./image/Dockerfile \
   --context ./image \
   --target runtime \
   --build-arg APP_VERSION=1.2.3 \
   --guest-version 24.04
 ```
 
-The context defaults to the current directory. The Dockerfile must be inside
-the context. Use `--build-arg` once for each build argument. BuildKit applies
+The command uses `./image/Dockerfile` because the context is `./image`. You can
+set another file with `--dockerfile`. In Dockerfile mode, the context defaults
+to `.`. The Dockerfile must be inside the context. Use `--build-arg` once for
+each build argument. BuildKit applies
 Docker ignore rules before it sends context files to the builder. It uses
 `Dockerfile.dockerignore` when that file exists. Otherwise, it uses
 `.dockerignore`.

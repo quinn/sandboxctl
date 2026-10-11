@@ -71,11 +71,10 @@ existing E2B-derived distribution profiles and provisioning renderer.
 
 ## 4. Command contract
 
-The planned command is:
+The command accepts a Dockerfile and context:
 
 ```sh
 sandboxctl image build dev-image \
-  --dockerfile ./image/Dockerfile \
   --context ./image \
   --guest-version 24.04
 ```
@@ -88,15 +87,17 @@ Add these options:
 | Option | Rule |
 | --- | --- |
 | `--guest-version VERSION` | Require the built guest's `VERSION_ID` to match this value. |
-| `--dockerfile PATH` | Select a regular local Dockerfile. Resolve PATH from the current directory. |
-| `--context DIRECTORY` | Select the local context directory. Default to the current directory. |
+| `--dockerfile PATH` | Select a regular local Dockerfile. Resolve PATH from the current directory. Default to `Dockerfile` in the context directory. |
+| `--context DIRECTORY` | Select the local context directory. Selecting this option selects Dockerfile input. Default to `.` in Dockerfile mode. |
 | `--target NAME` | Select a Dockerfile stage. Default to the final stage. |
 | `--build-arg NAME=VALUE` | Set one build argument. Permit repeated options with different names. |
 
-Require exactly one of `--base-image` and `--dockerfile`. Reject context,
-target, and build argument options in base-image mode. Reject duplicate build
-argument names. Require explicit values. Do not read argument values from the
-operator's environment.
+Require exactly one input mode. `--base-image` selects base-image mode.
+`--dockerfile`, `--context`, `--target`, or `--build-arg` selects Dockerfile
+mode. In Dockerfile mode, infer `<context>/Dockerfile` when `--dockerfile` is
+omitted. Default the context to `.`. Reject Dockerfile options in base-image
+mode. Reject duplicate build argument names. Require explicit values. Do not
+read argument values from the operator's environment.
 
 Require the selected Dockerfile to be inside the context directory. Do not
 accept standard input, remote context URLs, or Git context URLs in this phase.

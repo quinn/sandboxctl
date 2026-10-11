@@ -41,6 +41,34 @@ func TestParseDockerfileBuildOptions(t *testing.T) {
 	}
 }
 
+func TestParseInfersDockerfileFromContext(t *testing.T) {
+	options, err := parse([]string{
+		"--context", "./image", "--builder-image", "builder",
+		"--builder-version", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		"--guest-version", "24.04", "dev-image",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.Dockerfile != "image/Dockerfile" || options.ContextDir != "./image" {
+		t.Fatalf("parsed inferred Dockerfile options = %#v", options)
+	}
+}
+
+func TestParseDefaultsDockerfileContextToDot(t *testing.T) {
+	options, err := parse([]string{
+		"--dockerfile", "./image/Dockerfile", "--builder-image", "builder",
+		"--builder-version", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		"--guest-version", "24.04", "dev-image",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.ContextDir != "." {
+		t.Fatalf("context directory = %q, want .", options.ContextDir)
+	}
+}
+
 func TestParseRejectsDockerfileOptionConflicts(t *testing.T) {
 	base := []string{
 		"--base-image", "ubuntu@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -49,9 +77,9 @@ func TestParseRejectsDockerfileOptionConflicts(t *testing.T) {
 	if _, err := parse(base); err == nil {
 		t.Fatal("parse accepted both base-image and Dockerfile modes")
 	}
-	contextWithoutDockerfile := []string{"--context", ".", "--base-image", "ubuntu@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "--guest-version", "24.04", "dev-image"}
-	if _, err := parse(contextWithoutDockerfile); err == nil {
-		t.Fatal("parse accepted --context without --dockerfile")
+	contextWithBaseImage := []string{"--context", ".", "--base-image", "ubuntu@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "--guest-version", "24.04", "dev-image"}
+	if _, err := parse(contextWithBaseImage); err == nil {
+		t.Fatal("parse accepted --context with --base-image")
 	}
 	missingInput := []string{"--guest-version", "24.04", "dev-image"}
 	if _, err := parse(missingInput); err == nil {

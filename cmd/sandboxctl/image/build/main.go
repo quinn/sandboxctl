@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -197,8 +198,8 @@ func parse(arguments []string) (options, error) {
 	builderImage := flags.String("builder-image", "", "Installed builder image name. Defaults to the packaged builder.")
 	builderVersion := flags.String("builder-version", "", "Pinned builder image version. Defaults to the packaged builder version.")
 	baseImage := flags.String("base-image", "", "Digest-pinned OCI base image.")
-	dockerfile := flags.String("dockerfile", "", "Local Dockerfile path.")
-	contextDir := flags.String("context", "", "Local build context directory. Defaults to the current directory.")
+	dockerfile := flags.String("dockerfile", "", "Local Dockerfile path. Defaults to Dockerfile in the build context.")
+	contextDir := flags.String("context", "", "Local build context directory. Defaults to the current directory in Dockerfile mode.")
 	target := flags.String("target", "", "Dockerfile stage to build. Defaults to the final stage.")
 	var rawBuildArgs repeatedStringFlag
 	flags.Var(&rawBuildArgs, "build-arg", "Explicit Dockerfile build argument NAME=VALUE. Can be repeated.")
@@ -211,7 +212,7 @@ func parse(arguments []string) (options, error) {
 		return options{}, fmt.Errorf("parse image build options: %w", err)
 	}
 	if flags.NArg() != 1 {
-		return options{}, errors.New("usage: sandboxctl image build NAME (--base-image IMAGE@sha256:DIGEST | --dockerfile PATH) --guest-version VERSION [--context DIRECTORY --target NAME --build-arg NAME=VALUE] [--builder-image NAME --builder-version sha256:DIGEST] [--distribution debian|ubuntu]")
+		return options{}, errors.New("usage: sandboxctl image build NAME (--base-image IMAGE@sha256:DIGEST | --dockerfile PATH | --context DIRECTORY) --guest-version VERSION [--target NAME --build-arg NAME=VALUE] [--builder-image NAME --builder-version sha256:DIGEST] [--distribution debian|ubuntu]")
 	}
 	name := flags.Arg(0)
 	if err := cmdutil.ValidateSandboxName(name); err != nil {
@@ -219,22 +220,28 @@ func parse(arguments []string) (options, error) {
 	}
 	seen := make(map[string]bool)
 	flags.Visit(func(value *flag.Flag) { seen[value.Name] = true })
-	if seen["base-image"] == seen["dockerfile"] {
-		return options{}, errors.New("set exactly one of --base-image or --dockerfile")
+	dockerfileMode := seen["dockerfile"] || seen["context"] || seen["target"] || len(rawBuildArgs) != 0
+	if seen["base-image"] && dockerfileMode {
+		return options{}, errors.New("set exactly one of --base-image or Dockerfile input options")
 	}
-	if seen["dockerfile"] && *dockerfile == "" {
-		return options{}, errors.New("Dockerfile path is empty")
+	if !seen["base-image"] && !dockerfileMode {
+		return options{}, errors.New("set one input with --base-image, --dockerfile, or --context")
 	}
-	if !seen["dockerfile"] && (seen["context"] || seen["target"] || len(rawBuildArgs) != 0) {
-		return options{}, errors.New("--context, --target, and --build-arg require --dockerfile")
+	if seen["base-image"] && (seen["context"] || seen["target"] || len(rawBuildArgs) != 0) {
+		return options{}, errors.New("--context, --target, and --build-arg require Dockerfile input")
 	}
-	if seen["dockerfile"] {
+	if dockerfileMode {
+		if seen["context"] && *contextDir == "" {
+			return options{}, errors.New("build context directory is empty")
+		}
 		if *contextDir == "" {
-			var err error
-			*contextDir, err = os.Getwd()
-			if err != nil {
-				return options{}, fmt.Errorf("get working directory: %w", err)
-			}
+			*contextDir = "."
+		}
+		if seen["dockerfile"] && *dockerfile == "" {
+			return options{}, errors.New("Dockerfile path is empty")
+		}
+		if !seen["dockerfile"] {
+			*dockerfile = filepath.Join(*contextDir, "Dockerfile")
 		}
 		if seen["target"] && !validTarget.MatchString(*target) {
 			return options{}, errors.New("target must contain 1 to 128 letters, digits, dots, underscores, or hyphens")
