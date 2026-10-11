@@ -250,3 +250,26 @@ Original sandboxctl code is licensed under the GNU Affero General Public
 License, version 3 or any later version (AGPL-3.0-or-later). Third-party code
 keeps its own license. See [docs/LICENSING.md](docs/LICENSING.md) and
 `third_party/licenses/` for details and license texts.
+
+## Use with Herdr
+
+Herdr can connect to a sandbox through its generated OpenSSH alias. First add
+the `Include` line from `sandboxctl ssh-config` to `~/.ssh/config`. Create and
+start the sandbox. Then attach from your host:
+
+```sh
+herdr --remote sandbox-dev1
+```
+
+Replace `sandbox-dev1` with the alias for your sandbox. Herdr uses the normal
+OpenSSH configuration and authentication for this connection. You can save the
+host in Herdr with a label:
+
+```sh
+herdr machine add sandbox-dev1 --label dev1
+```
+
+Herdr may ask to install its server in the guest when you add the machine.
+Approve that step in Herdr. `sandboxctl` does not install Herdr or change its
+settings. See the [Herdr guide for connecting machines](https://herdr.dev/docs/connecting-machines/)
+for details.
