@@ -35,6 +35,13 @@ Host networking and guest image construction remain manual for this iteration.
 
 ## Guest images
 
+Dockerfile input is the next planned image build mode. BuildKit will execute
+the Dockerfile inside the existing temporary builder VM. Required sandboxctl
+provisioning follows the user build. The VM boots its guest init system as
+PID 1. Dockerfile `CMD` and `ENTRYPOINT` do not start guest applications.
+See [DOCKERFILE-IMAGE-BUILDS.md](DOCKERFILE-IMAGE-BUILDS.md) for scope and
+implementation order. This input mode is not implemented yet.
+
 The Arch package includes the pinned builder image bundle under
 `/usr/share/sandboxctl/builder`. `sandboxctl init` verifies the bundle and
 streams it to `sandboxd` for installation in the root-owned image store. The

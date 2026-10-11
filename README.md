@@ -196,3 +196,7 @@ read-only. `sandboxctl reset` removes changes from the writable disk.
 See [docs/SANDBOX-RUNTIME-V2.md](docs/SANDBOX-RUNTIME-V2.md) for the runtime
 design. See [docs/PROGRESS.md](docs/PROGRESS.md) for implementation and test
 status.
+
+Dockerfile input is planned in
+[docs/DOCKERFILE-IMAGE-BUILDS.md](docs/DOCKERFILE-IMAGE-BUILDS.md). It is not
+implemented yet.

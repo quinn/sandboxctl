@@ -1,5 +1,12 @@
 # Continuation
 
+The next phase is Dockerfile guest image input. Read
+[DOCKERFILE-IMAGE-BUILDS.md](DOCKERFILE-IMAGE-BUILDS.md) before implementation.
+The plan keeps BuildKit inside the temporary builder VM. Required guest
+provisioning follows the user build. `CMD` and `ENTRYPOINT` do not control VM
+startup. First prove the two-build OCI layout path and source pinning with
+the pinned BuildKit version. The command options are not implemented yet.
+
 The Arch package build now creates and includes the pinned builder image.
 `sandboxctl init` verifies it and installs it through the daemon image stream.
 `sandboxctl image build` selects the packaged builder name and digest by

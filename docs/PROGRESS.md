@@ -1,5 +1,23 @@
 # Implementation progress
 
+## Dockerfile image build planning
+
+The next phase is planned in
+[DOCKERFILE-IMAGE-BUILDS.md](DOCKERFILE-IMAGE-BUILDS.md). The operator confirmed
+that Dockerfile input should build the guest filesystem. `CMD` and
+`ENTRYPOINT` must not control VM startup. The guest init system runs as PID 1.
+BuildKit will execute the user Dockerfile inside the existing temporary
+builder VM. Required sandboxctl provisioning follows the user build.
+
+The E2B review used the retained runtime checkout at commit
+`47096f195aca4a545a9079b706efb3a18f51cf3f`. Its separate SDK translates a
+limited Dockerfile into template steps. No new E2B code extraction is planned.
+
+This is a documentation change. Dockerfile input is not implemented.
+The next task is to prove the two-build OCI layout path and source pinning
+with BuildKit v0.34.0. Then add bounded context preparation and transfer.
+The clean Arch host acceptance test remains deferred.
+
 ## Builder package distribution
 
 The Arch package build now creates the pinned builder image and places its
