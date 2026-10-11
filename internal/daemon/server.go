@@ -142,6 +142,9 @@ func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerIn
 	if len(requestIDs) != 1 || !requestIDPattern.MatchString(requestIDs[0]) {
 		return nil, status.Error(codes.InvalidArgument, "request identifier is missing or invalid")
 	}
+
+	requestID := requestIDs[0]
+
 	if _, ok := ctx.Deadline(); !ok {
 		return nil, status.Error(codes.InvalidArgument, "request deadline is required")
 	}
@@ -161,13 +164,13 @@ func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerIn
 	}
 	ctx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
-	if err := grpc.SetHeader(ctx, metadata.Pairs(RequestIDMetadataKey, requestIDs[0])); err != nil {
+	if err := grpc.SetHeader(ctx, metadata.Pairs(RequestIDMetadataKey, requestID)); err != nil {
 		return nil, status.Error(codes.Internal, "cannot set response request identifier")
 	}
 	started := time.Now()
-	slog.Info("RPC started", "method", info.FullMethod, "request_id", requestIDs[0])
+	slog.Info("RPC started", "method", info.FullMethod, "request_id", requestID)
 	response, err := handler(ctx, request)
-	logRPCResult(info.FullMethod, requestIDs[0], started, err)
+	logRPCResult(info.FullMethod, requestID, started, err)
 	return response, err
 }
 
