@@ -107,7 +107,7 @@ podman_cmd export "$container_id" | mksquashfs - "$bundle/root.squashfs" \
   -b 1M \
   -no-xattrs \
   -no-progress \
-  -repro-time 0
+  -all-time 0
 
 unsquashfs -s "$bundle/root.squashfs" >/dev/null
 for required_path in \
