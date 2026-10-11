@@ -243,3 +243,10 @@ status.
 
 See [docs/DOCKERFILE-IMAGE-BUILDS.md](docs/DOCKERFILE-IMAGE-BUILDS.md) for
 Dockerfile build limits, provenance, and remaining acceptance checks.
+
+## License
+
+Original sandboxctl code is licensed under the GNU Affero General Public
+License, version 3 or any later version (AGPL-3.0-or-later). Third-party code
+keeps its own license. See [docs/LICENSING.md](docs/LICENSING.md) and
+`third_party/licenses/` for details and license texts.

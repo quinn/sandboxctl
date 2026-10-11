@@ -4,7 +4,7 @@ pkgrel=1
 pkgdesc='Manage local Firecracker development sandboxes'
 arch=('x86_64')
 url='https://github.com/quinn/sandboxctl'
-license=('unknown' 'Apache-2.0')
+license=('AGPL-3.0-or-later' 'Apache-2.0' 'BSD-2-Clause' 'BSD-3-Clause' 'ISC' 'MIT' 'MPL-2.0')
 depends=('e2fsprogs' 'iproute2' 'nftables' 'openssh')
 makedepends=('cpio' 'curl' 'git' 'go>=1.27' 'gzip' 'podman' 'python' 'squashfs-tools')
 provides=('sandboxctl')
@@ -64,5 +64,7 @@ package() {
 	install -m644 "$builder_bundle/initramfs.cpio.gz" "$pkgdir/usr/share/sandboxctl/builder/initramfs.cpio.gz"
 	install -m644 "$builder_bundle/root.squashfs" "$pkgdir/usr/share/sandboxctl/builder/root.squashfs"
 	install -Dm644 README.md "$pkgdir/usr/share/doc/sandboxctl/README.md"
-	install -Dm644 third_party/licenses/firecracker-apache-2.0.txt "$pkgdir/usr/share/licenses/$pkgname/LICENSE.firecracker"
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+	install -d "$pkgdir/usr/share/licenses/$pkgname/third_party"
+	cp -a third_party/licenses/. "$pkgdir/usr/share/licenses/$pkgname/third_party/"
 }

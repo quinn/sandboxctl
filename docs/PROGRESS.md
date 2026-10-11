@@ -1,5 +1,10 @@
 # Implementation progress
 
+The project now uses AGPL-3.0-or-later for original sandboxctl code. The
+official GNU license text is in `LICENSE`. The Arch packages install it and
+the third-party license texts. `docs/LICENSING.md` records the dependency
+review and retained E2B, Firecracker, and BuildKit terms.
+
 ## Dockerfile image build
 
 Implemented `sandboxctl image build` with local Dockerfile and context input.
