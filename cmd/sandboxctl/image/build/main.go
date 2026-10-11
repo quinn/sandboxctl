@@ -122,7 +122,7 @@ func run(arguments []string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), maxBuildDuration)
 	defer cancel()
-	request := builder.Request{BaseImage: selected.BaseImage, Profile: profile}
+	request := builder.Request{BaseImage: selected.BaseImage, Profile: profile, GuestVersion: selected.GuestVersion}
 	if snapshot != nil {
 		request.Dockerfile = &builder.DockerfileInput{
 			Archive: snapshot.Archive, ArchiveBytes: snapshot.ArchiveBytes,
@@ -159,7 +159,7 @@ func run(arguments []string) error {
 			return fmt.Errorf("encode build argument provenance: %w", err)
 		}
 		argDigest := sha256.Sum256(argData)
-		provisionScript, err := provision.Render(profile)
+		provisionScript, err := provision.Render(profile, selected.GuestVersion)
 		if err != nil {
 			return fmt.Errorf("render guest provisioning provenance: %w", err)
 		}

@@ -48,9 +48,10 @@ type VMFactory interface {
 
 // Request contains the inputs for one guest image build.
 type Request struct {
-	BaseImage  string
-	Profile    distro.Profile
-	Dockerfile *DockerfileInput
+	BaseImage    string
+	Profile      distro.Profile
+	GuestVersion string
+	Dockerfile   *DockerfileInput
 }
 
 // DockerfileInput contains one snapshotted user build context and its settings.
@@ -87,14 +88,14 @@ func (runner Runner) Build(ctx context.Context, request Request, output io.Write
 		if request.BaseImage == "" {
 			return 0, errors.New("base image or Dockerfile input is required")
 		}
-		files, err = buildkit.ProvisioningContext(request.BaseImage, request.Profile)
+		files, err = buildkit.ProvisioningContext(request.BaseImage, request.Profile, request.GuestVersion)
 	} else {
 		if request.BaseImage != "" || validateDockerfileInput(request.Dockerfile) != nil {
 			return 0, errors.New("Dockerfile build input is invalid")
 		}
 		operation = "build-dockerfile"
 		var script string
-		script, err = provision.Render(request.Profile)
+		script, err = provision.Render(request.Profile, request.GuestVersion)
 		if err == nil {
 			files, err = buildkit.DockerfileContextFiles(script)
 		}

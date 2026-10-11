@@ -87,6 +87,7 @@ Add these options:
 
 | Option | Rule |
 | --- | --- |
+| `--guest-version VERSION` | Require the built guest's `VERSION_ID` to match this value. |
 | `--dockerfile PATH` | Select a regular local Dockerfile. Resolve PATH from the current directory. |
 | `--context DIRECTORY` | Select the local context directory. Default to the current directory. |
 | `--target NAME` | Select a Dockerfile stage. Default to the final stage. |
@@ -222,6 +223,8 @@ application data during cleanup. Document the exact cleanup paths.
 
 Verify the final `/etc/os-release` against `--distribution` and
 `--guest-version`. Refuse to publish a bundle with incorrect guest metadata.
+The provisioning script checks `ID` and the exact `VERSION_ID` before it
+installs packages.
 
 ## 8. Implementation locations
 
@@ -235,7 +238,8 @@ Verify the final `/etc/os-release` against `--distribution` and
 | `internal/imagebuild/finalize/` | Verifies builder artifacts and publishes the output bundle with input provenance. |
 | `internal/imagebuild/manifest/` | Keeps the existing image manifest schema and digest calculation. |
 | `scripts/manual-dockerfile-build.sh` | Builds, installs, boots, verifies, restarts, and deletes a test guest through the workspace CLI. |
-| `Makefile` | Adds `manual-dockerfile-build` with the test builder name and digest. |
+| `scripts/manual-dockerfile-rejections.sh` | Checks rejected builds and confirms that they publish no image manifest. |
+| `Makefile` | Adds Dockerfile acceptance targets with the test builder name and digest. |
 | `README.md` | Documents local Dockerfile builds and their limits. |
 
 Use the standard library for archives, hashing, typed settings, and file
@@ -295,13 +299,22 @@ context filtering, and state persistence after stop and restart. It then
 stopped and deleted the test VM. The log is
 `tmp/logs/dockerfile-build-test.log`.
 
+The live rejection test passed on 2026-10-11. It rejected a failing `RUN`, an
+unpinned source, a `scratch` result, a guest version mismatch, and an
+oversized Dockerfile. It confirmed that each failed build published no image
+manifest. Run it with `make manual-dockerfile-rejections`. The log is
+`tmp/logs/dockerfile-rejection-test.log`.
+
+The live base-image build passed again on 2026-10-11. It built Ubuntu 24.04
+from the pinned base and validated the guest version before it published the
+image. The image build log is `tmp/logs/image-build-test.log`.
+
 Unit tests cover invalid options, duplicate build arguments, context paths,
 ignore rules, unsafe links, file changes, archive limits, source-policy
 selection, transfer errors, build errors, cancellation cleanup, and manifest
-provenance. The live rejection tests for failed Dockerfile commands,
-unsupported guest results, mismatched guest metadata, unpinned sources, and
-size limits remain open. Rerun the base-image live test after the Dockerfile
-implementation settles.
+provenance. The live positive and rejection tests cover the base-image and
+Dockerfile paths. The clean supported Arch host acceptance test remains open
+from the runtime phase.
 
 Use workspace command binaries against the installed daemon. Do not reinstall
 the Arch package when only CLI or guest service source changes. A packaged

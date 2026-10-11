@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -18,14 +19,20 @@ import (
 //go:embed provision.sh
 var files embed.FS
 
+var guestVersionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
+
 // Render creates a deterministic provisioning script for a supported profile.
-func Render(profile distro.Profile) (string, error) {
+func Render(profile distro.Profile, guestVersion string) (string, error) {
 	canonical, err := distro.ForID(profile.ID)
 	if err != nil {
 		return "", err
 	}
+	if !guestVersionPattern.MatchString(guestVersion) {
+		return "", fmt.Errorf("guest version %q is invalid", guestVersion)
+	}
 	data := struct {
 		ID           string
+		GuestVersion string
 		Packages     string
 		PackageQuery string
 		PackageSetup string
@@ -37,6 +44,7 @@ func Render(profile distro.Profile) (string, error) {
 		BootSetup    []string
 	}{
 		ID:           canonical.ID,
+		GuestVersion: guestVersion,
 		Packages:     strings.Join(canonical.Packages, " "),
 		PackageQuery: canonical.PackageQuery,
 		PackageSetup: canonical.PackageInstall,

@@ -82,8 +82,8 @@ func SourcePolicyJSON() []byte {
 }
 
 // ProvisioningContext renders the selected guest profile into a BuildKit context.
-func ProvisioningContext(baseImage string, profile distro.Profile) (map[string][]byte, error) {
-	script, err := provision.Render(profile)
+func ProvisioningContext(baseImage string, profile distro.Profile, guestVersion string) (map[string][]byte, error) {
+	script, err := provision.Render(profile, guestVersion)
 	if err != nil {
 		return nil, err
 	}

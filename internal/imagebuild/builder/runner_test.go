@@ -67,7 +67,7 @@ func TestBuildUploadsDockerfileSnapshotAndBuildSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := Request{
-		Profile: profile,
+		Profile: profile, GuestVersion: "24.04",
 		Dockerfile: &DockerfileInput{
 			Archive: strings.NewReader("context archive"), ArchiveBytes: int64(len("context archive")),
 			Dockerfile:     []byte("FROM ubuntu@sha256:" + strings.Repeat("a", 64) + "\n"),
@@ -101,6 +101,9 @@ func TestBuildUploadsDockerfileSnapshotAndBuildSettings(t *testing.T) {
 	}
 	if executor.command.Args[len(executor.command.Args)-1] != "build-dockerfile" {
 		t.Fatalf("guest command = %#v, want Dockerfile build mode", executor.command)
+	}
+	if !strings.Contains(string(executor.uploads[contextDirectory+"/provision.sh"]), `EXPECTED_VERSION="24.04"`) {
+		t.Fatal("runner did not pass the requested guest version to provisioning")
 	}
 }
 
@@ -172,7 +175,7 @@ func testRequest(t *testing.T) Request {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Request{BaseImage: "ubuntu@sha256:" + strings.Repeat("e", 64), Profile: profile}
+	return Request{BaseImage: "ubuntu@sha256:" + strings.Repeat("e", 64), Profile: profile, GuestVersion: "24.04"}
 }
 
 type testFactory struct {

@@ -15,12 +15,14 @@ func TestRenderCreatesSecureDebianAndUbuntuScripts(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			script, err := Render(profile)
+			script, err := Render(profile, map[string]string{"debian": "12", "ubuntu": "24.04"}[id])
 			if err != nil {
 				t.Fatal(err)
 			}
 			for _, required := range []string{
 				"EXPECTED_ID=" + id,
+				"EXPECTED_VERSION=\"" + map[string]string{"debian": "12", "ubuntu": "24.04"}[id] + "\"",
+				"expected guest version $EXPECTED_VERSION",
 				"openssh-server",
 				"useradd --create-home --home-dir /home/dev",
 				"dev ALL=(ALL) NOPASSWD: ALL",
@@ -56,8 +58,20 @@ func TestRenderCreatesSecureDebianAndUbuntuScripts(t *testing.T) {
 }
 
 func TestRenderRejectsUnsupportedProfile(t *testing.T) {
-	if _, err := Render(distro.Profile{ID: "fedora"}); err == nil {
+	if _, err := Render(distro.Profile{ID: "fedora"}, "40"); err == nil {
 		t.Fatal("Render() accepted an unsupported profile")
+	}
+}
+
+func TestRenderRejectsInvalidGuestVersion(t *testing.T) {
+	profile, err := distro.ForID("ubuntu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []string{"", "24.04\nexit 0", strings.Repeat("1", 65)} {
+		if _, err := Render(profile, version); err == nil {
+			t.Errorf("Render() accepted invalid guest version %q", version)
+		}
 	}
 }
 
@@ -66,7 +80,7 @@ func TestRenderedBootstrapValidatesMetadataAndNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	script, err := Render(profile)
+	script, err := Render(profile, "24.04")
 	if err != nil {
 		t.Fatal(err)
 	}

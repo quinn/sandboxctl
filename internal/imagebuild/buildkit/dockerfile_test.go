@@ -111,21 +111,24 @@ func TestProvisioningContextConnectsProfileRendererToBuildKit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, err := ProvisioningContext(base, profile)
+	files, err := ProvisioningContext(base, profile, "24.04")
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantScript, err := provision.Render(profile)
+	wantScript, err := provision.Render(profile, "24.04")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(files["provision.sh"]) != wantScript {
 		t.Fatal("BuildKit context does not contain the rendered provisioning script")
 	}
+	if !strings.Contains(string(files["provision.sh"]), `EXPECTED_VERSION="24.04"`) {
+		t.Fatal("BuildKit provisioning script does not validate the requested guest version")
+	}
 	if !strings.Contains(string(files["Dockerfile"]), base) {
 		t.Fatal("BuildKit context Dockerfile does not use the pinned base")
 	}
-	if _, err := ProvisioningContext(base, distro.Profile{ID: "fedora"}); err == nil {
+	if _, err := ProvisioningContext(base, distro.Profile{ID: "fedora"}, "40"); err == nil {
 		t.Fatal("ProvisioningContext accepted an unsupported distribution")
 	}
 }

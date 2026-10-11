@@ -18,9 +18,15 @@ The live Dockerfile test passed on 2026-10-11. It verified local `COPY`,
 executable file modes, multiple stages, build arguments, ignore rules, a
 non-root final `USER`, container startup settings, guest bootstrap, public-key
 SSH, systemd PID 1, and state persistence after restart. The test stopped and
-deleted its VM. See `tmp/logs/dockerfile-build-test.log`. Remaining checks:
-live rejection cases and a rerun of the base-image test. The clean Arch host
-acceptance test remains deferred.
+deleted its VM. A guest-version mismatch check now runs during provisioning.
+The live Dockerfile test passed again with that check enabled. The base-image
+build passed again with exact guest-version validation. The live rejection
+test rejected a failed `RUN`, an unpinned source, a `scratch` result, a guest
+version mismatch, and an oversized Dockerfile. Each rejection published no
+image manifest. See `tmp/logs/dockerfile-build-test.log`,
+`tmp/logs/dockerfile-rejection-test.log`, and
+`tmp/logs/image-build-test.log`. The clean Arch host acceptance test remains
+deferred.
 
 ## Builder package distribution
 

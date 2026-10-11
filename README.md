@@ -80,6 +80,8 @@ sandboxctl image install dev-image --version sha256:IMAGE_DIGEST
 
 The image build needs host network rules from host installation. The builder
 VM also needs network access to the image registry and package servers.
+The build checks that the guest's distribution ID and version match the
+requested values before it publishes the image.
 
 Build a custom image from a local Dockerfile and context:
 
@@ -208,6 +210,9 @@ installed, configured sandboxd service:
   filtering, build arguments, VM boot, SSH, and state persistence. Edit the
   builder name and digest in the Makefile when the installed test builder
   changes.
+- `make manual-dockerfile-rejections` checks invalid Dockerfile builds,
+  guest metadata, and context size limits. It confirms that failed builds do
+  not publish an image.
 
 These manual targets check sandboxd state and disk operations. They need an
 installed, configured sandboxd service. The reset test also starts a guest and

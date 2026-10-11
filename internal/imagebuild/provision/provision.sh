@@ -5,6 +5,7 @@
 set -eu
 
 EXPECTED_ID={{.ID}}
+EXPECTED_VERSION="{{.GuestVersion}}"
 PACKAGES="{{.Packages}}"
 INIT_BINARY={{.InitBinary}}
 SSH_SERVICE={{.SSHService}}
@@ -18,6 +19,10 @@ fi
 . /etc/os-release
 if [ "${ID:-}" != "$EXPECTED_ID" ]; then
     echo "sandboxctl: expected $EXPECTED_ID, found ${ID:-unknown}" >&2
+    exit 1
+fi
+if [ "${VERSION_ID:-}" != "$EXPECTED_VERSION" ]; then
+    echo "sandboxctl: expected guest version $EXPECTED_VERSION, found ${VERSION_ID:-unknown}" >&2
     exit 1
 fi
 
