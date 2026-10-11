@@ -19,8 +19,8 @@ make install
 
 The target uses `yay`. It downloads the pinned Firecracker release from GitHub.
 The package build also creates the pinned builder image and includes it in the
-package. Podman is a package build dependency. It is not needed to run
-`sandboxctl` or build guest images after installation.
+package. The package stores the builder files in `/usr/share/sandboxctl/builder`. Package installation does not import the image
+into sandboxd. Podman is a package build dependency. It is not needed to run `sandboxctl` or build guest images after installation.
 
 Install the host service and network rules:
 
@@ -36,7 +36,8 @@ Host installation defaults to user and group ID ranges of `200000:65536` and
 the address pool `172.30.0.0/16`. Pass `--uid-range`, `--gid-range`, or
 `--address-pool` to select different values.
 
-Initialize the user files and check the host:
+Initialize the user files and import the packaged builder image. Then check the
+host:
 
 ```sh
 sandboxctl init
