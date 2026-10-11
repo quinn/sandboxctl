@@ -13,7 +13,7 @@ import (
 	"strings"
 	"text/template"
 
-	"sandboxctl/internal/imagebuild/distro"
+	"sandboxctl/cmd/sandboxctl/image/build/distro"
 )
 
 //go:embed provision.sh

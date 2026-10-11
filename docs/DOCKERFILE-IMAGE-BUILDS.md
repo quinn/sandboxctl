@@ -144,7 +144,7 @@ builds as fully reproducible.
 
 ## 6. Context preparation and transfer
 
-Create `internal/imagebuild/buildcontext/` for context preparation. Keep file
+Create `cmd/sandboxctl/image/build/buildcontext/` for context preparation. Keep file
 walking, filtering, archive creation, limits, and hashing in this package.
 Use `snapshot.go` for file collection and input identity. Use `ignore.go` for
 ignore rules. Use `archive.go` for archive creation. Use `extract.go` for
@@ -233,10 +233,10 @@ installs packages.
 | Path | Implementation |
 | --- | --- |
 | `cmd/sandboxctl/image/build/` | Parses both input modes and builds a typed request. |
-| `internal/imagebuild/buildcontext/` | Creates a bounded, private context snapshot with ignore rules, safe file checks, archive output, and input digests. |
-| `internal/imagebuild/buildkit/` | Renders the fixed provisioning build and pins BuildKit source policy. |
+| `cmd/sandboxctl/image/build/buildcontext/` | Creates a bounded, private context snapshot with ignore rules, safe file checks, archive output, and input digests. |
+| `cmd/sandboxctl/image/build/buildkit/` | Renders the fixed provisioning build and pins BuildKit source policy. |
 | `cmd/sandboxctl/image/build/builder/` | Uploads separate user and control inputs, runs the fixed guest service, and cleans up the builder VM. |
-| `internal/imagebuild/guest/` | Validates uploaded settings, extracts context safely, runs the two BuildKit stages, and finalizes the guest filesystem. |
+| `cmd/sandboxctl/image/build/guest/` | Validates uploaded settings, extracts context safely, runs the two BuildKit stages, and finalizes the guest filesystem. |
 | `cmd/sandboxctl/image/build/finalize/` | Verifies builder artifacts and publishes the output bundle with input provenance. |
 | `internal/imagebuild/manifest/` | Keeps the existing image manifest schema and digest calculation. |
 | `scripts/manual-dockerfile-build.sh` | Builds, installs, boots, verifies, restarts, and deletes a test guest through the workspace CLI. |

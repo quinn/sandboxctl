@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"sandboxctl/internal/imagebuild/distro"
+	"sandboxctl/cmd/sandboxctl/image/build/distro"
 )
 
 func TestRenderCreatesSecureDebianAndUbuntuScripts(t *testing.T) {

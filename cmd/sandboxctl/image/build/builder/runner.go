@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"sandboxctl/internal/imagebuild/buildcontext"
-	"sandboxctl/internal/imagebuild/buildkit"
-	"sandboxctl/internal/imagebuild/distro"
-	"sandboxctl/internal/imagebuild/guest"
-	"sandboxctl/internal/imagebuild/provision"
+	"sandboxctl/cmd/sandboxctl/image/build/buildcontext"
+	"sandboxctl/cmd/sandboxctl/image/build/buildkit"
+	"sandboxctl/cmd/sandboxctl/image/build/distro"
+	"sandboxctl/cmd/sandboxctl/image/build/guest"
+	"sandboxctl/cmd/sandboxctl/image/build/provision"
 )
 
 const (

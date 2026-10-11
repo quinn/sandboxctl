@@ -107,15 +107,16 @@ that VM. The build creates a Debian or Ubuntu guest filesystem, adds
 sandboxctl's guest setup, then writes a bootable image bundle. The command
 installs the image by default. It can stage the bundle without installing it.
 
-The command-line parser, VM orchestration, and bundle finalizer are in
-`cmd/sandboxctl/image/build/`. Shared image-build packages under
-`internal/imagebuild/` handle context snapshots, Dockerfile checks, guest
-provisioning, manifests, and bundle operations. The manual tests cover the
-fixed base-image path, a Dockerfile build, and rejected Dockerfile inputs.
+The command-line parser, VM orchestration, build context handling, BuildKit
+configuration, guest provisioning, builder connection, and bundle finalizer
+are in `cmd/sandboxctl/image/build/`. Shared image packages under
+`internal/imagebuild/` handle manifests, bundles, and installation. The
+manual tests cover the fixed base-image path, a Dockerfile build, and rejected
+Dockerfile inputs.
 
-Files and folders: `cmd/sandboxctl/image/build/`, `internal/imagebuild/`,
-image-build scripts under `scripts/`, and related RPC definitions and handlers
-under `proto/` and `internal/daemon/`.
+Files and folders: `cmd/sandboxctl/image/build/`, the shared packages that
+remain under `internal/imagebuild/`, image-build scripts under `scripts/`, and
+related RPC definitions and handlers under `proto/` and `internal/daemon/`.
 
 Extra check: run the matching test: `make manual-image-build`,
 `make manual-dockerfile-build`, or `make manual-dockerfile-rejections`.

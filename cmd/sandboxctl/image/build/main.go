@@ -16,17 +16,17 @@ import (
 	"strings"
 	"time"
 
+	"sandboxctl/cmd/sandboxctl/image/build/buildcontext"
 	"sandboxctl/cmd/sandboxctl/image/build/builder"
+	"sandboxctl/cmd/sandboxctl/image/build/distro"
 	"sandboxctl/cmd/sandboxctl/image/build/finalize"
+	"sandboxctl/cmd/sandboxctl/image/build/provision"
 	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/config"
 	"sandboxctl/internal/daemon"
-	"sandboxctl/internal/imagebuild/buildcontext"
 	"sandboxctl/internal/imagebuild/bundle"
-	"sandboxctl/internal/imagebuild/distro"
 	"sandboxctl/internal/imagebuild/installer"
-	"sandboxctl/internal/imagebuild/provision"
 	sshconfig "sandboxctl/internal/ssh"
 )
 

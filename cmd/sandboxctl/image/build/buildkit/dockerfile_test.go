@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"sandboxctl/internal/imagebuild/distro"
-	"sandboxctl/internal/imagebuild/provision"
+	"sandboxctl/cmd/sandboxctl/image/build/distro"
+	"sandboxctl/cmd/sandboxctl/image/build/provision"
 )
 
 func TestDockerfileUsesPinnedBaseAndProvisioningScript(t *testing.T) {

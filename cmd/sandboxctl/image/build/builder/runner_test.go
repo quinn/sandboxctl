@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"sandboxctl/internal/imagebuild/buildcontext"
-	"sandboxctl/internal/imagebuild/distro"
-	"sandboxctl/internal/imagebuild/guest"
+	"sandboxctl/cmd/sandboxctl/image/build/buildcontext"
+	"sandboxctl/cmd/sandboxctl/image/build/distro"
+	"sandboxctl/cmd/sandboxctl/image/build/guest"
 )
 
 func TestBuildRunsFixedWorkflowAndClosesBuilder(t *testing.T) {

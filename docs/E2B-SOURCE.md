@@ -18,9 +18,9 @@ The license text is in `third_party/licenses/e2b-apache-2.0.txt`.
   - `packages/orchestrator/pkg/template/build/phases/base/distro/distro_test.go`
   - `packages/orchestrator/pkg/template/build/phases/base/distro/parity_test.go`
 - Destination paths:
-  - `internal/imagebuild/distro/profile.go`
-  - `internal/imagebuild/distro/init.go`
-  - `internal/imagebuild/distro/profile_test.go`
+  - `cmd/sandboxctl/image/build/distro/profile.go`
+  - `cmd/sandboxctl/image/build/distro/init.go`
+  - `cmd/sandboxctl/image/build/distro/profile_test.go`
 - Functions and concepts retained: declared `/etc/os-release` identity selection, explicit Debian and Ubuntu package profiles, `dpkg-query` package detection, noninteractive `apt-get` package installation, init-system paths, SSH service names, administrator groups, CA bundle refresh, serial console and first-boot service handling.
 - Omitted: Fedora, Arch, Alpine, and NixOS profiles; `ID_LIKE` fallback; time-sync and E2B service setup; snapshot behavior; mutable global profile registry.
 - Material modifications: support Debian and Ubuntu only; use sandboxctl identifiers; reduce packages to the sandbox bootstrap requirements; set secure OpenSSH policy; create `dev` with a random unusable password hash; configure the documented guest sudo policy; enable SSH; remove machine identity and SSH host keys for bootstrap regeneration.
@@ -34,9 +34,9 @@ The license text is in `third_party/licenses/e2b-apache-2.0.txt`.
   - `packages/orchestrator/pkg/template/build/phases/base/provision.sh`
   - `packages/orchestrator/pkg/template/build/phases/base/provision_test.go`
 - Destination paths:
-  - `internal/imagebuild/provision/render.go`
-  - `internal/imagebuild/provision/provision.sh`
-  - `internal/imagebuild/provision/provision_test.go`
+  - `cmd/sandboxctl/image/build/provision/render.go`
+  - `cmd/sandboxctl/image/build/provision/provision.sh`
+  - `cmd/sandboxctl/image/build/provision/provision_test.go`
 - Functions and concepts retained: render a deterministic POSIX shell provisioning script and select package setup from the declared distribution profile.
 - Omitted: E2B telemetry, logging, template metadata, rootfs mounts, environment daemon setup, time synchronization, proxy setup, snapshot settings, and E2B-specific cleanup.
 - Material modifications: embed a sandboxctl-owned script; add secure SSH policy; create the `dev` account and sudo policy; leave `authorized_keys` for guest bootstrap; remove machine ID and SSH host keys; enable SSH through the selected init system.

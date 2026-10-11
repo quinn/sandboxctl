@@ -18,10 +18,10 @@ import (
 	"sync"
 	"time"
 
+	"sandboxctl/cmd/sandboxctl/image/build/guest"
 	"sandboxctl/internal/config"
 	"sandboxctl/internal/controlpb"
 	"sandboxctl/internal/daemon"
-	"sandboxctl/internal/imagebuild/guest"
 
 	"google.golang.org/grpc"
 )
