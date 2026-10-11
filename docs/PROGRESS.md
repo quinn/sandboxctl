@@ -113,7 +113,7 @@ The current staged test bundle uses the upstream Ubuntu SquashFS without running
 - `bash -n` passes for the Phase 1 scripts and the manual test scripts.
 - `git diff --check` passes.
 - Firecracker and jailer v1.17.0 are installed in the current development environment.
-- Added `cmd/overlay-init` to mount SquashFS read-only, mount ext4 state read-write, assemble OverlayFS, and switch to the guest init system.
+- Added `cmd/guest/overlay-init` to mount SquashFS read-only, mount ext4 state read-write, assemble OverlayFS, and switch to the guest init system.
 - Added `cmd/overlay-proof` to start a temporary SDK VM with SquashFS as `/dev/vda` and ext4 state as `/dev/vdb`.
 - The initramfs builder passed archive validation.
 - The initramfs archive contains the expected `init` executable and passes `gzip -t`.

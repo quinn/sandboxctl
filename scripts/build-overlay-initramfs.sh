@@ -14,8 +14,8 @@ case "$(uname -m)" in
 esac
 
 cd "$repo_dir"
-CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" go build -trimpath -ldflags='-s -w' -o "$stage/init" ./cmd/overlay-init
-CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" go build -trimpath -ldflags='-s -w' -o "$stage/bootstrap" ./cmd/guest-bootstrap
+CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" go build -trimpath -ldflags='-s -w' -o "$stage/init" ./cmd/guest/overlay-init
+CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" go build -trimpath -ldflags='-s -w' -o "$stage/bootstrap" ./cmd/guest/bootstrap
 chmod 0755 "$stage/init"
 chmod 0755 "$stage/bootstrap"
 mkdir -p "$output_dir"
