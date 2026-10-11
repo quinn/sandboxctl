@@ -253,10 +253,6 @@ needs KVM access:
 - `make manual-reset-test` checks state-disk reset. Set `IMAGE` to select an
   installed image other than `default`.
 
-The `make stage-overlay-image` and `make overlay-proof` targets support the
-SquashFS and OverlayFS storage proof. The staged overlay image is for boot
-testing. It does not include the configured `dev` account or SSH bootstrap.
-
 ## Data and safety
 
 The operator's SSH keys and generated SSH files stay in the user's config,

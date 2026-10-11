@@ -57,6 +57,9 @@ packaged version is installed.
 
 Last updated: 2026-10-11
 
+Moved the Phase 1 proof targets to `make/phase1.make`. The root Makefile includes
+that file. Removed the old direct-VM test targets and their unused scripts.
+
 ## Authority and order
 
 `docs/SANDBOX-RUNTIME-V2.md` is the authoritative runtime design.
@@ -223,7 +226,7 @@ The current staged test bundle uses the upstream Ubuntu SquashFS without running
 - Keep the current SDK runner available until the jailed SDK runtime completes an integration boot.
 - Keep Phase 1 as an isolated development experiment.
 - Do not start sandboxd, its protocol, or the host installer before the Phase 1 exit conditions pass.
-- The `download-test-assets` target converts the SquashFS into a writable ext4 root and selects changing remote artifacts. It does not match the Phase 1 image model. Do not use it as Phase 1 input.
+- The retired `download-test-assets` workflow converted the SquashFS into a writable ext4 root and selected changing remote artifacts. It did not match the Phase 1 image model. The workflow and its direct-VM test scripts are now removed.
 - Use gRPC over the Unix socket. Use Buf with pinned remote plugins for schema lint and code generation.
 - Use the Unix socket's owner, group, and mode as the only client authorization check. Membership in the `sandboxctl` group grants access to the full daemon API.
 - Use separate typed RPC methods. Do not use a generic `Call` method or a negotiation RPC.
