@@ -1,6 +1,6 @@
 package main
 
-import "sandboxctl/internal/overlayinit"
+import "sandboxctl/cmd/guest/overlay-init/overlayinit"
 
 func main() {
 	overlayinit.Main()

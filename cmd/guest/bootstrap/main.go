@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"sandboxctl/internal/guestbootstrap"
+	"sandboxctl/cmd/guest/bootstrap/guestbootstrap"
 )
 
 func main() {

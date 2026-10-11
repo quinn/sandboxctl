@@ -90,11 +90,11 @@ reads Firecracker metadata. It configures the hostname, network, SSH account,
 and authorized key, and writes a completion marker. This setup runs inside the
 guest and does not mount the guest filesystem on the host.
 
-Files and folders: `cmd/guest/overlay-init/`, `internal/overlayinit/`,
-`internal/overlayboot/`, `cmd/guest/bootstrap/`,
-`internal/guestbootstrap/`, and image or initramfs scripts under `scripts/`.
-The guest bootstrap unit and related guest image files are under
-`internal/imagebuild/`.
+Files and folders: `cmd/guest/overlay-init/`,
+`cmd/guest/overlay-init/overlayinit/`, `internal/overlayboot/`,
+`cmd/guest/bootstrap/`, `cmd/guest/bootstrap/guestbootstrap/`, and image or
+initramfs scripts under `scripts/`. The guest bootstrap unit and related guest
+image files are under `internal/imagebuild/`.
 
 Extra check: run `make manual-bootstrap-test`.
 
@@ -107,11 +107,11 @@ that VM. The build creates a Debian or Ubuntu guest filesystem, adds
 sandboxctl's guest setup, then writes a bootable image bundle. The command
 installs the image by default. It can stage the bundle without installing it.
 
-The command-line parser is in `cmd/sandboxctl/image/build/`. The build
-orchestration, Dockerfile checks, context snapshot, guest provisioning,
-manifest, bundle finalization, and optional installation are in
-`internal/imagebuild/`. The manual tests cover the fixed base-image path, a
-Dockerfile build, and rejected Dockerfile inputs.
+The command-line parser, VM orchestration, and bundle finalizer are in
+`cmd/sandboxctl/image/build/`. Shared image-build packages under
+`internal/imagebuild/` handle context snapshots, Dockerfile checks, guest
+provisioning, manifests, and bundle operations. The manual tests cover the
+fixed base-image path, a Dockerfile build, and rejected Dockerfile inputs.
 
 Files and folders: `cmd/sandboxctl/image/build/`, `internal/imagebuild/`,
 image-build scripts under `scripts/`, and related RPC definitions and handlers
@@ -134,7 +134,7 @@ Files and folders: lifecycle commands under `cmd/sandboxctl/`, shared
 operations in `internal/app/`, RPC handlers in `internal/daemon/`, VM control
 in `internal/runtime/`, records and allocations in `internal/store/`,
 `internal/hoststate/`, disk handling in `internal/disk/`, and TAP handling in
-`internal/network/`.
+`cmd/sandboxd/network/`.
 
 Extra check: run the matching test: `make manual-delete-test` or
 `make manual-reset-test`.
