@@ -8,14 +8,11 @@ import (
 	"hash"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"sandboxctl/internal/imagebuild/manifest"
 )
 
 const maxImageChunkSize = 256 << 10
-
-var imageInstallMu sync.Mutex
 
 // ErrInvalidImageManifest indicates that an imported manifest is invalid.
 var ErrInvalidImageManifest = errors.New("invalid image manifest")
@@ -122,8 +119,8 @@ func (image *ImageImport) Commit() error {
 	if image.file != nil || image.index != len(manifest.ArtifactNames()) {
 		return fmt.Errorf("%w: import is incomplete", ErrInvalidImageChunk)
 	}
-	imageInstallMu.Lock()
-	defer imageInstallMu.Unlock()
+	imageStoreMu.Lock()
+	defer imageStoreMu.Unlock()
 	destination := filepath.Join(image.paths.Images, image.name)
 	if _, err := os.Lstat(destination); err == nil {
 		return ErrImageAlreadyInstalled

@@ -182,7 +182,7 @@ The protocol must enforce request-size limits and operation deadlines.
 Allowed operation groups are:
 
 - Host status.
-- Image list and verified image import.
+- Image list, verified image import, and guarded image deletion.
 - Instance create, inspect, list, start, stop, reset, and delete.
 - Runtime status.
 - Bounded log retrieval.
@@ -859,6 +859,15 @@ The daemon must not open a path supplied by the operator.
 The daemon must publish the image only after all artifact sizes and digests match.
 
 Do not use a moving latest prefix.
+
+### 13.4.1 Image deletion
+
+    sandboxctl image delete NAME --version VERSION [--yes]
+
+The command must ask for confirmation unless `--yes` is present. The daemon must
+require the exact installed version. It must refuse to delete an image that any
+saved sandbox uses. It must validate the image directory before it removes the
+fixed image files. The command must leave staged local bundles in place.
 
 ### 13.5 Create
 

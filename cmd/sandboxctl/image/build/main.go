@@ -19,11 +19,13 @@ import (
 	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/config"
+	"sandboxctl/internal/daemon"
 	"sandboxctl/internal/imagebuild/buildcontext"
 	"sandboxctl/internal/imagebuild/builder"
 	"sandboxctl/internal/imagebuild/bundle"
 	"sandboxctl/internal/imagebuild/distro"
 	"sandboxctl/internal/imagebuild/finalize"
+	"sandboxctl/internal/imagebuild/installer"
 	"sandboxctl/internal/imagebuild/provision"
 	sshconfig "sandboxctl/internal/ssh"
 )
@@ -47,6 +49,7 @@ type options struct {
 	ContextDir     string
 	Target         string
 	BuildArgs      []buildcontext.BuildArg
+	Install        bool
 }
 
 func main() { cmdutil.Main(run) }
@@ -138,7 +141,7 @@ func run(arguments []string) error {
 	}
 	slog.Info("guest image build started", "name", selected.Name, "input_mode", inputMode,
 		"base_image", selected.BaseImage, "distribution", profile.ID, "builder_image", selected.BuilderImage,
-		"target", selected.Target, "build_arg_count", len(selected.BuildArgs))
+		"target", selected.Target, "build_arg_count", len(selected.BuildArgs), "install", selected.Install)
 	if _, err := (builder.Runner{Factory: factory}).Build(ctx, request, output); err != nil {
 		_ = output.Close()
 		return fmt.Errorf("build guest image: %w", err)
@@ -188,13 +191,34 @@ func run(arguments []string) error {
 	slog.Info("guest image build completed", "name", selected.Name, "version", version, "directory", directory)
 	fmt.Fprintf(os.Stdout, "Built image %s at version %s.\n", selected.Name, version)
 	fmt.Fprintf(os.Stdout, "Image bundle: %s\n", directory)
-	fmt.Fprintf(os.Stdout, "Install it with: sandboxctl image install %s --version %s\n", selected.Name, version)
+	if selected.Install {
+		image, err := bundle.Open(directory)
+		if err != nil {
+			return fmt.Errorf("open built image bundle: %w", err)
+		}
+		defer image.Close()
+		installCtx, cancel := context.WithTimeout(context.Background(), daemon.MaxInstallDuration)
+		installed, installErr := installer.EnsureInstalled(installCtx, service, image)
+		cancel()
+		if installErr != nil {
+			return fmt.Errorf("install built image %s: %w", selected.Name, installErr)
+		}
+		if installed {
+			slog.Info("built image installed", "name", selected.Name, "version", version)
+			fmt.Fprintf(os.Stdout, "Installed image %s at version %s.\n", selected.Name, version)
+		} else {
+			fmt.Fprintf(os.Stdout, "Image %s at version %s is already installed.\n", selected.Name, version)
+		}
+	} else {
+		fmt.Fprintf(os.Stdout, "Install it with: sandboxctl image install %s --version %s\n", selected.Name, version)
+	}
 	return nil
 }
 
 func parse(arguments []string) (options, error) {
 	flags := flag.NewFlagSet("image build", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
+	installImage := flags.Bool("install", true, "Install the built image through sandboxd.")
 	builderImage := flags.String("builder-image", "", "Installed builder image name. Defaults to the packaged builder.")
 	builderVersion := flags.String("builder-version", "", "Pinned builder image version. Defaults to the packaged builder version.")
 	baseImage := flags.String("base-image", "", "Digest-pinned OCI base image.")
@@ -212,7 +236,7 @@ func parse(arguments []string) (options, error) {
 		return options{}, fmt.Errorf("parse image build options: %w", err)
 	}
 	if flags.NArg() != 1 {
-		return options{}, errors.New("usage: sandboxctl image build NAME (--base-image IMAGE@sha256:DIGEST | --dockerfile PATH | --context DIRECTORY) --guest-version VERSION [--target NAME --build-arg NAME=VALUE] [--builder-image NAME --builder-version sha256:DIGEST] [--distribution debian|ubuntu]")
+		return options{}, errors.New("usage: sandboxctl image build NAME (--base-image IMAGE@sha256:DIGEST | --dockerfile PATH | --context DIRECTORY) --guest-version VERSION [--install=false] [--target NAME --build-arg NAME=VALUE] [--builder-image NAME --builder-version sha256:DIGEST] [--distribution debian|ubuntu]")
 	}
 	name := flags.Arg(0)
 	if err := cmdutil.ValidateSandboxName(name); err != nil {
@@ -283,7 +307,7 @@ func parse(arguments []string) (options, error) {
 	return options{
 		Name: name, BuilderImage: *builderImage, BuilderVersion: *builderVersion, BuilderDir: builderDirectory,
 		BaseImage: *baseImage, Distribution: *distribution, GuestVersion: *guestVersion,
-		Dockerfile: *dockerfile, ContextDir: *contextDir, Target: *target, BuildArgs: buildArgs,
+		Dockerfile: *dockerfile, ContextDir: *contextDir, Target: *target, BuildArgs: buildArgs, Install: *installImage,
 	}, nil
 }
 

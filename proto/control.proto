@@ -17,6 +17,9 @@ service ControlService {
   // Lists and validates the installed images.
   rpc ListImages(ListImagesRequest) returns (ListImagesResponse);
 
+  // Deletes an installed image that no saved sandbox uses.
+  rpc DeleteImage(DeleteImageRequest) returns (DeleteImageResponse);
+
   // Reports the saved state for one sandbox instance.
   rpc InspectInstance(InspectInstanceRequest) returns (InspectInstanceResponse);
 
@@ -74,6 +77,20 @@ message InstalledImage {
   // Names the installed image.
   string name = 1;
   // Gives the pinned image version.
+  string version = 2;
+}
+
+message DeleteImageRequest {
+  // Names the installed image.
+  string name = 1;
+  // Gives the expected pinned SHA-256 image version.
+  string version = 2;
+}
+
+message DeleteImageResponse {
+  // Names the deleted image.
+  string name = 1;
+  // Gives the deleted image version.
   string version = 2;
 }
 

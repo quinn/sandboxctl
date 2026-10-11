@@ -102,8 +102,9 @@ read argument values from the operator's environment.
 Require the selected Dockerfile to be inside the context directory. Do not
 accept standard input, remote context URLs, or Git context URLs in this phase.
 
-Keep the existing output bundle and printed image install command. Do not
-install the finished guest image automatically.
+Keep the output bundle. Install the finished guest image by default. Accept
+`--install=false` to stage the bundle without installing it, and print the
+image install command in that mode.
 
 ## 5. Dockerfile behavior
 

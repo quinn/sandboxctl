@@ -70,13 +70,35 @@ The build supports Ubuntu and Debian. It uses the installed `builder` image by
 default. Use `--distribution debian` for a Debian base image. The base image
 reference uses the image name and an immutable Secure Hash Algorithm 256-bit
 (SHA-256) digest from its container registry. The example digest is the pinned
-Ubuntu image used by this repository's live build test. The command prints the
-digest and install command for the finished image. Run the printed install
-command. It reads the image bundle from your user data directory.
+Ubuntu image used by this repository's live build test. The command installs
+the finished image by default. Set `--install=false` to build and stage the
+image without installing it.
+
+Use this command to install a staged image:
 
 ```sh
 sandboxctl image install dev-image --version sha256:IMAGE_DIGEST
 ```
+
+The command stores a built image under
+`$XDG_DATA_HOME/sandboxctl/images/NAME/VERSION/`. The default
+`XDG_DATA_HOME` is `~/.local/share`. List images in the protected image store
+with:
+
+```sh
+sandboxctl image list
+```
+
+Delete an installed image by name and pinned version:
+
+```sh
+sandboxctl image delete dev-image --version sha256:IMAGE_DIGEST
+```
+
+The command asks for confirmation. Use `--yes` to skip the prompt in a script.
+The command refuses to delete an image that a saved sandbox uses. Delete those
+sandboxes first. This command removes the installed image from the protected
+host store. It does not remove a staged bundle in the XDG data directory.
 
 The image build needs host network rules from host installation. The builder
 VM also needs network access to the image registry and package servers.
@@ -113,8 +135,9 @@ They do not set the guest login environment or SSH user. `CMD` and
 identifier (PID) 1. Required sandboxctl provisioning runs after the selected
 stage.
 
-The command writes the image bundle to your user data directory. It prints
-the image digest and install command. Install the image before you create a
+The command writes the image bundle to your user data directory. It installs
+the image by default. Set `--install=false` to defer installation. The command
+then prints the install command. Install the image before you create a
 sandbox from it.
 
 ## Create and use a sandbox
@@ -181,8 +204,11 @@ ssh-keygen -R GUEST_ADDRESS -f KNOWN_HOSTS_PATH
   socket-activated service.
 - `sandboxctl image build` builds a Debian or Ubuntu guest image in a temporary
   virtual machine. It accepts a digest-pinned base image or a local Dockerfile
-  and context. It uses the builder image included in the Arch package.
+  and context. It uses the builder image included in the Arch package. It
+  installs the finished image by default. Set `--install=false` to stage it only.
+- `sandboxctl image list` shows installed image names and versions.
 - `sandboxctl image install` imports a verified local image bundle.
+- `sandboxctl image delete` removes an installed image that no saved sandbox uses.
 - `sandboxctl create`, `start`, `stop`, `reset`, and `delete` manage sandboxes.
 - `sandboxctl list` shows sandbox state.
 - `sandboxctl ssh` runs a command through the generated SSH alias.

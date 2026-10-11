@@ -325,6 +325,31 @@ func TestServerImportsVerifiedImageStream(t *testing.T) {
 	if err != nil || len(listed.GetImages()) != 1 || listed.GetImages()[0].GetName() != "default" || listed.GetImages()[0].GetVersion() != version {
 		t.Fatalf("ListImages() = %v, %v", listed, err)
 	}
+	instanceID, err := hoststate.NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Store.Save(daemonTestInstance(instanceID, "holds-image")); err != nil {
+		t.Fatal(err)
+	}
+	blockedContext, blockedCancel := callContext(daemon.APIVersion, "abababababababababababababababab")
+	_, err = service.DeleteImage(blockedContext, &controlpb.DeleteImageRequest{Name: "default", Version: version})
+	blockedCancel()
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("DeleteImage() with a saved sandbox returned %v, want FailedPrecondition", err)
+	}
+	if err := os.RemoveAll(filepath.Join(paths.Instances, "holds-image")); err != nil {
+		t.Fatal(err)
+	}
+	deleteContext, deleteCancel := callContext(daemon.APIVersion, "99999999999999999999999999999999")
+	deleted, err := service.DeleteImage(deleteContext, &controlpb.DeleteImageRequest{Name: "default", Version: version})
+	deleteCancel()
+	if err != nil || deleted.GetName() != "default" || deleted.GetVersion() != version {
+		t.Fatalf("DeleteImage() = %v, %v", deleted, err)
+	}
+	if _, err := os.Stat(filepath.Join(paths.Images, "default")); !os.IsNotExist(err) {
+		t.Fatalf("DeleteImage() left image directory: %v", err)
+	}
 }
 
 func TestServerStartsAndStopsInstanceThroughRuntimeController(t *testing.T) {

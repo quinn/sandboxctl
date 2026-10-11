@@ -6,3 +6,4 @@
 packaging/local/*.tgz
 packaging/local/*.pkg.tar.zst
 packaging/local/.SRCINFO
+packaging/local/src

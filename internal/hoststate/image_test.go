@@ -2,8 +2,10 @@ package hoststate
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"sandboxctl/internal/imagebuild/manifest"
@@ -144,5 +146,38 @@ func TestInstalledImagesRejectWritableBootArtifact(t *testing.T) {
 	}
 	if _, err := (InstalledImages{Paths: paths}).ResolveBootImage("default", version); err == nil {
 		t.Fatal("accepted a writable boot artifact")
+	}
+}
+
+func TestInstalledImagesDeleteExactVersion(t *testing.T) {
+	paths := PathsAt(filepath.Join(t.TempDir(), "state"))
+	if err := paths.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	directory := filepath.Join(paths.Images, "default")
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	manifestData, artifacts, version := imageFixture(t)
+	if err := os.WriteFile(filepath.Join(directory, "manifest.json"), manifestData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range artifacts {
+		if err := os.WriteFile(filepath.Join(directory, name), data, 0o444); err != nil {
+			t.Fatal(err)
+		}
+	}
+	images := InstalledImages{Paths: paths}
+	if err := images.Delete("default", "sha256:"+strings.Repeat("0", 64)); err == nil {
+		t.Fatal("Delete accepted a different image version")
+	}
+	if _, err := os.Stat(directory); err != nil {
+		t.Fatalf("wrong-version delete removed image directory: %v", err)
+	}
+	if err := images.Delete("default", version); err != nil {
+		t.Fatalf("Delete() = %v", err)
+	}
+	if _, err := os.Stat(directory); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("image directory still exists: %v", err)
 	}
 }

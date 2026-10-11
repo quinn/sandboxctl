@@ -1,12 +1,16 @@
 package hoststate
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
 	"syscall"
 
 	"sandboxctl/internal/imagebuild/manifest"
@@ -16,6 +20,8 @@ import (
 type InstalledImages struct {
 	Paths Paths
 }
+
+var imageStoreMu sync.Mutex
 
 // InstalledImage is a validated image name and pinned version.
 type InstalledImage struct {
@@ -106,6 +112,51 @@ func (images InstalledImages) List() ([]InstalledImage, error) {
 		result = append(result, InstalledImage{Name: entry.Name(), Version: version})
 	}
 	return result, nil
+}
+
+// Delete removes one installed image after it validates the pinned version.
+func (images InstalledImages) Delete(name, version string) error {
+	if !safeName.MatchString(name) {
+		return ErrInvalidName
+	}
+	if !strings.HasPrefix(version, "sha256:") || len(version) != len("sha256:")+64 {
+		return errors.New("invalid image version")
+	}
+	if _, err := hex.DecodeString(strings.TrimPrefix(version, "sha256:")); err != nil {
+		return errors.New("invalid image version")
+	}
+	imageStoreMu.Lock()
+	defer imageStoreMu.Unlock()
+
+	if _, err := images.ResolveBootImage(name, version); err != nil {
+		return err
+	}
+	directory := filepath.Join(images.Paths.Images, name)
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return fmt.Errorf("read installed image directory: %w", err)
+	}
+	want := []string{"initramfs.cpio.gz", "manifest.json", "root.squashfs", "vmlinux"}
+	got := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		got = append(got, entry.Name())
+	}
+	sort.Strings(got)
+	if len(got) != len(want) {
+		return errors.New("installed image directory contains unexpected files")
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			return errors.New("installed image directory contains unexpected files")
+		}
+	}
+	if err := os.RemoveAll(directory); err != nil {
+		return fmt.Errorf("remove installed image: %w", err)
+	}
+	if err := syncDirectory(images.Paths.Images); err != nil {
+		return fmt.Errorf("sync image store: %w", err)
+	}
+	return nil
 }
 
 // ResolveBootImage returns the fixed boot artifacts for an installed image version.

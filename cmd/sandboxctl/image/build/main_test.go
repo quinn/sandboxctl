@@ -16,6 +16,24 @@ func TestParseImageBuildOptions(t *testing.T) {
 	if options.Name != "dev-image" || options.BuilderImage != "builder" || options.BuilderVersion != "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" || options.Distribution != "ubuntu" || options.GuestVersion != "24.04" {
 		t.Fatalf("parsed options = %#v", options)
 	}
+	if !options.Install {
+		t.Fatal("install default = false, want true")
+	}
+}
+
+func TestParseImageBuildCanSkipInstall(t *testing.T) {
+	options, err := parse([]string{
+		"--base-image", "ubuntu:24.04@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"--builder-image", "builder",
+		"--builder-version", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		"--guest-version", "24.04", "--install=false", "dev-image",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.Install {
+		t.Fatal("install = true, want false")
+	}
 }
 
 func TestParseDockerfileBuildOptions(t *testing.T) {

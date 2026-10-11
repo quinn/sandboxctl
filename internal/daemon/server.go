@@ -39,6 +39,8 @@ const (
 )
 
 var requestIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
+var imageNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+var imageVersionPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 // RuntimeStatus exposes only the status needed by the initial host API.
 type RuntimeStatus interface {
@@ -146,6 +148,8 @@ func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerIn
 	duration := MaxOperationDuration
 	if info.FullMethod == controlpb.ControlService_CreateInstance_FullMethodName {
 		duration = MaxCreateDuration
+	} else if info.FullMethod == controlpb.ControlService_DeleteImage_FullMethodName {
+		duration = MaxDeleteDuration
 	} else if info.FullMethod == controlpb.ControlService_StartInstance_FullMethodName {
 		duration = MaxStartDuration
 	} else if info.FullMethod == controlpb.ControlService_StopInstance_FullMethodName {
@@ -277,6 +281,56 @@ func (s *service) ListImages(context.Context, *controlpb.ListImagesRequest) (*co
 	return response, nil
 }
 
+func (s *service) DeleteImage(ctx context.Context, request *controlpb.DeleteImageRequest) (*controlpb.DeleteImageResponse, error) {
+	if s.imagePaths == nil || s.instances == nil {
+		return nil, status.Error(codes.FailedPrecondition, "image deletion is unavailable")
+	}
+	if err := s.acquireImageSlot(ctx); err != nil {
+		return nil, err
+	}
+	defer func() { <-s.imageSlot }()
+	name, version := request.GetName(), request.GetVersion()
+	if !imageNamePattern.MatchString(name) {
+		return nil, status.Error(codes.InvalidArgument, "invalid image name")
+	}
+	if !imageVersionPattern.MatchString(version) {
+		return nil, status.Error(codes.InvalidArgument, "invalid image version")
+	}
+	instances, err := s.instances.List()
+	if err != nil {
+		slog.Error("cannot check image references", "name", name, "error", err)
+		return nil, status.Error(codes.Internal, "cannot check image references")
+	}
+	for _, instance := range instances {
+		if instance.Image == name {
+			return nil, status.Error(codes.FailedPrecondition, "image is used by a saved sandbox")
+		}
+	}
+	if err := (hoststate.InstalledImages{Paths: *s.imagePaths}).Delete(name, version); err != nil {
+		if errors.Is(err, hoststate.ErrInvalidName) {
+			return nil, status.Error(codes.InvalidArgument, "invalid image name")
+		}
+		if errors.Is(err, hoststate.ErrImageNotInstalled) {
+			return nil, status.Error(codes.NotFound, "image is not installed")
+		}
+		slog.Error("delete installed image failed", "name", name, "version", version, "error", err)
+		return nil, status.Error(codes.FailedPrecondition, "cannot delete installed image")
+	}
+	return &controlpb.DeleteImageResponse{Name: name, Version: version}, nil
+}
+
+func (s *service) acquireImageSlot(ctx context.Context) error {
+	select {
+	case s.imageSlot <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return status.Error(codes.DeadlineExceeded, "image operation exceeded its time limit")
+		}
+		return status.Error(codes.Canceled, "image operation was canceled")
+	}
+}
+
 func (s *service) InspectInstance(_ context.Context, request *controlpb.InspectInstanceRequest) (*controlpb.InspectInstanceResponse, error) {
 	if s.instances == nil {
 		return nil, status.Error(codes.FailedPrecondition, "instance state is unavailable")
@@ -301,6 +355,10 @@ func (s *service) CreateInstance(ctx context.Context, request *controlpb.CreateI
 	if request.GetVcpus() < 1 || request.GetMemoryMib() < 128 || request.GetStateDiskBytes() < 1 || request.GetImage() == "" {
 		return nil, status.Error(codes.InvalidArgument, "CPU, memory, disk size, and image are required")
 	}
+	if err := s.acquireImageSlot(ctx); err != nil {
+		return nil, err
+	}
+	defer func() { <-s.imageSlot }()
 	instance, err := s.creator.Create(ctx, hoststate.CreateOptions{
 		Name: request.GetName(), VCPUs: int(request.GetVcpus()), MemoryMiB: int(request.GetMemoryMib()),
 		StateDiskBytes: request.GetStateDiskBytes(), Image: request.GetImage(), SSHPublicKey: request.GetSshPublicKey(),
@@ -454,15 +512,10 @@ func (s *service) InstallImage(stream controlpb.ControlService_InstallImageServe
 	if s.imagePaths == nil {
 		return status.Error(codes.FailedPrecondition, "image installation is unavailable")
 	}
-	select {
-	case s.imageSlot <- struct{}{}:
-		defer func() { <-s.imageSlot }()
-	case <-stream.Context().Done():
-		if errors.Is(stream.Context().Err(), context.DeadlineExceeded) {
-			return status.Error(codes.DeadlineExceeded, "image import exceeded its time limit")
-		}
-		return status.Error(codes.Canceled, "image import was canceled")
+	if err := s.acquireImageSlot(stream.Context()); err != nil {
+		return err
 	}
+	defer func() { <-s.imageSlot }()
 	first, err := stream.Recv()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
