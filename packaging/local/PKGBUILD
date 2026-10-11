@@ -1,5 +1,5 @@
 pkgname=sandboxctl-local
-pkgver=0.1.0.r0.g0000000
+pkgver=0.1.0.r96.gf919917
 pkgrel=1
 pkgdesc='Manage local Firecracker development sandboxes'
 arch=('x86_64')

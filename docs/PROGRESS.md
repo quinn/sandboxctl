@@ -10,8 +10,9 @@ review and retained E2B, Firecracker, and BuildKit terms.
 Image builds install the finished image by default. Set `--install=false` to
 stage the image bundle without installing it.
 Use `sandboxctl image list` to show installed image names and versions.
-Use `sandboxctl image delete NAME --version VERSION` to remove an installed image
-that no saved sandbox uses. The command leaves the staged bundle in place.
+Use `sandboxctl image delete NAME` to remove an installed image that no saved
+sandbox uses. Each image name has one installed version. The command finds that
+version and leaves the staged bundle in place.
 
 Implemented `sandboxctl image build` with local Dockerfile and context input.
 BuildKit runs the Dockerfile inside the existing temporary builder VM. The

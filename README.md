@@ -89,16 +89,17 @@ with:
 sandboxctl image list
 ```
 
-Delete an installed image by name and pinned version:
+Delete an installed image by name:
 
 ```sh
-sandboxctl image delete dev-image --version sha256:IMAGE_DIGEST
+sandboxctl image delete dev-image
 ```
 
 The command asks for confirmation. Use `--yes` to skip the prompt in a script.
 The command refuses to delete an image that a saved sandbox uses. Delete those
-sandboxes first. This command removes the installed image from the protected
-host store. It does not remove a staged bundle in the XDG data directory.
+sandboxes first. Each image name has one installed version. The command finds
+that version for you. It removes the installed image from the protected host
+store. It does not remove a staged bundle in the XDG data directory.
 
 The image build needs host network rules from host installation. The builder
 VM also needs network access to the image registry and package servers.

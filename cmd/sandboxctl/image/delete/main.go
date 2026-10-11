@@ -26,11 +26,6 @@ func run(arguments []string) error {
 		}
 		return err
 	}
-	if !options.Yes {
-		if err := confirm(options.Name, options.Version, os.Stdin, os.Stdout, os.Stderr); err != nil {
-			return err
-		}
-	}
 	connection, service, err := client.Dial(context.Background(), client.DefaultSocketPath)
 	if err != nil {
 		return err
@@ -38,7 +33,26 @@ func run(arguments []string) error {
 	defer connection.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxDeleteDuration)
 	defer cancel()
-	response, err := service.DeleteImage(ctx, &controlpb.DeleteImageRequest{Name: options.Name, Version: options.Version})
+	images, err := service.ListImages(ctx, &controlpb.ListImagesRequest{})
+	if err != nil {
+		return fmt.Errorf("find installed image %s: %w", options.Name, err)
+	}
+	var version string
+	for _, image := range images.GetImages() {
+		if image.GetName() == options.Name {
+			version = image.GetVersion()
+			break
+		}
+	}
+	if version == "" {
+		return fmt.Errorf("image %s is not installed", options.Name)
+	}
+	if !options.Yes {
+		if err := confirm(options.Name, version, os.Stdin, os.Stdout, os.Stderr); err != nil {
+			return err
+		}
+	}
+	response, err := service.DeleteImage(ctx, &controlpb.DeleteImageRequest{Name: options.Name, Version: version})
 	if err != nil {
 		return fmt.Errorf("delete image %s: %w", options.Name, err)
 	}
@@ -47,33 +61,25 @@ func run(arguments []string) error {
 }
 
 type deleteOptions struct {
-	Name    string
-	Version string
-	Yes     bool
+	Name string
+	Yes  bool
 }
 
 func parse(arguments []string) (deleteOptions, error) {
 	flags := flag.NewFlagSet("image delete", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
-	version := flags.String("version", "", "Pinned image version from the manifest.")
 	yes := flags.Bool("yes", false, "Delete the image without a confirmation prompt.")
 	if err := flags.Parse(cmdutil.PositionalArgumentLast(arguments)); err != nil {
 		return deleteOptions{}, fmt.Errorf("parse image delete options: %w", err)
 	}
 	if flags.NArg() != 1 {
-		return deleteOptions{}, errors.New("usage: sandboxctl image delete NAME --version sha256:DIGEST [--yes]")
+		return deleteOptions{}, errors.New("usage: sandboxctl image delete NAME [--yes]")
 	}
 	name := flags.Arg(0)
 	if err := cmdutil.ValidateSandboxName(name); err != nil {
 		return deleteOptions{}, err
 	}
-	if *version == "" {
-		return deleteOptions{}, errors.New("image version is required")
-	}
-	if err := cmdutil.ValidateImageVersion(*version); err != nil {
-		return deleteOptions{}, err
-	}
-	return deleteOptions{Name: name, Version: *version, Yes: *yes}, nil
+	return deleteOptions{Name: name, Yes: *yes}, nil
 }
 
 func confirm(name, version string, input *os.File, output, errorsOutput *os.File) error {

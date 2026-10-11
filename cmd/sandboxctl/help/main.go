@@ -30,7 +30,7 @@ Usage:
   sandboxctl init
   sandboxctl image list
   sandboxctl image install NAME --version sha256:DIGEST
-  sandboxctl image delete NAME --version sha256:DIGEST [--yes]
+  sandboxctl image delete NAME [--yes]
   sandboxctl image build NAME --base-image IMAGE@sha256:DIGEST --guest-version VERSION [--install=false] [--builder-image NAME --builder-version sha256:DIGEST] [--distribution debian|ubuntu]
   sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]
   sandboxctl start NAME [--dry-run]

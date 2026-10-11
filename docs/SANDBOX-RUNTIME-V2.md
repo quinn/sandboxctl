@@ -862,12 +862,13 @@ Do not use a moving latest prefix.
 
 ### 13.4.1 Image deletion
 
-    sandboxctl image delete NAME --version VERSION [--yes]
+    sandboxctl image delete NAME [--yes]
 
-The command must ask for confirmation unless `--yes` is present. The daemon must
-require the exact installed version. It must refuse to delete an image that any
-saved sandbox uses. It must validate the image directory before it removes the
-fixed image files. The command must leave staged local bundles in place.
+The command must ask for confirmation unless `--yes` is present. It must get
+the current pinned version from the daemon, then request deletion of that exact
+version. The daemon must refuse to delete an image that any saved sandbox uses.
+It must validate the image directory before it removes the fixed image files.
+The command must leave staged local bundles in place.
 
 ### 13.5 Create
 
