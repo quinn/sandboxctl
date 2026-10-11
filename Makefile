@@ -1,4 +1,4 @@
-.PHONY: build install host-install sandboxctl test check generate proto-lint download-test-assets download-overlay-assets download-builder-tools manual-test manual-test-prepare manual-bootstrap-test manual-builder-test manual-image-build manual-delete-test manual-reset-test overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof stage-overlay-image stage-builder-image clean
+.PHONY: build install host-install sandboxctl test check generate proto-lint download-test-assets download-overlay-assets download-builder-tools manual-test manual-test-prepare manual-bootstrap-test manual-builder-test manual-image-build manual-dockerfile-build manual-delete-test manual-reset-test overlay-initramfs overlay-state-disk overlay-state-reset overlay-proof stage-overlay-image stage-builder-image clean
 
 SANDBOXCTL_COMMANDS = create delete doctor help host host/install image image/build image/install init list paths reset ssh ssh-config start stop version vmrun
 
@@ -79,6 +79,9 @@ manual-builder-test: build
 
 manual-image-build: build
 	./scripts/manual-image-build.sh
+
+manual-dockerfile-build: build
+	./scripts/manual-dockerfile-build.sh builder-1791682822-1720510 sha256:040909f5da1acf7c6be8b9bbb490540126439e839c36d76aa7085e55197c2c7d
 
 manual-delete-test: build
 	./scripts/manual-delete-test.sh

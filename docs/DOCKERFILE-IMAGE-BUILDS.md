@@ -1,8 +1,8 @@
 # Dockerfile guest image builds
 
-Status: Planned. The command options in this document are not implemented.
+Status: Implemented. The base-image and local Dockerfile modes are available.
 
-Date: 2026-10-10
+Date: 2026-10-11
 
 ## 1. Purpose and authority
 
@@ -225,24 +225,18 @@ Verify the final `/etc/os-release` against `--distribution` and
 
 ## 8. Implementation locations
 
-| Path | Required change |
+| Path | Implementation |
 | --- | --- |
-| `cmd/sandboxctl/image/build/main.go` | Add the input mode, option parsing, validation, and typed request construction. |
-| `cmd/sandboxctl/image/build/main_test.go` | Test both input modes, option conflicts, explicit arguments, and path errors. |
-| `internal/imagebuild/buildcontext/` | Add the bounded snapshot, ignore matcher integration, archive writer, and input digest. Add parser and boundary tests. |
-| `internal/imagebuild/buildkit/dockerfile.go` | Keep base-image mode. Add the fixed provisioning Dockerfile for a named user result. |
-| `internal/imagebuild/buildkit/dockerfile_test.go` | Test fixed provisioning inputs and isolation from user image settings. |
-| `internal/imagebuild/builder/runner.go` | Accept typed input modes. Upload user inputs and control inputs separately. Return artifact and build metadata. |
-| `internal/imagebuild/builder/runner_test.go` | Test validation, transfer failure, build failure, cancellation, and cleanup. |
-| `internal/imagebuild/guest/executor.go` | Reuse bounded transfer. Add bounded progress reporting if required. |
-| `internal/imagebuild/guest/image-builder.sh` | Read fixed structured settings. Extract context safely. Run both builds and existing finalization. |
-| `internal/imagebuild/guest/service.go` | Embed any new fixed guest helper. Keep a fixed operation interface. |
-| `internal/imagebuild/guest/service_test.go` | Test settings, extraction boundaries, command construction, and finalization. |
-| `internal/imagebuild/finalize/stage.go` | Accept provenance for either input mode. Preserve private atomic bundle publication. |
-| `internal/imagebuild/manifest/` | Keep the existing manifest schema and artifact version calculation. |
-| `scripts/manual-dockerfile-build.sh` | Add a workspace CLI test against the installed daemon. |
-| `Makefile` | Add `manual-dockerfile-build`. |
-| `README.md` | Add Dockerfile instructions only when the command works. |
+| `cmd/sandboxctl/image/build/` | Parses both input modes and builds a typed request. |
+| `internal/imagebuild/buildcontext/` | Creates a bounded, private context snapshot with ignore rules, safe file checks, archive output, and input digests. |
+| `internal/imagebuild/buildkit/` | Renders the fixed provisioning build and pins BuildKit source policy. |
+| `internal/imagebuild/builder/` | Uploads separate user and control inputs, runs the fixed guest service, and cleans up the builder VM. |
+| `internal/imagebuild/guest/` | Validates uploaded settings, extracts context safely, runs the two BuildKit stages, and finalizes the guest filesystem. |
+| `internal/imagebuild/finalize/` | Verifies builder artifacts and publishes the output bundle with input provenance. |
+| `internal/imagebuild/manifest/` | Keeps the existing image manifest schema and digest calculation. |
+| `scripts/manual-dockerfile-build.sh` | Builds, installs, boots, verifies, restarts, and deletes a test guest through the workspace CLI. |
+| `Makefile` | Adds `manual-dockerfile-build` with the test builder name and digest. |
+| `README.md` | Documents local Dockerfile builds and their limits. |
 
 Use the standard library for archives, hashing, typed settings, and file
 handling. Record each additional dependency and its version. No E2B code
@@ -278,33 +272,36 @@ Show bounded BuildKit progress while the command runs. Keep bounded failure
 output that includes the final error. Do not leave a long build silent until
 it exits. Build commands can print sensitive data, so keep saved logs private.
 
-## 10. Implementation order and acceptance
+## 10. Implementation status and acceptance
 
-1. Prove the two-build OCI path and source pinning in the existing builder VM.
-2. Add typed input selection and context snapshot tests.
-3. Add bounded transfer, safe extraction, and guest build settings.
-4. Connect the runner, provisioning, metadata, and bundle publication.
-5. Add the live test and user documentation.
+The base-image and Dockerfile modes share the packaged builder VM, bounded
+artifact transfer, provisioning, manifest validation, and atomic publication.
+Dockerfile inputs use a private, deterministic context snapshot and Docker
+ignore rules. BuildKit enforces digest-pinned image sources. The builder
+exports the selected stage, applies fixed guest provisioning, and returns a
+SquashFS image. Container startup settings do not replace guest PID 1.
 
-Run the required format, vet, and Go test checks after each code step. Run
-`make check` before the implementation handoff. Commit completed steps with
-short technical descriptions.
+Run the Dockerfile VM acceptance test with `make manual-dockerfile-build`.
+The Makefile contains the installed builder name and digest for this test.
+Edit those values when the installed test builder changes. The test uses the
+workspace CLI with the installed sandboxd service. It does not require a
+package reinstall when the package builder did not change.
 
-The live test must build a Dockerfile with local `COPY`, an executable file,
-multiple stages, and an explicit build argument. Include an ignored file and
-confirm it cannot enter the build context. Include container startup settings
-and confirm the VM still boots systemd as PID 1. End the user stage with a
-non-root `USER` and confirm required provisioning still succeeds.
+The live test passed on 2026-10-11. It built multiple Dockerfile stages with
+local `COPY`, an executable file, an explicit build argument, an ignored
+file, a non-root final `USER`, `ENV`, `CMD`, and `ENTRYPOINT`. The guest booted
+systemd as PID 1. The test confirmed fixed provisioning, public-key SSH,
+context filtering, and state persistence after stop and restart. It then
+stopped and deleted the test VM. The log is
+`tmp/logs/dockerfile-build-test.log`.
 
-Install the result through the existing image stream. Start a disposable VM.
-Verify custom files, bootstrap completion, public-key SSH, disabled password
-SSH, and the `dev` account. Verify state persistence after stop and restart.
-Stop and delete the test VM.
-
-Also test failed Dockerfile commands, unsupported guest results, mismatched
-guest metadata, unpinned sources, unsafe archives, size limits, and
-cancellation. These failures must not publish an image or leave a temporary
-builder running. Rerun the existing base-image build test.
+Unit tests cover invalid options, duplicate build arguments, context paths,
+ignore rules, unsafe links, file changes, archive limits, source-policy
+selection, transfer errors, build errors, cancellation cleanup, and manifest
+provenance. The live rejection tests for failed Dockerfile commands,
+unsupported guest results, mismatched guest metadata, unpinned sources, and
+size limits remain open. Rerun the base-image live test after the Dockerfile
+implementation settles.
 
 Use workspace command binaries against the installed daemon. Do not reinstall
 the Arch package when only CLI or guest service source changes. A packaged

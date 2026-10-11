@@ -1,22 +1,26 @@
 # Implementation progress
 
-## Dockerfile image build planning
+## Dockerfile image build
 
-The next phase is planned in
-[DOCKERFILE-IMAGE-BUILDS.md](DOCKERFILE-IMAGE-BUILDS.md). The operator confirmed
-that Dockerfile input should build the guest filesystem. `CMD` and
-`ENTRYPOINT` must not control VM startup. The guest init system runs as PID 1.
-BuildKit will execute the user Dockerfile inside the existing temporary
-builder VM. Required sandboxctl provisioning follows the user build.
+Implemented `sandboxctl image build` with local Dockerfile and context input.
+BuildKit runs the Dockerfile inside the existing temporary builder VM. The
+command supports stage selection and explicit build arguments. It applies
+Docker ignore rules, validates and hashes the context snapshot, and records
+input digests in image provenance. Required sandboxctl provisioning follows
+the selected build stage. `CMD` and `ENTRYPOINT` do not control VM startup.
+The guest init system runs as PID 1.
 
 The E2B review used the retained runtime checkout at commit
 `47096f195aca4a545a9079b706efb3a18f51cf3f`. Its separate SDK translates a
 limited Dockerfile into template steps. No new E2B code extraction is planned.
 
-This is a documentation change. Dockerfile input is not implemented.
-The next task is to prove the two-build OCI layout path and source pinning
-with BuildKit v0.34.0. Then add bounded context preparation and transfer.
-The clean Arch host acceptance test remains deferred.
+The live Dockerfile test passed on 2026-10-11. It verified local `COPY`,
+executable file modes, multiple stages, build arguments, ignore rules, a
+non-root final `USER`, container startup settings, guest bootstrap, public-key
+SSH, systemd PID 1, and state persistence after restart. The test stopped and
+deleted its VM. See `tmp/logs/dockerfile-build-test.log`. Remaining checks:
+live rejection cases and a rerun of the base-image test. The clean Arch host
+acceptance test remains deferred.
 
 ## Builder package distribution
 
@@ -31,7 +35,7 @@ command reads the builder name and digest from the packaged manifest unless
 the caller supplies both override options. `sandboxctl doctor` checks that the
 packaged version is installed.
 
-Last updated: 2026-10-10
+Last updated: 2026-10-11
 
 ## Authority and order
 

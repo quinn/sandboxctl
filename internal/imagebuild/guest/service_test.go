@@ -24,10 +24,20 @@ func TestImageBuilderServiceUsesFixedBuildAndFinalizationSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, required := range []string{
-		"[ \"$#\" -ne 1 ] || [ \"$1\" != build ]",
+		"[ \"$#\" -ne 1 ] || { [ \"$1\" != build-base ] && [ \"$1\" != build-dockerfile ]; }",
+		"context archive digest does not match build settings",
+		"--no-same-owner --no-same-permissions --no-overwrite-dir",
+		"--opt \"target=$selected_target\"",
+		"build-arg:$arg_name=$arg_value",
 		"--frontend dockerfile.v0",
+		"--source-policy-file \"$provision_context/source-policy.json\"",
+		"--output \"type=oci,dest=$user_oci_tar\"",
+		"--oci-layout \"sandboxctl-user-image=$user_oci\"",
+		"oci-layout://sandboxctl-user-image@$user_digest",
+		"applying sandboxctl guest provisioning",
 		"--output \"type=local,dest=$rootfs\"",
-		"BuildKit image build failed; last 80 log lines follow",
+		"BuildKit user image build failed; last 80 log lines follow",
+		"guest provisioning build failed; last 80 log lines follow",
 		"mksquashfs failed; first 60 log lines follow",
 		"chroot \"$rootfs\" /usr/sbin/sshd -T",
 		"rm -f -- \"$rootfs/etc/machine-id\"",

@@ -16,8 +16,6 @@ func TestDockerfileUsesPinnedBaseAndProvisioningScript(t *testing.T) {
 	}
 	for _, want := range []string{
 		"FROM " + base,
-		"COPY provision.sh /tmp/sandboxctl-provision.sh",
-		`RUN ["/bin/sh", "-c", "/bin/sh /tmp/sandboxctl-provision.sh && rm -f /tmp/sandboxctl-provision.sh"]`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Dockerfile does not contain %q", want)
@@ -25,6 +23,26 @@ func TestDockerfileUsesPinnedBaseAndProvisioningScript(t *testing.T) {
 	}
 	if again, err := Dockerfile(base); err != nil || again != got {
 		t.Fatalf("Dockerfile is not deterministic: err=%v", err)
+	}
+}
+
+func TestProvisioningDockerfileResetsImageRuntimeSettings(t *testing.T) {
+	got := ProvisioningDockerfile()
+	for _, want := range []string{
+		"FROM scratch",
+		"COPY --from=sandboxctl-user-image / /",
+		"USER 0:0",
+		"WORKDIR /",
+		"ENV PATH=",
+		"COPY provision.sh /tmp/sandboxctl-provision.sh",
+		`RUN ["/bin/sh", "-c", "/bin/sh /tmp/sandboxctl-provision.sh && rm -f /tmp/sandboxctl-provision.sh"]`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("provisioning Dockerfile does not contain %q", want)
+		}
+	}
+	if strings.Contains(got, "CMD ") || strings.Contains(got, "ENTRYPOINT ") {
+		t.Fatal("provisioning Dockerfile defines container startup behavior")
 	}
 }
 
@@ -51,8 +69,26 @@ func TestContextFilesIncludesRenderedInputs(t *testing.T) {
 	if !strings.Contains(string(files["Dockerfile"]), base) {
 		t.Fatal("build context Dockerfile does not use the requested base")
 	}
+	if string(files["provision.Dockerfile"]) != ProvisioningDockerfile() {
+		t.Fatal("build context does not contain the fixed provisioning Dockerfile")
+	}
+	if string(files["source-policy.json"]) != string(SourcePolicyJSON()) {
+		t.Fatal("build context does not contain the fixed source policy")
+	}
 	if string(files["provision.sh"]) != "#!/bin/sh\nset -eu\n" {
 		t.Fatal("build context changed the provisioning script")
+	}
+}
+
+func TestSourcePolicyRejectsMutableAndRemoteInputs(t *testing.T) {
+	policy := string(SourcePolicyJSON())
+	for _, want := range []string{"\"action\":\"ALLOW\"", "docker-image://*@sha256:*", "\"action\":\"DENY\"", "docker-image://*", "http://*", "https://*", "git://*"} {
+		if !strings.Contains(policy, want) {
+			t.Errorf("source policy does not contain %q", want)
+		}
+	}
+	if strings.Index(policy, "docker-image://*") > strings.Index(policy, "docker-image://*@sha256:*") {
+		t.Fatal("digest-pinned image allowance must follow the broad image denial")
 	}
 }
 

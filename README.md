@@ -81,6 +81,39 @@ sandboxctl image install dev-image --version sha256:IMAGE_DIGEST
 The image build needs host network rules from host installation. The builder
 VM also needs network access to the image registry and package servers.
 
+Build a custom image from a local Dockerfile and context:
+
+```sh
+sandboxctl image build app-image \
+  --dockerfile ./image/Dockerfile \
+  --context ./image \
+  --target runtime \
+  --build-arg APP_VERSION=1.2.3 \
+  --guest-version 24.04
+```
+
+The context defaults to the current directory. The Dockerfile must be inside
+the context. Use `--build-arg` once for each build argument. BuildKit applies
+Docker ignore rules before it sends context files to the builder. It uses
+`Dockerfile.dockerignore` when that file exists. Otherwise, it uses
+`.dockerignore`.
+
+The Dockerfile must produce a Debian or Ubuntu systemd guest. Pin each external
+image source with a SHA-256 digest. The build rejects unpinned sources and
+remote `ADD` inputs. It does not support remote contexts, registry
+credentials, secret mounts, SSH mounts, or privileged BuildKit options.
+
+BuildKit uses `RUN`, `COPY`, `ADD`, build arguments, and stages to create the
+guest filesystem. `ENV`, `USER`, and `WORKDIR` apply during the image build.
+They do not set the guest login environment or SSH user. `CMD` and
+`ENTRYPOINT` do not control VM startup. The guest init system runs as process
+identifier (PID) 1. Required sandboxctl provisioning runs after the selected
+stage.
+
+The command writes the image bundle to your user data directory. It prints
+the image digest and install command. Install the image before you create a
+sandbox from it.
+
 ## Create and use a sandbox
 
 Create a sandbox from the installed image, then start it:
@@ -144,7 +177,8 @@ ssh-keygen -R GUEST_ADDRESS -f KNOWN_HOSTS_PATH
 - `sandboxctl host install` installs host configuration and enables the
   socket-activated service.
 - `sandboxctl image build` builds a Debian or Ubuntu guest image in a temporary
-  virtual machine. It uses the builder image included in the Arch package.
+  virtual machine. It accepts a digest-pinned base image or a local Dockerfile
+  and context. It uses the builder image included in the Arch package.
 - `sandboxctl image install` imports a verified local image bundle.
 - `sandboxctl create`, `start`, `stop`, `reset`, and `delete` manage sandboxes.
 - `sandboxctl list` shows sandbox state.
@@ -170,6 +204,10 @@ installed, configured sandboxd service:
 - `make manual-builder-test` checks the builder image and its tools.
 - `make manual-image-build` checks the guest image build pipeline and stages
   its output bundle.
+- `make manual-dockerfile-build` checks a local Dockerfile build, context
+  filtering, build arguments, VM boot, SSH, and state persistence. Edit the
+  builder name and digest in the Makefile when the installed test builder
+  changes.
 
 These manual targets check sandboxd state and disk operations. They need an
 installed, configured sandboxd service. The reset test also starts a guest and
@@ -197,6 +235,5 @@ See [docs/SANDBOX-RUNTIME-V2.md](docs/SANDBOX-RUNTIME-V2.md) for the runtime
 design. See [docs/PROGRESS.md](docs/PROGRESS.md) for implementation and test
 status.
 
-Dockerfile input is planned in
-[docs/DOCKERFILE-IMAGE-BUILDS.md](docs/DOCKERFILE-IMAGE-BUILDS.md). It is not
-implemented yet.
+See [docs/DOCKERFILE-IMAGE-BUILDS.md](docs/DOCKERFILE-IMAGE-BUILDS.md) for
+Dockerfile build limits, provenance, and remaining acceptance checks.

@@ -3,11 +3,13 @@ package builder
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"strings"
 	"testing"
 
+	"sandboxctl/internal/imagebuild/buildcontext"
 	"sandboxctl/internal/imagebuild/distro"
 	"sandboxctl/internal/imagebuild/guest"
 )
@@ -29,8 +31,8 @@ func TestBuildRunsFixedWorkflowAndClosesBuilder(t *testing.T) {
 	if !vm.closed || factory.starts != 1 {
 		t.Fatalf("builder lifecycle: starts=%d closed=%v", factory.starts, vm.closed)
 	}
-	if len(executor.uploads) != 3 {
-		t.Fatalf("uploaded %d build inputs, want 3", len(executor.uploads))
+	if len(executor.uploads) != 5 {
+		t.Fatalf("uploaded %d build inputs, want 5", len(executor.uploads))
 	}
 	if _, ok := executor.uploads[contextDirectory+"/Dockerfile"]; !ok {
 		t.Fatal("BuildKit Dockerfile was not uploaded")
@@ -38,15 +40,67 @@ func TestBuildRunsFixedWorkflowAndClosesBuilder(t *testing.T) {
 	if _, ok := executor.uploads[contextDirectory+"/provision.sh"]; !ok {
 		t.Fatal("rendered provisioning script was not uploaded")
 	}
+	if _, ok := executor.uploads[contextDirectory+"/provision.Dockerfile"]; !ok {
+		t.Fatal("fixed provisioning Dockerfile was not uploaded")
+	}
+	if _, ok := executor.uploads[contextDirectory+"/source-policy.json"]; !ok {
+		t.Fatal("fixed source policy was not uploaded")
+	}
 	if _, ok := executor.uploads[servicePath]; !ok {
 		t.Fatal("fixed builder service was not uploaded")
 	}
-	wantCommand := guest.Command{Program: "sudo", Args: []string{"-n", "/bin/sh", servicePath, "build"}}
+	wantCommand := guest.Command{Program: "sudo", Args: []string{"-n", "/bin/sh", servicePath, "build-base"}}
 	if executor.command.Program != wantCommand.Program || strings.Join(executor.command.Args, "\x00") != strings.Join(wantCommand.Args, "\x00") {
 		t.Fatalf("guest command = %#v, want fixed service command %#v", executor.command, wantCommand)
 	}
 	if executor.downloadPath != outputPath || executor.downloadLimit != maxArtifactBytes {
 		t.Fatalf("download request = (%q, %d)", executor.downloadPath, executor.downloadLimit)
+	}
+}
+
+func TestBuildUploadsDockerfileSnapshotAndBuildSettings(t *testing.T) {
+	executor := &testExecutor{artifact: "squashfs-bytes"}
+	vm := &testVM{executor: executor}
+	factory := &testFactory{vm: vm}
+	profile, err := distro.ForID("ubuntu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := Request{
+		Profile: profile,
+		Dockerfile: &DockerfileInput{
+			Archive: strings.NewReader("context archive"), ArchiveBytes: int64(len("context archive")),
+			Dockerfile:     []byte("FROM ubuntu@sha256:" + strings.Repeat("a", 64) + "\n"),
+			DockerfileName: "Dockerfile", ContextDigest: "sha256:" + strings.Repeat("b", 64),
+			DockerfileHash: "sha256:" + strings.Repeat("c", 64), Target: "runtime",
+			BuildArgs: []buildcontext.BuildArg{{Name: "VERSION", Value: "24.04"}},
+		},
+	}
+	var output bytes.Buffer
+	if _, err := (Runner{Factory: factory}).Build(context.Background(), request, &output); err != nil {
+		t.Fatal(err)
+	}
+	if string(executor.uploads[userDockerfile]) != string(request.Dockerfile.Dockerfile) {
+		t.Fatal("runner did not upload the selected Dockerfile")
+	}
+	if string(executor.uploads[archivePath]) != "context archive" {
+		t.Fatal("runner did not upload the context archive")
+	}
+	var settings struct {
+		DockerfileName string                  `json:"dockerfile_name"`
+		ContextDigest  string                  `json:"context_digest"`
+		DockerfileHash string                  `json:"dockerfile_hash"`
+		Target         string                  `json:"target"`
+		BuildArgs      []buildcontext.BuildArg `json:"build_args"`
+	}
+	if err := json.Unmarshal(executor.uploads[settingsPath], &settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings.DockerfileName != "Dockerfile" || settings.Target != "runtime" || settings.ContextDigest != request.Dockerfile.ContextDigest || settings.DockerfileHash != request.Dockerfile.DockerfileHash || len(settings.BuildArgs) != 1 || settings.BuildArgs[0].Value != "24.04" {
+		t.Fatalf("uploaded build settings = %#v", settings)
+	}
+	if executor.command.Args[len(executor.command.Args)-1] != "build-dockerfile" {
+		t.Fatalf("guest command = %#v, want Dockerfile build mode", executor.command)
 	}
 }
 

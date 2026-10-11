@@ -13,7 +13,8 @@ import (
 )
 
 func TestStagePublishesVerifiedImageBundle(t *testing.T) {
-	imagesDir := t.TempDir()
+	imagesDir := filepath.Join(t.TempDir(), "images")
+	builderDir := filepath.Join(t.TempDir(), "packaged-builder")
 	artifacts := map[string][]byte{
 		"vmlinux":           []byte("kernel"),
 		"initramfs.cpio.gz": []byte("initramfs"),
@@ -31,7 +32,6 @@ func TestStagePublishesVerifiedImageBundle(t *testing.T) {
 		image.Artifacts[name] = manifest.Artifact{Size: int64(len(content)), SHA256: hex.EncodeToString(digest[:])}
 	}
 	image.Version = manifest.VersionForManifest(image)
-	builderDir := filepath.Join(imagesDir, "builder", image.Version)
 	if err := os.MkdirAll(builderDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestStagePublishesVerifiedImageBundle(t *testing.T) {
 		t.Fatal(err)
 	}
 	version, destination, err := Stage(StageOptions{
-		ImagesDir: imagesDir, BuilderName: "builder", BuilderVersion: image.Version,
+		ImagesDir: imagesDir, BuilderDirectory: builderDir, BuilderName: "builder", BuilderVersion: image.Version,
 		ImageName: "ubuntu-dev", Distribution: "Ubuntu", GuestVersion: "24.04",
 		BaseImage: "ubuntu@sha256:" + string(bytes.Repeat([]byte("b"), 64)), ProvisioningID: "ubuntu",
 		SquashFS: bytes.NewReader([]byte("built guest root")),

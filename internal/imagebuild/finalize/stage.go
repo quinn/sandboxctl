@@ -21,15 +21,17 @@ var imageVersionPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 // StageOptions contains validated metadata for one completed guest image.
 type StageOptions struct {
-	ImagesDir      string
-	BuilderName    string
-	BuilderVersion string
-	ImageName      string
-	Distribution   string
-	GuestVersion   string
-	BaseImage      string
-	ProvisioningID string
-	SquashFS       io.Reader
+	ImagesDir        string
+	BuilderDirectory string
+	BuilderName      string
+	BuilderVersion   string
+	ImageName        string
+	Distribution     string
+	GuestVersion     string
+	BaseImage        string
+	InputProvenance  string
+	ProvisioningID   string
+	SquashFS         io.Reader
 }
 
 // Stage validates the builder bundle and writes a private, immutable image bundle.
@@ -37,13 +39,16 @@ func Stage(options StageOptions) (string, string, error) {
 	if options.ImagesDir == "" || !imageNamePattern.MatchString(options.BuilderName) || !imageVersionPattern.MatchString(options.BuilderVersion) || !imageNamePattern.MatchString(options.ImageName) {
 		return "", "", errors.New("image staging identity is invalid")
 	}
-	if options.Distribution == "" || !guestVersionPattern.MatchString(options.GuestVersion) || options.BaseImage == "" || options.ProvisioningID == "" || options.SquashFS == nil {
+	if options.Distribution == "" || !guestVersionPattern.MatchString(options.GuestVersion) || (options.BaseImage == "") == (options.InputProvenance == "") || options.ProvisioningID == "" || options.SquashFS == nil {
 		return "", "", errors.New("image staging metadata is incomplete")
 	}
-	if len(options.ProvisioningID) > 512 || len(options.BaseImage) > 512 {
+	if len(options.ProvisioningID) > 512 || len(options.BaseImage) > 512 || len(options.InputProvenance) > 4096 {
 		return "", "", errors.New("image provenance exceeds the size limit")
 	}
-	builderDir := filepath.Join(options.ImagesDir, options.BuilderName, options.BuilderVersion)
+	builderDir := options.BuilderDirectory
+	if builderDir == "" {
+		builderDir = filepath.Join(options.ImagesDir, options.BuilderName, options.BuilderVersion)
+	}
 	builderManifestData, err := readRegularFile(filepath.Join(builderDir, "manifest.json"), manifest.MaxManifestSize)
 	if err != nil {
 		return "", "", fmt.Errorf("read builder manifest: %w", err)
@@ -107,6 +112,10 @@ func Stage(options StageOptions) (string, string, error) {
 		return "", "", fmt.Errorf("write guest SquashFS artifact: %w", copyErr)
 	}
 
+	inputProvenance := options.InputProvenance
+	if inputProvenance == "" {
+		inputProvenance = "Base image " + options.BaseImage
+	}
 	image := manifest.Manifest{
 		SchemaVersion: manifest.SchemaVersion,
 		Name:          options.ImageName,
@@ -120,7 +129,7 @@ func Stage(options StageOptions) (string, string, error) {
 			"root.squashfs":     {Size: size, SHA256: hex.EncodeToString(hasher.Sum(nil))},
 		},
 		KernelArgs: append([]string(nil), builderManifest.KernelArgs...),
-		Provenance: "Base image " + options.BaseImage + "; profile " + options.ProvisioningID + "; builder " + options.BuilderName + "@" + options.BuilderVersion + "; seed " + builderManifest.Version,
+		Provenance: inputProvenance + "; profile " + options.ProvisioningID + "; builder " + options.BuilderName + "@" + options.BuilderVersion + "; seed " + builderManifest.Version,
 	}
 	image.Version = manifest.VersionForManifest(image)
 	if err := image.Validate(); err != nil {
