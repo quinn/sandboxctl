@@ -1,6 +1,19 @@
 # Implementation progress
 
-Last updated: 2026-10-09
+## Builder package distribution
+
+The Arch package build now creates the pinned builder image and places its
+manifest, kernel, initramfs, and SquashFS under `/usr/share/sandboxctl/builder`.
+The package build uses Podman. The installed tool does not need Podman.
+`sandboxctl init` verifies the package bundle and installs it through the
+existing bounded gRPC stream. It skips an exact installed match. The bundle
+name includes a fingerprint of all three boot artifacts, so package updates
+can install a new builder without replacing an existing image. The image build
+command reads the builder name and digest from the packaged manifest unless
+the caller supplies both override options. `sandboxctl doctor` checks that the
+packaged version is installed.
+
+Last updated: 2026-10-10
 
 ## Authority and order
 

@@ -15,6 +15,7 @@ import (
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/config"
 	"sandboxctl/internal/imagebuild/builder"
+	"sandboxctl/internal/imagebuild/bundle"
 	"sandboxctl/internal/imagebuild/distro"
 	"sandboxctl/internal/imagebuild/finalize"
 	sshconfig "sandboxctl/internal/ssh"
@@ -125,8 +126,8 @@ func run(arguments []string) error {
 func parse(arguments []string) (options, error) {
 	flags := flag.NewFlagSet("image build", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
-	builderImage := flags.String("builder-image", "builder", "Installed builder image name.")
-	builderVersion := flags.String("builder-version", "", "Pinned builder image version.")
+	builderImage := flags.String("builder-image", "", "Installed builder image name. Defaults to the packaged builder.")
+	builderVersion := flags.String("builder-version", "", "Pinned builder image version. Defaults to the packaged builder version.")
 	baseImage := flags.String("base-image", "", "Digest-pinned OCI base image.")
 	distribution := flags.String("distribution", "ubuntu", "Guest distribution ID: debian or ubuntu.")
 	guestVersion := flags.String("guest-version", "", "Guest distribution version.")
@@ -137,11 +138,23 @@ func parse(arguments []string) (options, error) {
 		return options{}, fmt.Errorf("parse image build options: %w", err)
 	}
 	if flags.NArg() != 1 {
-		return options{}, errors.New("usage: sandboxctl image build NAME --base-image IMAGE@sha256:DIGEST --builder-version sha256:DIGEST --guest-version VERSION [--builder-image NAME] [--distribution debian|ubuntu]")
+		return options{}, errors.New("usage: sandboxctl image build NAME --base-image IMAGE@sha256:DIGEST --guest-version VERSION [--builder-image NAME --builder-version sha256:DIGEST] [--distribution debian|ubuntu]")
 	}
 	name := flags.Arg(0)
 	if err := cmdutil.ValidateSandboxName(name); err != nil {
 		return options{}, err
+	}
+	if (*builderImage == "") != (*builderVersion == "") {
+		return options{}, errors.New("builder image and builder version must be set together")
+	}
+	if *builderImage == "" {
+		image, err := bundle.Open(bundle.PackagedBuilderDirectory)
+		if err != nil {
+			return options{}, fmt.Errorf("read packaged builder image: %w", err)
+		}
+		*builderImage = image.Manifest.Name
+		*builderVersion = image.Manifest.Version
+		image.Close()
 	}
 	if err := cmdutil.ValidateSandboxName(*builderImage); err != nil {
 		return options{}, fmt.Errorf("builder image: %w", err)

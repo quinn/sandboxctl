@@ -50,6 +50,7 @@ printf '%s  %s\n' "$buildkit_archive_sha256" "$tools_dir/buildkit-v0.34.0.linux-
 
 install -d -m 0700 "$image_root"
 chmod 0700 "$image_root"
+staging_image_root=$image_root
 stage=$(mktemp -d "$image_root/.builder-image.XXXXXX")
 chmod 0700 "$stage"
 podman_store=$(mktemp -d "${TMPDIR:-/tmp}/sandboxctl-builder-podman.XXXXXX")
@@ -68,6 +69,9 @@ cleanup() {
   podman_cmd system reset --force >/dev/null 2>&1 || true
   rm -rf -- "$stage"
   rm -rf -- "$podman_store"
+  if [[ $staging_image_root != "$image_root" ]]; then
+    rmdir -- "$staging_image_root" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT
 
@@ -120,6 +124,29 @@ for required_path in \
     exit 1
   fi
 done
+
+if [[ $image_name == auto ]]; then
+  image_name=$(python3 - "$bundle" <<'PY'
+import hashlib
+import pathlib
+import sys
+
+directory = pathlib.Path(sys.argv[1])
+hasher = hashlib.sha256()
+for name in ("vmlinux", "initramfs.cpio.gz", "root.squashfs"):
+    artifact_hasher = hashlib.sha256()
+    with (directory / name).open("rb") as source:
+        while chunk := source.read(1024 * 1024):
+            artifact_hasher.update(chunk)
+    hasher.update(name.encode())
+    hasher.update(artifact_hasher.digest())
+print("builder-" + hasher.hexdigest()[:16])
+PY
+  )
+  image_root="$data_home/sandboxctl/images/$image_name"
+  install -d -m 0700 "$image_root"
+  chmod 0700 "$image_root"
+fi
 
 python3 - "$bundle" "$image_name" "$ubuntu_index_digest" "$apt_snapshot" "$buildkit_archive_sha256" <<'PY'
 import hashlib

@@ -1,16 +1,22 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"time"
 
+	"sandboxctl/internal/client"
 	"sandboxctl/internal/config"
+	"sandboxctl/internal/daemon"
 	"sandboxctl/internal/disk"
+	"sandboxctl/internal/imagebuild/bundle"
+	"sandboxctl/internal/imagebuild/installer"
 	"sandboxctl/internal/model"
 	"sandboxctl/internal/names"
 	processctl "sandboxctl/internal/process"
@@ -75,8 +81,11 @@ func RunVM(name string) error {
 	return ctx.vm.Run(instance, ready)
 }
 
-// Init creates the managed SSH key and configuration files.
+// Init installs the packaged builder image and creates the managed SSH files.
 func (c *Context) Init() error {
+	if err := c.installPackagedBuilder(); err != nil {
+		return err
+	}
 	if err := c.ssh.PrepareKey(); err != nil {
 		return err
 	}
@@ -84,6 +93,34 @@ func (c *Context) Init() error {
 	fmt.Fprintln(os.Stdout, "SSH key:", c.paths.PrivateKey())
 	fmt.Fprintln(os.Stdout, "SSH public key:", c.paths.PublicKey())
 	fmt.Fprintln(os.Stdout, "SSH configuration:", c.paths.SSHConfig)
+	return nil
+}
+
+func (c *Context) installPackagedBuilder() error {
+	image, err := bundle.Open(bundle.PackagedBuilderDirectory)
+	if err != nil {
+		return fmt.Errorf("read the packaged builder image: %w", err)
+	}
+	defer image.Close()
+
+	connection, service, err := client.Dial(context.Background(), client.DefaultSocketPath)
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxInstallDuration)
+	defer cancel()
+	installed, err := installer.EnsureInstalled(ctx, service, image)
+	if err != nil {
+		return fmt.Errorf("install the packaged builder image: %w", err)
+	}
+	if installed {
+		slog.Info("packaged builder image installed", "name", image.Manifest.Name, "version", image.Manifest.Version)
+		fmt.Fprintf(os.Stdout, "Installed builder image %s at version %s.\n", image.Manifest.Name, image.Manifest.Version)
+	} else {
+		slog.Info("packaged builder image already installed", "name", image.Manifest.Name, "version", image.Manifest.Version)
+		fmt.Fprintf(os.Stdout, "Builder image %s at version %s is already installed.\n", image.Manifest.Name, image.Manifest.Version)
+	}
 	return nil
 }
 

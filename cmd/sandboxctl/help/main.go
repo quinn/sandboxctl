@@ -29,7 +29,7 @@ Usage:
   sandboxctl doctor
   sandboxctl init
   sandboxctl image install NAME --version sha256:DIGEST
-  sandboxctl image build NAME --base-image IMAGE@sha256:DIGEST --builder-version sha256:DIGEST --guest-version VERSION [--builder-image NAME] [--distribution debian|ubuntu]
+  sandboxctl image build NAME --base-image IMAGE@sha256:DIGEST --guest-version VERSION [--builder-image NAME --builder-version sha256:DIGEST] [--distribution debian|ubuntu]
   sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]
   sandboxctl start NAME [--dry-run]
   sandboxctl stop NAME [--force]

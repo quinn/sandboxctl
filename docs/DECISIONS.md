@@ -35,6 +35,12 @@ Host networking and guest image construction remain manual for this iteration.
 
 ## Guest images
 
+The Arch package includes the pinned builder image bundle under
+`/usr/share/sandboxctl/builder`. `sandboxctl init` verifies the bundle and
+streams it to `sandboxd` for installation in the root-owned image store. The
+image build command reads its default builder name and version from the
+packaged manifest. Podman is a package build dependency only.
+
 The first image profile supports Debian and Ubuntu systemd images. The image
 creates a `dev` account and grants it passwordless sudo inside the guest. This
 policy applies only to the isolated guest. The image keeps `authorized_keys`

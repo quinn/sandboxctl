@@ -1,5 +1,11 @@
 # Continuation
 
+The Arch package build now creates and includes the pinned builder image.
+`sandboxctl init` verifies it and installs it through the daemon image stream.
+`sandboxctl image build` selects the packaged builder name and digest by
+default. `sandboxctl doctor` checks that the exact packaged version is
+installed. Content-based builder names let package updates keep old images.
+
 Follow the implementation order in [SANDBOX-RUNTIME-V2.md](SANDBOX-RUNTIME-V2.md), section 18.
 Use [PROGRESS.md](PROGRESS.md) to resume the current work.
 

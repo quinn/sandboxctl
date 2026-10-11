@@ -18,6 +18,9 @@ make install
 ```
 
 The target uses `yay`. It downloads the pinned Firecracker release from GitHub.
+The package build also creates the pinned builder image and includes it in the
+package. Podman is a package build dependency. It is not needed to run
+`sandboxctl` or build guest images after installation.
 
 Install the host service and network rules:
 
@@ -40,9 +43,9 @@ sandboxctl init
 sandboxctl doctor
 ```
 
-`init` prints an OpenSSH `Include` line. Add that line to `~/.ssh/config`
-yourself. `sandboxctl` does not edit that file. After you create a sandbox,
-check that OpenSSH reads its managed configuration with:
+`sandboxctl ssh-config` prints an OpenSSH `Include` line. Add that line to
+`~/.ssh/config` yourself. `sandboxctl` does not edit that file. After you create
+a sandbox, check that OpenSSH reads its managed configuration with:
 
 ```sh
 ssh -G sandbox-NAME
@@ -50,24 +53,15 @@ ssh -G sandbox-NAME
 
 ## Build and install a guest image
 
-First, create and install the builder image. It is a reusable build
-environment. `make stage-builder-image` uses Podman and the pinned BuildKit
-tools to create it:
+`sandboxctl init` imports the builder image from the Arch package through the
+privileged service. It verifies the image files and installs them in the
+protected image store. You do not need to build or select the builder image.
 
-```sh
-make stage-builder-image
-sandboxctl image install builder --version sha256:BUILDER_DIGEST
-```
-
-Use the digest printed by `make stage-builder-image` in the install command.
-The installed builder image runs as a temporary virtual machine for each image
-build. It is not the operating system image for the guest. The `--base-image`
-value below selects that guest operating system:
+Build a guest image with a digest-pinned base image:
 
 ```sh
 sandboxctl image build dev-image \
   --base-image ubuntu:24.04@sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254 \
-  --builder-version sha256:BUILDER_DIGEST \
   --guest-version 24.04
 ```
 
@@ -142,13 +136,14 @@ ssh-keygen -R GUEST_ADDRESS -f KNOWN_HOSTS_PATH
 
 ## Commands
 
-- `sandboxctl init` creates user configuration and SSH files.
-- `sandboxctl doctor` checks host setup, KVM, networking, SSH, and installed
-  images.
+- `sandboxctl init` creates user configuration and SSH files. It also installs
+  the packaged builder image through sandboxd.
+- `sandboxctl doctor` checks host setup, KVM, networking, SSH, installed
+  images, and the packaged builder version.
 - `sandboxctl host install` installs host configuration and enables the
   socket-activated service.
 - `sandboxctl image build` builds a Debian or Ubuntu guest image in a temporary
-  builder virtual machine.
+  virtual machine. It uses the builder image included in the Arch package.
 - `sandboxctl image install` imports a verified local image bundle.
 - `sandboxctl create`, `start`, `stop`, `reset`, and `delete` manage sandboxes.
 - `sandboxctl list` shows sandbox state.

@@ -18,6 +18,7 @@ import (
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/config"
 	"sandboxctl/internal/controlpb"
+	"sandboxctl/internal/imagebuild/bundle"
 	microvmruntime "sandboxctl/internal/runtime"
 )
 
@@ -46,6 +47,7 @@ func Doctor(ctx context.Context, output io.Writer, paths config.Paths) error {
 		checkAddressPool(ctx),
 		checkSSHInclude(ctx, paths),
 		checkInstalledImages(ctx),
+		checkBuilderImage(ctx),
 	}
 	failed := 0
 	for _, item := range results {
@@ -248,4 +250,33 @@ func checkInstalledImages(ctx context.Context) result {
 		return result{name: "installed image integrity (no images installed)"}
 	}
 	return result{name: "installed image integrity"}
+}
+
+func checkBuilderImage(ctx context.Context) result {
+	expected, err := bundle.Open(bundle.PackagedBuilderDirectory)
+	if err != nil {
+		return result{"packaged builder image", err}
+	}
+	defer expected.Close()
+	connection, service, err := client.Dial(ctx, controlSocket)
+	if err != nil {
+		return result{"installed builder image", err}
+	}
+	defer connection.Close()
+	callContext, cancel := context.WithTimeout(ctx, client.DialTimeout)
+	defer cancel()
+	response, err := service.ListImages(callContext, &controlpb.ListImagesRequest{})
+	if err != nil {
+		return result{"installed builder image", err}
+	}
+	for _, image := range response.GetImages() {
+		if image.GetName() != expected.Manifest.Name {
+			continue
+		}
+		if image.GetVersion() != expected.Manifest.Version {
+			return result{"installed builder image", fmt.Errorf("version %s is installed; package requires %s", image.GetVersion(), expected.Manifest.Version)}
+		}
+		return result{name: "installed builder image"}
+	}
+	return result{"installed builder image", fmt.Errorf("version %s is missing; run sandboxctl init", expected.Manifest.Version)}
 }
