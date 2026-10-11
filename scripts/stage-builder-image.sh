@@ -97,7 +97,7 @@ container_id=$(podman_cmd create "$image_tag")
 bundle="$stage/bundle"
 install -m 0600 "$source_dir/vmlinux" "$bundle/vmlinux"
 install -m 0600 "$repo_dir/tmp/config/initramfs/overlay-initramfs.cpio.gz" "$bundle/initramfs.cpio.gz"
-podman_cmd export "$container_id" | mksquashfs - "$bundle/root.squashfs" \
+podman_cmd export "$container_id" | env -u SOURCE_DATE_EPOCH mksquashfs - "$bundle/root.squashfs" \
   -tar \
   -numeric-owner \
   -default-uid 0 \
