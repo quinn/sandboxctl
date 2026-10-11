@@ -16,6 +16,32 @@ source=(
 )
 sha256sums=('06094a1108ae9e82aa4c23a775aa92758f53f1175d422270d9d6162cb9ade558')
 
+find_builder_bundle() {
+	local images_dir="$1"
+	local manifest image_name version bundle artifact valid
+	[[ -d $images_dir ]] || return 0
+	while IFS= read -r -d '' manifest; do
+		image_name=$(basename "$(dirname "$(dirname "$manifest")")")
+		case "$image_name" in
+			builder|builder-*) ;;
+			*) continue ;;
+		esac
+		version=$(basename "$(dirname "$manifest")")
+		[[ $version == sha256:* ]] || continue
+		bundle=$(dirname "$manifest")
+		valid=1
+		for artifact in vmlinux initramfs.cpio.gz root.squashfs; do
+			if [[ ! -s $bundle/$artifact || -L $bundle/$artifact ]]; then
+				valid=0
+				break
+			fi
+		done
+		[[ $valid == 1 ]] || continue
+		printf '%s\n' "$bundle"
+		return 0
+	done < <(find "$images_dir" -mindepth 3 -maxdepth 3 -type f -name manifest.json -print0)
+}
+
 pkgver() {
 	local project_root="$startdir/../.."
 	local count hash
@@ -36,19 +62,38 @@ prepare() {
 build() {
 	cd "$srcdir/sandboxctl"
 	make build
+	local package_images="$srcdir/package-data/sandboxctl/images"
+	local package_bundle cached_bundle data_home
+	package_bundle=$(find_builder_bundle "$package_images")
+	if [[ -n $package_bundle ]]; then
+		printf 'Using the builder image already in the package build directory: %s\n' "$package_bundle"
+		return
+	fi
+	data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
+	cached_bundle=$(find_builder_bundle "$data_home/sandboxctl/images")
+	if [[ -n $cached_bundle ]]; then
+		local image_name version destination
+		image_name=$(basename "$(dirname "$(dirname "$cached_bundle")")")
+		version=$(basename "$(dirname "$cached_bundle")")
+		destination="$package_images/$image_name/$version"
+		install -d -m700 "${destination%/*}"
+		cp -a "$cached_bundle" "$destination"
+		printf 'Copied the staged builder image into the package build directory: %s\n' "$destination"
+		return
+	fi
 	XDG_DATA_HOME="$srcdir/package-data" IMAGE_NAME=auto make stage-builder-image
 }
 
 package() {
 	cd "$srcdir/sandboxctl"
 	local firecracker_dir="$srcdir/release-v${_firecracker_version}-${_firecracker_arch}"
-	local builder_manifest builder_bundle
-	builder_manifest=$(find "$srcdir/package-data/sandboxctl/images" -mindepth 3 -maxdepth 3 -type f -name manifest.json -print -quit)
-	if [[ -z $builder_manifest ]]; then
+	local builder_bundle builder_manifest
+	builder_bundle=$(find_builder_bundle "$srcdir/package-data/sandboxctl/images")
+	if [[ -z $builder_bundle ]]; then
 		printf 'The builder image bundle was not created during package build.\n' >&2
 		return 1
 	fi
-	builder_bundle=${builder_manifest%/manifest.json}
+	builder_manifest="$builder_bundle/manifest.json"
 	install -Dm755 bin/sandboxctl "$pkgdir/usr/bin/sandboxctl"
 	install -Dm755 bin/sandboxd "$pkgdir/usr/bin/sandboxd"
 	install -Dm755 "$firecracker_dir/firecracker-v${_firecracker_version}-${_firecracker_arch}" "$pkgdir/usr/lib/sandboxctl/firecracker"

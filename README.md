@@ -18,9 +18,12 @@ make install
 ```
 
 The target uses `yay`. It downloads the pinned Firecracker release from GitHub.
-The package build also creates the pinned builder image and includes it in the
-package. The package stores the builder files in `/usr/share/sandboxctl/builder`. Package installation does not import the image
-into sandboxd. Podman is a package build dependency. It is not needed to run `sandboxctl` or build guest images after installation.
+The package build copies a staged builder image from your XDG data directory
+when one exists. Otherwise, it builds the image inside the package build
+directory. It includes the image in the package at
+`/usr/share/sandboxctl/builder`. Package installation does not import the image
+into sandboxd. Podman is a package build dependency. It is not needed to run
+`sandboxctl` or build guest images after installation.
 
 Install the host service and network rules:
 
