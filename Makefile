@@ -15,6 +15,13 @@ build:
 	done
 
 install:
+	@changes=$$(git status --porcelain --untracked-files=all) || exit $$?; \
+	if [ -n "$$changes" ]; then \
+		echo 'make install: the checkout has uncommitted changes.' >&2; \
+		echo 'Commit or remove them before installing.' >&2; \
+		printf '%s\n' "$$changes" >&2; \
+		exit 1; \
+	fi
 	yay -Bi "$(CURDIR)/packaging/local"
 
 host-install: build
