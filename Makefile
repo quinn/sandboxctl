@@ -48,6 +48,9 @@ proto-lint:
 clean-builder:
 	./scripts/stage-builder-image.sh --clean
 
+check-builder:
+	./scripts/stage-builder-image.sh --check
+
 stage-builder-image:
 	./scripts/stage-builder-image.sh
 

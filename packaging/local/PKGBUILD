@@ -46,8 +46,8 @@ find_builder_bundle() {
 copy_builder_bundle() {
 	local source_bundle="$1" images_dir="$2"
 	local image_name version destination
-	image_name=$(basename "$(dirname "$(dirname "$source_bundle")")")
-	version=$(basename "$(dirname "$source_bundle")")
+	image_name=$(basename "$(dirname "$source_bundle")")
+	version=$(basename "$source_bundle")
 	destination="$images_dir/$image_name/$version"
 	install -d -m700 "$destination"
 	cp -a "$source_bundle/." "$destination/"

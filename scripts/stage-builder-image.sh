@@ -14,7 +14,7 @@ ubuntu_index_digest=sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642c
 buildkit_archive_sha256=14813b1fb2a40082114e6d386c6fc5e7dd5298176ce7ee1a18bc33e73e109ac3
 
 if [[ $# -gt 1 ]]; then
-  printf 'Usage: %s [--clean]\n' "${0##*/}" >&2
+  printf 'Usage: %s [--check|--clean]\n' "${0##*/}" >&2
   exit 2
 fi
 
@@ -31,8 +31,80 @@ if [[ ${1:-} == --clean ]]; then
     printf 'No cached builder image at %s\n' "$image_root"
   fi
   exit 0
+elif [[ ${1:-} == --check ]]; then
+  command -v python3 >/dev/null 2>&1 || {
+    printf 'Required command not found: python3\n' >&2
+    exit 1
+  }
+  python3 - "$image_root" "$image_name" <<'PY'
+import json
+import pathlib
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+expected_name = sys.argv[2]
+print(f"Builder image cache: {root}")
+if not root.exists():
+    print("No cached builder image.")
+    raise SystemExit(0)
+
+bundles = sorted(root.iterdir(), key=lambda path: path.name)
+if not bundles:
+    print("No cached builder bundles.")
+    raise SystemExit(0)
+
+for bundle in bundles:
+    print(f"Bundle: {bundle}")
+    if bundle.is_symlink() or not bundle.is_dir():
+        print("  Status: invalid cache entry")
+        continue
+
+    manifest_path = bundle / "manifest.json"
+    try:
+        if manifest_path.is_symlink() or not manifest_path.is_file():
+            raise ValueError("manifest is missing or is not a regular file")
+        manifest = json.loads(manifest_path.read_text())
+        if not isinstance(manifest, dict):
+            raise ValueError("manifest is not a JSON object")
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"  Status: invalid manifest ({error})")
+        continue
+
+    name = manifest.get("name", "")
+    version = manifest.get("version", "")
+    print(f"  Name: {name or '(missing)'}")
+    print(f"  Version: {version or '(missing)'}")
+    valid = name == expected_name and version == bundle.name
+    artifacts = manifest.get("artifacts", {})
+    if not isinstance(artifacts, dict):
+        artifacts = {}
+        valid = False
+    for artifact in ("vmlinux", "initramfs.cpio.gz", "root.squashfs"):
+        path = bundle / artifact
+        try:
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_size == 0:
+                raise ValueError("missing, empty, or not a regular file")
+            metadata = artifacts.get(artifact, {})
+            if not isinstance(metadata, dict):
+                metadata = {}
+            expected = metadata.get("size")
+            if expected is not None and expected != info.st_size:
+                raise ValueError(f"size {info.st_size}, expected {expected}")
+            if expected is None:
+                valid = False
+                print(f"  {artifact}: present ({info.st_size} bytes); manifest size missing")
+                continue
+            print(f"  {artifact}: present ({info.st_size} bytes)")
+        except (OSError, ValueError) as error:
+            valid = False
+            print(f"  {artifact}: invalid ({error})")
+    print(f"  Status: {'complete' if valid else 'incomplete or mismatched'}")
+PY
+  exit 0
 elif [[ $# -ne 0 ]]; then
-  printf 'Usage: %s [--clean]\n' "${0##*/}" >&2
+  printf 'Usage: %s [--check|--clean]\n' "${0##*/}" >&2
   exit 2
 fi
 
