@@ -186,6 +186,16 @@ sandboxctl delete dev1
 Delete asks for confirmation. Add `--yes` to skip the prompt. The tool refuses
 to delete a running sandbox. Delete does not remove the shared image.
 
+Delete all sandboxes that use one image with:
+
+```sh
+sandboxctl delete --image dev-image
+```
+
+The command lists the matching sandboxes and asks for confirmation. It deletes
+them only when all are stopped. Stop running sandboxes first. Add `--yes` to
+skip the prompt in a script.
+
 The default state disk is 20 GiB. Set `--disk-size` when you create a sandbox
 to choose another size. `--cpus`, `--memory`, and `--image` also have defaults.
 Run `sandboxctl help` for command syntax.
@@ -214,6 +224,8 @@ ssh-keygen -R GUEST_ADDRESS -f KNOWN_HOSTS_PATH
 - `sandboxctl image install` imports a verified local image bundle.
 - `sandboxctl image delete` removes an installed image that no saved sandbox uses.
 - `sandboxctl create`, `start`, `stop`, `reset`, and `delete` manage sandboxes.
+  Use `sandboxctl delete --image IMAGE` to delete all stopped sandboxes for an
+  image.
 - `sandboxctl list` shows sandbox state.
 - `sandboxctl ssh` runs a command through the generated SSH alias.
 - `sandboxctl ssh-config` prints the SSH `Include` instruction and refreshes
