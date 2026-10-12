@@ -18,12 +18,15 @@ make install
 ```
 
 The target uses `yay`. It downloads the pinned Firecracker release from GitHub.
-The package build copies a staged builder image from your XDG data directory
-when one exists. Otherwise, it builds the image inside the package build
-directory. It includes the image in the package at
-`/usr/share/sandboxctl/builder`. Package installation does not import the image
-into sandboxd. Podman is a package build dependency. It is not needed to run
-`sandboxctl` or build guest images after installation.
+The package build reuses the cached builder image when one exists. Otherwise,
+it builds the image during package creation. The cache is in
+`$XDG_CACHE_HOME/sandboxctl/images/builder/`. It uses `~/.cache` when
+`XDG_CACHE_HOME` is not set. Run `make clean-builder` to clear this cache and
+force a fresh build. This does not remove an installed builder image. The
+package includes the image at `/usr/share/sandboxctl/builder`. Package
+installation does not import the image into sandboxd. Podman is a package
+build dependency. It is not needed to run `sandboxctl` or build guest images
+after installation.
 
 Install the host service and network rules:
 

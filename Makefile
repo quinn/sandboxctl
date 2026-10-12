@@ -1,4 +1,4 @@
-.PHONY: build install host-install sandboxctl test check generate proto-lint download-builder-tools download-builder-base-assets guest-initramfs stage-builder-image clean
+.PHONY: build install host-install sandboxctl test check generate proto-lint download-builder-tools download-builder-base-assets guest-initramfs stage-builder-image clean-builder clean
 
 include tests/phase1/phase1.make
 include e2e/e2e.make
@@ -23,6 +23,9 @@ install:
 		exit 1; \
 	fi
 	yay -Bi "$(CURDIR)/packaging/local"
+
+clean-builder:
+	./scripts/stage-builder-image.sh --clean
 
 host-install: build
 	sudo env PATH="$(CURDIR)/bin:$$PATH" "$(CURDIR)/bin/sandboxctl" host install --operator "$$(id -un)"
@@ -54,7 +57,7 @@ download-builder-base-assets:
 guest-initramfs:
 	./scripts/build-guest-initramfs.sh
 
-stage-builder-image: download-builder-base-assets guest-initramfs download-builder-tools
+stage-builder-image:
 	./scripts/stage-builder-image.sh
 
 clean:

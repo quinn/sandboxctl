@@ -24,7 +24,7 @@ find_builder_bundle() {
 	while IFS= read -r -d '' manifest; do
 		image_name=$(basename "$(dirname "$(dirname "$manifest")")")
 		case "$image_name" in
-			builder|builder-*) ;;
+			builder) ;;
 			*) continue ;;
 		esac
 		version=$(basename "$(dirname "$manifest")")
@@ -74,22 +74,16 @@ build() {
 	cd "$srcdir/sandboxctl"
 	make build
 	local package_images="$srcdir/package-data/sandboxctl/images"
-	local package_bundle cached_bundle cache_home cache_images
+	local cached_bundle cache_home cache_images
 	cache_home=${XDG_CACHE_HOME:-"$HOME/.cache"}
 	cache_images="$cache_home/sandboxctl/images"
+	make stage-builder-image
 	cached_bundle=$(find_builder_bundle "$cache_images")
-	if [[ -n $cached_bundle ]]; then
-		copy_builder_bundle "$cached_bundle" "$package_images"
-		printf 'Using the cached builder image: %s\n' "$cached_bundle"
-		return
-	fi
-	XDG_DATA_HOME="$srcdir/package-data" IMAGE_NAME=auto make stage-builder-image
-	package_bundle=$(find_builder_bundle "$package_images")
-	if [[ -z $package_bundle ]]; then
+	if [[ -z $cached_bundle ]]; then
 		printf 'The builder image bundle was not created during package build.\n' >&2
 		return 1
 	fi
-	copy_builder_bundle "$package_bundle" "$cache_images"
+	copy_builder_bundle "$cached_bundle" "$package_images"
 }
 
 package() {
