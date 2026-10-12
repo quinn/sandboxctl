@@ -31,8 +31,6 @@ func TestRenderCreatesSecureDebianAndUbuntuScripts(t *testing.T) {
 				"PasswordAuthentication no",
 				"KbdInteractiveAuthentication no",
 				"PubkeyAuthentication yes",
-				"sandboxctl-bootstrap.service",
-				"ssh-keygen -A",
 				"rm -f /etc/machine-id",
 				"/usr/local/share/sandboxctl/image-build.env",
 			} {
@@ -75,7 +73,7 @@ func TestRenderRejectsInvalidGuestVersion(t *testing.T) {
 	}
 }
 
-func TestRenderedBootstrapValidatesMetadataAndNetwork(t *testing.T) {
+func TestRenderedProvisionDoesNotInstallGuestBootstrap(t *testing.T) {
 	profile, err := distro.ForID("ubuntu")
 	if err != nil {
 		t.Fatal(err)
@@ -84,18 +82,15 @@ func TestRenderedBootstrapValidatesMetadataAndNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{
+	for _, forbidden := range []string{
+		"/usr/local/libexec/guest-bootstrap",
+		"guest-bootstrap.service",
 		"/latest/api/token",
 		"/latest/meta-data/",
-		".sandboxctl.schema_version",
-		".sandboxctl.ssh_authorized_key",
-		".sandboxctl.network.address",
-		"MMDS address differs from the early guest address",
-		"MMDS gateway differs from the early guest route",
 		"/var/lib/sandboxctl/bootstrap-complete",
 	} {
-		if !strings.Contains(script, required) {
-			t.Errorf("bootstrap script does not contain %q", required)
+		if strings.Contains(script, forbidden) {
+			t.Errorf("provision script unexpectedly contains guest bootstrap item %q", forbidden)
 		}
 	}
 }

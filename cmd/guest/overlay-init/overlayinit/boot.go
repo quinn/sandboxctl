@@ -21,7 +21,7 @@ Before=ssh.socket ssh.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/libexec/sandboxctl-bootstrap
+ExecStart=/usr/local/libexec/guest-bootstrap
 StandardOutput=journal+console
 StandardError=journal+console
 RemainAfterExit=yes
@@ -93,7 +93,7 @@ func Run() error {
 	if err := mountFS(mounts[2]); err != nil {
 		return fmt.Errorf("mount overlay: %w", err)
 	}
-	bootstrap, err := os.ReadFile("/bootstrap")
+	bootstrap, err := os.ReadFile("/guest-bootstrap")
 	if err != nil {
 		return fmt.Errorf("read guest bootstrap program: %w", err)
 	}
@@ -156,10 +156,10 @@ func InstallBootstrap(root string, binary []byte) error {
 	if err := ensureRealDirectory(root, libexec); err != nil {
 		return err
 	}
-	if err := writeBootstrapFile(filepath.Join(libexec, "sandboxctl-bootstrap"), binary, 0o755); err != nil {
+	if err := writeBootstrapFile(filepath.Join(libexec, "guest-bootstrap"), binary, 0o755); err != nil {
 		return fmt.Errorf("write guest bootstrap program: %w", err)
 	}
-	servicePath := filepath.Join(root, "etc", "systemd", "system", "sandboxctl-bootstrap.service")
+	servicePath := filepath.Join(root, "etc", "systemd", "system", "guest-bootstrap.service")
 	for _, directory := range []string{
 		filepath.Join(root, "etc"),
 		filepath.Join(root, "etc", "systemd"),
@@ -176,13 +176,13 @@ func InstallBootstrap(root string, binary []byte) error {
 	if err := ensureRealDirectory(root, wants); err != nil {
 		return err
 	}
-	linkPath := filepath.Join(wants, "sandboxctl-bootstrap.service")
+	linkPath := filepath.Join(wants, "guest-bootstrap.service")
 	if target, err := os.Readlink(linkPath); err == nil {
-		if target != "/etc/systemd/system/sandboxctl-bootstrap.service" {
+		if target != "/etc/systemd/system/guest-bootstrap.service" {
 			return errors.New("guest bootstrap service link has an unexpected target")
 		}
 	} else if errors.Is(err, os.ErrNotExist) {
-		if err := os.Symlink("/etc/systemd/system/sandboxctl-bootstrap.service", linkPath); err != nil {
+		if err := os.Symlink("/etc/systemd/system/guest-bootstrap.service", linkPath); err != nil {
 			return fmt.Errorf("enable guest bootstrap service: %w", err)
 		}
 	} else {
@@ -218,7 +218,7 @@ func ensureRealDirectory(root, path string) error {
 
 func writeBootstrapFile(path string, content []byte, mode os.FileMode) error {
 	directory := filepath.Dir(path)
-	file, err := os.CreateTemp(directory, ".sandboxctl-bootstrap-")
+	file, err := os.CreateTemp(directory, ".guest-bootstrap-")
 	if err != nil {
 		return err
 	}

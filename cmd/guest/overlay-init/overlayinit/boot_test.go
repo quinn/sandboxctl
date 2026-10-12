@@ -48,7 +48,7 @@ func TestInstallBootstrapWritesProgramAndEnablesService(t *testing.T) {
 	if err := InstallBootstrap(root, program); err != nil {
 		t.Fatalf("InstallBootstrap() retry: %v", err)
 	}
-	programPath := filepath.Join(root, "usr/local/libexec/sandboxctl-bootstrap")
+	programPath := filepath.Join(root, "usr/local/libexec/guest-bootstrap")
 	got, err := os.ReadFile(programPath)
 	if err != nil || string(got) != string(program) {
 		t.Fatalf("bootstrap program = %q, %v", got, err)
@@ -57,7 +57,7 @@ func TestInstallBootstrapWritesProgramAndEnablesService(t *testing.T) {
 	if err != nil || programInfo.Mode().Perm() != 0o755 {
 		t.Fatalf("bootstrap program mode = %v, %v", programInfo, err)
 	}
-	servicePath := filepath.Join(root, "etc/systemd/system/sandboxctl-bootstrap.service")
+	servicePath := filepath.Join(root, "etc/systemd/system/guest-bootstrap.service")
 	service, err := os.ReadFile(servicePath)
 	if err != nil || string(service) != bootstrapService {
 		t.Fatalf("bootstrap service = %q, %v", service, err)
@@ -65,9 +65,9 @@ func TestInstallBootstrapWritesProgramAndEnablesService(t *testing.T) {
 	if !strings.Contains(string(service), "StandardOutput=journal+console\n") || !strings.Contains(string(service), "StandardError=journal+console\n") {
 		t.Fatal("bootstrap service does not send its logs to the journal and serial console")
 	}
-	linkPath := filepath.Join(root, "etc/systemd/system/sockets.target.wants/sandboxctl-bootstrap.service")
+	linkPath := filepath.Join(root, "etc/systemd/system/sockets.target.wants/guest-bootstrap.service")
 	target, err := os.Readlink(linkPath)
-	if err != nil || target != "/etc/systemd/system/sandboxctl-bootstrap.service" {
+	if err != nil || target != "/etc/systemd/system/guest-bootstrap.service" {
 		t.Fatalf("bootstrap service link = %q, %v", target, err)
 	}
 }

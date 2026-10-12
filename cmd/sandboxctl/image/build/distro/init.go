@@ -19,6 +19,5 @@ func BootSetup(profile Profile) ([]string, error) {
 		"systemctl --root=/ mask systemd-networkd-wait-online.service",
 		"systemctl --root=/ mask systemd-firstboot.service",
 		"systemctl --root=/ enable " + canonical.SSHService + ".service",
-		"systemctl --root=/ enable sandboxctl-bootstrap.service",
 	}, nil
 }

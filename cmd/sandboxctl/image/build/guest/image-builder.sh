@@ -232,16 +232,14 @@ for path in \
     "$rootfs/etc/os-release" \
     "$rootfs/etc/passwd" \
     "$rootfs/etc/ssh/sshd_config" \
-    "$rootfs/usr/sbin/sshd" \
-    "$rootfs/usr/local/libexec/sandboxctl-bootstrap" \
-    "$rootfs/etc/systemd/system/multi-user.target.wants/sandboxctl-bootstrap.service"; do
+    "$rootfs/usr/sbin/sshd"; do
     if [ ! -e "$path" ]; then
         echo "sandboxctl-image-builder: required guest file is missing: $path" >&2
         exit 1
     fi
 done
-if [ ! -x "$rootfs/usr/sbin/sshd" ] || [ ! -x "$rootfs/usr/local/libexec/sandboxctl-bootstrap" ]; then
-    echo 'sandboxctl-image-builder: SSH server or bootstrap service is not executable' >&2
+if [ ! -x "$rootfs/usr/sbin/sshd" ]; then
+    echo 'sandboxctl-image-builder: SSH server is not executable' >&2
     exit 1
 fi
 

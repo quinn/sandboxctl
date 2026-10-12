@@ -79,7 +79,7 @@ func TestProfilePackagesAreSandboxScoped(t *testing.T) {
 	}
 }
 
-func TestBootSetupEnablesSSHAndBootstrapWithoutE2BServices(t *testing.T) {
+func TestBootSetupEnablesSSHWithoutE2BServices(t *testing.T) {
 	profile, err := ForID("ubuntu")
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +89,7 @@ func TestBootSetupEnablesSSHAndBootstrapWithoutE2BServices(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(commands, "\n")
-	for _, required := range []string{"mask serial-getty@ttyS0.service", "mask systemd-firstboot.service", "enable ssh.service", "enable sandboxctl-bootstrap.service"} {
+	for _, required := range []string{"mask serial-getty@ttyS0.service", "mask systemd-firstboot.service", "enable ssh.service"} {
 		if !strings.Contains(joined, required) {
 			t.Errorf("boot setup missing %q", required)
 		}

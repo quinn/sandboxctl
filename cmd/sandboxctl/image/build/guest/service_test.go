@@ -42,7 +42,7 @@ func TestImageBuilderServiceUsesFixedBuildAndFinalizationSteps(t *testing.T) {
 		"chroot \"$rootfs\" /usr/sbin/sshd -T",
 		"rm -f -- \"$rootfs/etc/machine-id\"",
 		"rm -f -- \"$rootfs/var/lib/sandboxctl/bootstrap-complete\"",
-		"SSH server or bootstrap service is not executable",
+		"SSH server is not executable",
 		"/usr/bin/mksquashfs",
 		"-all-time 0",
 		"chmod 0644 \"$output/root.squashfs\"",
