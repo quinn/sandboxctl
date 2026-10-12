@@ -30,7 +30,10 @@ import (
 	sshconfig "sandboxctl/internal/ssh"
 )
 
-const maxBuildDuration = 2 * time.Hour
+const (
+	maxBuildDuration = 2 * time.Hour
+	defaultBaseImage = "ubuntu:24.04@sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254"
+)
 
 var validGuestVersion = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
 var validBaseImage = regexp.MustCompile(`^[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}$`)
@@ -221,7 +224,7 @@ func parse(arguments []string) (options, error) {
 	installImage := flags.Bool("install", true, "Install the built image through sandboxd.")
 	builderImage := flags.String("builder-image", "", "Installed builder image name. Defaults to the packaged builder.")
 	builderVersion := flags.String("builder-version", "", "Pinned builder image version. Defaults to the packaged builder version.")
-	baseImage := flags.String("base-image", "", "Digest-pinned OCI base image.")
+	baseImage := flags.String("base-image", "", "Digest-pinned OCI base image. Defaults to the pinned Ubuntu 24.04 image when no input mode is set.")
 	dockerfile := flags.String("dockerfile", "", "Local Dockerfile path. Defaults to Dockerfile in the build context.")
 	contextDir := flags.String("context", "", "Local build context directory. Defaults to the current directory in Dockerfile mode.")
 	target := flags.String("target", "", "Dockerfile stage to build. Defaults to the final stage.")
@@ -236,7 +239,7 @@ func parse(arguments []string) (options, error) {
 		return options{}, fmt.Errorf("parse image build options: %w", err)
 	}
 	if flags.NArg() != 1 {
-		return options{}, errors.New("usage: sandboxctl image build NAME (--base-image IMAGE@sha256:DIGEST | --dockerfile PATH | --context DIRECTORY) --guest-version VERSION [--install=false] [--target NAME --build-arg NAME=VALUE] [--builder-image NAME --builder-version sha256:DIGEST] [--distribution debian|ubuntu]")
+		return options{}, errors.New("usage: sandboxctl image build NAME [--base-image IMAGE@sha256:DIGEST | --dockerfile PATH | --context DIRECTORY] --guest-version VERSION [--install=false] [--target NAME --build-arg NAME=VALUE] [--builder-image NAME --builder-version sha256:DIGEST] [--distribution debian|ubuntu]")
 	}
 	name := flags.Arg(0)
 	if err := cmdutil.ValidateSandboxName(name); err != nil {
@@ -249,7 +252,7 @@ func parse(arguments []string) (options, error) {
 		return options{}, errors.New("set exactly one of --base-image or Dockerfile input options")
 	}
 	if !seen["base-image"] && !dockerfileMode {
-		return options{}, errors.New("set one input with --base-image, --dockerfile, or --context")
+		*baseImage = defaultBaseImage
 	}
 	if seen["base-image"] && (seen["context"] || seen["target"] || len(rawBuildArgs) != 0) {
 		return options{}, errors.New("--context, --target, and --build-arg require Dockerfile input")
@@ -295,7 +298,7 @@ func parse(arguments []string) (options, error) {
 	if err := cmdutil.ValidateImageVersion(*builderVersion); err != nil {
 		return options{}, fmt.Errorf("builder version: %w", err)
 	}
-	if seen["base-image"] && !validBaseImage.MatchString(*baseImage) {
+	if *baseImage != "" && !validBaseImage.MatchString(*baseImage) {
 		return options{}, errors.New("base image must use a SHA-256 digest")
 	}
 	if *guestVersion == "" || !validGuestVersion.MatchString(*guestVersion) {

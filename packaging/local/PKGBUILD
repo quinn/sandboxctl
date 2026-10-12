@@ -1,10 +1,11 @@
 pkgname=sandboxctl-local
-pkgver=0.1.0.r105.gaf55f06
+pkgver=0.1.0.r107.gb192912
 pkgrel=1
 pkgdesc='Manage local Firecracker development sandboxes'
 arch=('x86_64')
 url='https://github.com/quinn/sandboxctl'
 license=('AGPL-3.0-or-later' 'Apache-2.0' 'BSD-2-Clause' 'BSD-3-Clause' 'ISC' 'MIT' 'MPL-2.0')
+options=('!strip')
 depends=('e2fsprogs' 'iproute2' 'nftables' 'openssh')
 makedepends=('cpio' 'curl' 'git' 'go>=1.27' 'gzip' 'podman' 'python' 'squashfs-tools')
 provides=('sandboxctl')

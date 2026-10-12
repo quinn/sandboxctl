@@ -21,6 +21,23 @@ func TestParseImageBuildOptions(t *testing.T) {
 	}
 }
 
+func TestParseDefaultsToPinnedBaseImageWhenNoInputIsSet(t *testing.T) {
+	options, err := parse([]string{
+		"--builder-image", "builder",
+		"--builder-version", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		"--guest-version", "24.04", "dev-image",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.BaseImage != defaultBaseImage {
+		t.Fatalf("base image = %q, want default %q", options.BaseImage, defaultBaseImage)
+	}
+	if options.Dockerfile != "" || options.ContextDir != "" {
+		t.Fatalf("Dockerfile input was set for base-image default: %#v", options)
+	}
+}
+
 func TestParseImageBuildCanSkipInstall(t *testing.T) {
 	options, err := parse([]string{
 		"--base-image", "ubuntu:24.04@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -98,10 +115,6 @@ func TestParseRejectsDockerfileOptionConflicts(t *testing.T) {
 	contextWithBaseImage := []string{"--context", ".", "--base-image", "ubuntu@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "--guest-version", "24.04", "dev-image"}
 	if _, err := parse(contextWithBaseImage); err == nil {
 		t.Fatal("parse accepted --context with --base-image")
-	}
-	missingInput := []string{"--guest-version", "24.04", "dev-image"}
-	if _, err := parse(missingInput); err == nil {
-		t.Fatal("parse accepted a build without an input mode")
 	}
 }
 

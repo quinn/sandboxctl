@@ -92,7 +92,8 @@ Add these options:
 | `--target NAME` | Select a Dockerfile stage. Default to the final stage. |
 | `--build-arg NAME=VALUE` | Set one build argument. Permit repeated options with different names. |
 
-Require exactly one input mode. `--base-image` selects base-image mode.
+Use the pinned Ubuntu 24.04 base image when no input mode is selected.
+`--base-image` selects base-image mode and overrides that default.
 `--dockerfile`, `--context`, `--target`, or `--build-arg` selects Dockerfile
 mode. In Dockerfile mode, infer `<context>/Dockerfile` when `--dockerfile` is
 omitted. Default the context to `.`. Reject Dockerfile options in base-image

@@ -61,7 +61,17 @@ ssh -G sandbox-NAME
 privileged service. It verifies the image files and installs them in the
 protected image store. You do not need to build or select the builder image.
 
-Build a guest image with a digest-pinned base image:
+Build a guest image from the pinned Ubuntu 24.04 base image:
+
+```sh
+sandboxctl image build dev-image --guest-version 24.04
+```
+
+When you do not set `--base-image`, `--context`, or `--dockerfile`, the command
+uses the pinned Ubuntu 24.04 base image. The build supports Ubuntu and Debian.
+It uses the installed `builder` image by default. Use `--distribution debian`
+for a Debian base image. You can set another base image with a registry name
+and an immutable Secure Hash Algorithm 256-bit (SHA-256) digest:
 
 ```sh
 sandboxctl image build dev-image \
@@ -69,13 +79,8 @@ sandboxctl image build dev-image \
   --guest-version 24.04
 ```
 
-The build supports Ubuntu and Debian. It uses the installed `builder` image by
-default. Use `--distribution debian` for a Debian base image. The base image
-reference uses the image name and an immutable Secure Hash Algorithm 256-bit
-(SHA-256) digest from its container registry. The example digest is the pinned
-Ubuntu image used by this repository's live build test. The command installs
-the finished image by default. Set `--install=false` to build and stage the
-image without installing it.
+The command installs the finished image by default. Set `--install=false` to
+build and stage the image without installing it.
 
 Use this command to install a staged image:
 
