@@ -57,8 +57,10 @@ packaged version is installed.
 
 Last updated: 2026-10-11
 
-Moved the Phase 1 proof targets to `make/phase1.make`. The root Makefile includes
-that file. Removed the old direct-VM test targets and their unused scripts.
+Moved the Phase 1 proof runner and state-disk helpers to `tests/phase1/`.
+Moved manual validation scripts to `tests/manual/`. The root Makefile includes
+the Phase 1 targets from `tests/phase1/phase1.make`. Active builder asset
+scripts remain under `scripts/` because the package build uses them.
 
 ## Authority and order
 
@@ -114,10 +116,10 @@ The current staged test bundle uses the upstream Ubuntu SquashFS without running
 - `git diff --check` passes.
 - Firecracker and jailer v1.17.0 are installed in the current development environment.
 - Added `cmd/guest/overlay-init` to mount SquashFS read-only, mount ext4 state read-write, assemble OverlayFS, and switch to the guest init system.
-- Added `cmd/overlay-proof` to start a temporary SDK VM with SquashFS as `/dev/vda` and ext4 state as `/dev/vdb`.
+- Added `tests/phase1/overlay-proof` to start a temporary SDK VM with SquashFS as `/dev/vda` and ext4 state as `/dev/vdb`.
 - The initramfs builder passed archive validation.
 - The initramfs archive contains the expected `init` executable and passes `gzip -t`.
-- Added `make download-overlay-assets` for fixed Firecracker CI v1.15 sources: x86-64 Linux 6.1.155 and Ubuntu 24.04 SquashFS.
+- Added the pinned Firecracker CI v1.15 kernel and Ubuntu 24.04 SquashFS downloads. The active target is now `make download-builder-base-assets`.
 - The overlay asset target records SHA-256 checksums and verifies them on later runs. It does not extract or convert the SquashFS image.
 - The generated ext4 state image passed `e2fsck -fn` and uses mode `0600` in a mode `0700` directory.
 - Unit tests cover drive access modes, mount layout, marker persistence, replacement state, and invalid marker data.
@@ -202,9 +204,9 @@ The current staged test bundle uses the upstream Ubuntu SquashFS without running
 - The image version now derives from the manifest fields and artifact digests. The manifest rejects changed metadata or artifacts under an old version.
 - Added streamed image import over gRPC. The CLI verifies local artifacts before transfer. sandboxd verifies chunk order, size, and digest, then atomically publishes read-only artifacts in the root-owned image store.
 - Added `sandboxctl image install NAME --version VERSION`. It reads bundles from the XDG data directory.
-- Added `make stage-overlay-image` to package the Phase 1 kernel, initramfs, and Ubuntu SquashFS as a local image bundle.
+- Added a local test-image staging script for the Phase 1 kernel, initramfs, and Ubuntu SquashFS. It now lives under `tests/manual/` and runs through `make stage-bootstrap-test-image`.
 - The jailed SDK configuration now uses the required kernel arguments from the validated image manifest.
-- The initramfs archive now uses reproducible metadata. Running `make stage-overlay-image` twice produces the same pinned version and reuses the staged bundle.
+- The initramfs archive now uses reproducible metadata. Running `make stage-bootstrap-test-image` twice produces the same pinned version and reuses the staged bundle.
 - Gave the Phase 1 downloader a separate checksum file. This avoids failures when a manual test changes `root.ext4` in the shared asset directory.
 - Added importer, manifest parser, and gRPC integration tests. The staged bundle target completed with a temporary XDG data directory.
 - `gofmt`, `go vet ./...`, `go test ./...`, `make proto-lint`, `make build`, shell syntax checks, and `git diff --check` pass.

@@ -39,45 +39,6 @@ func TestMMDSRouteTargetsLinkLocalAddressOnGuestInterface(t *testing.T) {
 	}
 }
 
-func TestVerifyPersistenceDetectsRetainedAndReplacedState(t *testing.T) {
-	stateRoot := t.TempDir()
-	retained, err := VerifyPersistence(stateRoot)
-	if err != nil || retained {
-		t.Fatalf("first boot = %t, %v; want a new marker", retained, err)
-	}
-	retained, err = VerifyPersistence(stateRoot)
-	if err != nil || !retained {
-		t.Fatalf("second boot = %t, %v; want the retained marker", retained, err)
-	}
-	info, err := os.Stat(filepath.Join(stateRoot, "var", "lib", persistenceMarker))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("marker mode = %o, want 600", info.Mode().Perm())
-	}
-
-	replacedState := t.TempDir()
-	retained, err = VerifyPersistence(replacedState)
-	if err != nil || retained {
-		t.Fatalf("replacement disk = %t, %v; want a new marker", retained, err)
-	}
-}
-
-func TestVerifyPersistenceRejectsUnexpectedMarker(t *testing.T) {
-	root := t.TempDir()
-	path := filepath.Join(root, "var", "lib", persistenceMarker)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte("unexpected\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := VerifyPersistence(root); err == nil {
-		t.Fatal("accepted a marker with unexpected contents")
-	}
-}
-
 func TestInstallBootstrapWritesProgramAndEnablesService(t *testing.T) {
 	root := t.TempDir()
 	program := []byte("guest-bootstrap-test")

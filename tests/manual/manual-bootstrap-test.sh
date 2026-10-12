@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 umask 077
 
-repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 log_dir="$repo_dir/tmp/logs"
 mkdir -p "$log_dir"
 chmod 0700 "$log_dir"
@@ -27,7 +27,7 @@ fi
 
 name="bootstrap-$(date +%s)-$$"
 alias="sandbox-$name"
-XDG_DATA_HOME="$repo_dir/tmp/test-data" IMAGE_NAME="$name" make -C "$repo_dir" stage-overlay-image
+XDG_DATA_HOME="$repo_dir/tmp/test-data" IMAGE_NAME="$name" make -C "$repo_dir" stage-bootstrap-test-image
 image_root="$repo_dir/tmp/test-data/sandboxctl/images/$name"
 
 [[ -r /dev/kvm && -w /dev/kvm ]] || {

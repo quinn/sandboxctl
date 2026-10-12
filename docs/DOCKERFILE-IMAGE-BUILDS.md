@@ -239,8 +239,8 @@ installs packages.
 | `cmd/sandboxctl/image/build/guest/` | Validates uploaded settings, extracts context safely, runs the two BuildKit stages, and finalizes the guest filesystem. |
 | `cmd/sandboxctl/image/build/finalize/` | Verifies builder artifacts and publishes the output bundle with input provenance. |
 | `internal/imagebuild/manifest/` | Keeps the existing image manifest schema and digest calculation. |
-| `scripts/manual-dockerfile-build.sh` | Builds, installs, boots, verifies, restarts, and deletes a test guest through the workspace CLI. |
-| `scripts/manual-dockerfile-rejections.sh` | Checks rejected builds and confirms that they publish no image manifest. |
+| `tests/manual/manual-dockerfile-build.sh` | Builds, installs, boots, verifies, restarts, and deletes a test guest through the workspace CLI. |
+| `tests/manual/manual-dockerfile-rejections.sh` | Checks rejected builds and confirms that they publish no image manifest. |
 | `Makefile` | Adds Dockerfile acceptance targets with the test builder name and digest. |
 | `README.md` | Documents local Dockerfile builds and their limits. |
 

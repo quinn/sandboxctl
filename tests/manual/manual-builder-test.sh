@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 umask 077
 
-repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 export PATH="$repo_dir/bin:$PATH"
 log_dir="$repo_dir/tmp/logs"
 mkdir -p "$log_dir"

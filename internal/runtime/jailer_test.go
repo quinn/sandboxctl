@@ -8,7 +8,7 @@ import (
 
 	firecracker "github.com/firecracker-microvm/firecracker-go-sdk"
 	"sandboxctl/internal/hoststate"
-	"sandboxctl/internal/overlayboot"
+	"sandboxctl/tests/phase1/overlayboot"
 )
 
 func TestJailedConfigurationUsesOverlayBootAndAllocatedIdentity(t *testing.T) {

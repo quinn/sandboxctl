@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 log_path="$repository_root/tmp/logs/delete-test.log"
 mkdir -p "$(dirname -- "$log_path")"
 umask 077

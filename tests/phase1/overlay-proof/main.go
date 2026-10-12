@@ -15,7 +15,7 @@ import (
 	"time"
 
 	firecracker "github.com/firecracker-microvm/firecracker-go-sdk"
-	"sandboxctl/internal/overlayboot"
+	"sandboxctl/tests/phase1/overlayboot"
 )
 
 func main() {

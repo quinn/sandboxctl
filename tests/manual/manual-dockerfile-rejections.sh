@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 umask 077
 
-repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 if [[ $# -ne 2 ]]; then
   printf 'Usage: %s BUILDER_IMAGE BUILDER_VERSION\n' "$0" >&2
   exit 2

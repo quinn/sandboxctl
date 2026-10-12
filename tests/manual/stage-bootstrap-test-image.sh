@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
 image_name=${IMAGE_NAME:-default}
 source_dir="$repo_dir/tmp/config/images/default"

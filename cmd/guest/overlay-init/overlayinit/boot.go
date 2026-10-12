@@ -13,9 +13,6 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-const persistenceMarker = ".sandboxctl-phase1-overlay-proof"
-const persistenceValue = "overlay-state-was-retained-v1\n"
-
 const bootstrapService = `[Unit]
 Description=Configure this sandbox from Firecracker metadata
 DefaultDependencies=no
@@ -105,15 +102,6 @@ func Run() error {
 	}
 	if err := addMMDSRoute(); err != nil {
 		return fmt.Errorf("add the MMDS route: %w", err)
-	}
-	retained, err := VerifyPersistence("/newroot")
-	if err != nil {
-		return fmt.Errorf("verify overlay state: %w", err)
-	}
-	if retained {
-		fmt.Fprintln(os.Stdout, "PHASE1 OVERLAY: retained the marker from the previous boot")
-	} else {
-		fmt.Fprintln(os.Stdout, "PHASE1 OVERLAY: created a marker on the new state disk")
 	}
 	for _, dir := range []string{"/proc", "/sys", "/dev", "/run"} {
 		newRootPath := filepath.Join("/newroot", dir[1:])
@@ -280,30 +268,6 @@ func mmdsRoute(interfaceIndex int) *netlink.Route {
 
 func mountFS(mount Mount) error {
 	return syscall.Mount(mount.Source, mount.Target, mount.Type, mount.Flags, mount.Data)
-}
-
-// VerifyPersistence creates a marker on first boot and recognizes it on later boots.
-func VerifyPersistence(root string) (bool, error) {
-	dir := filepath.Join(root, "var", "lib")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return false, err
-	}
-	path := filepath.Join(dir, persistenceMarker)
-	data, err := os.ReadFile(path)
-	if err == nil {
-		if string(data) != persistenceValue {
-			return false, errors.New("the overlay proof marker has unexpected content")
-		}
-		return true, nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return false, err
-	}
-	if err := os.WriteFile(path, []byte(persistenceValue), 0o600); err != nil {
-		return false, err
-	}
-	syscall.Sync()
-	return false, nil
 }
 
 func attachConsole() error {

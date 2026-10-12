@@ -25,8 +25,8 @@ those files from the schema. Do not edit generated files by hand.
 
 Files and folders: `proto/`, `buf.yaml`, `buf.gen.yaml`, generated files in
 `internal/controlpb/`, protocol metadata and validation in
-`internal/controlsettings/`, client code in `internal/client/`, and server code in
-`cmd/sandboxd/daemon/`.
+`internal/controlsettings/`, client code in `internal/client/`, and server code
+in `cmd/sandboxd/daemon/`.
 
 Extra check: run `make generate`, then `make check`.
 
@@ -52,10 +52,11 @@ Extra check: run `bash -n packaging/local/PKGBUILD` and
 These files support preparing and staging images. The scripts do not implement
 the user-facing image build operation.
 
-The overlay scripts download and verify the kernel and Ubuntu SquashFS used by
-the Phase 1 proof. They build the overlay initramfs and create or reset its
-ext4 state disk. `stage-overlay-image.sh` packages those proof assets in the
-user data directory.
+The active asset scripts download the pinned kernel and Ubuntu SquashFS used
+by the builder image. They build the guest initramfs. `stage-builder-image.sh`
+uses these files to prepare the builder image. The Phase 1 proof and its
+state-disk helpers are under `tests/phase1/`. Manual validation scripts are
+under `tests/manual/`.
 
 The builder scripts prepare the internal builder VM image. `builder-base.Dockerfile`
 defines the seed filesystem. `download-builder-tools.sh` downloads and checks
@@ -67,16 +68,18 @@ is a development and packaging step. `sandboxctl image build` does not build
 the internal builder image; it uses an installed builder image to build a
 guest image.
 
-The Go package in `internal/imagebuild/` implements guest image builds inside a
-temporary builder VM. The command in `cmd/sandboxctl/image/build/` parses user
-options and calls the daemon. The daemon runs the image-build package. These
-pieces use the internal builder image, but they do not run the host-side
-Podman staging workflow.
+The Go packages in `internal/imagebuild/` handle image manifests, bundles, and
+installation. The command in `cmd/sandboxctl/image/build/` parses user options
+and coordinates a guest image build. It asks `sandboxd` to create and start a
+temporary builder VM. It then connects to that VM to run BuildKit and retrieve
+the finished image. It asks `sandboxd` to stop and delete the VM when the build
+ends. These pieces use the installed builder image. They do not run the
+host-side Podman staging workflow.
 
-Files and folders: image and builder scripts under `scripts/`,
+Files and folders: active image and builder scripts under `scripts/`,
 `scripts/builder-base.Dockerfile`, `internal/imagebuild/`,
-`cmd/sandboxctl/image/`, and the related targets in `Makefile` and
-`make/phase1.make`.
+`cmd/sandboxctl/image/`, manual tests under `tests/manual/`, and related
+targets in `Makefile`.
 
 Extra check: check the syntax of each changed script. Run
 `make stage-builder-image` when the staged builder image itself needs testing.
@@ -91,21 +94,36 @@ and authorized key, and writes a completion marker. This setup runs inside the
 guest and does not mount the guest filesystem on the host.
 
 Files and folders: `cmd/guest/overlay-init/`,
-`cmd/guest/overlay-init/overlayinit/`, `internal/overlayboot/`,
-`cmd/guest/bootstrap/`, `cmd/guest/bootstrap/guestbootstrap/`, and image or
-initramfs scripts under `scripts/`. The guest bootstrap unit and related guest
-image files are under `internal/imagebuild/`.
+`cmd/guest/overlay-init/overlayinit/`, `cmd/guest/bootstrap/`,
+`cmd/guest/bootstrap/guestbootstrap/`, and image or
+initramfs scripts under `scripts/`. The overlay initramfs installs the guest
+bootstrap binary and service. The guest image provisioning script and service
+setup are under `cmd/sandboxctl/image/build/provision/`. Manual guest tests are
+under `tests/manual/`.
 
 Extra check: run `make manual-bootstrap-test`.
+
+## Phase 1 proof and manual validation
+
+Keep the temporary direct Firecracker proof and its state-disk helpers in
+`tests/phase1/`. Keep manual tests that start real sandboxes in
+`tests/manual/`. These files validate the runtime. They are not runtime or
+package scripts.
+
+Files and folders: `tests/phase1/`, `tests/manual/`, and the proof and manual
+test targets in `Makefile`.
+
+Extra check: run the relevant target, such as `make phase1-overlay-proof` or
+the matching `make manual-*` target. Run `bash -n` on changed shell scripts.
 
 ## Image build behavior
 
 The `sandboxctl image build` command accepts a digest-pinned container base
-image or a local Dockerfile and build context. It sends the request to
-`sandboxd`. The daemon starts a temporary builder VM and runs BuildKit inside
-that VM. The build creates a Debian or Ubuntu guest filesystem, adds
-sandboxctl's guest setup, then writes a bootable image bundle. The command
-installs the image by default. It can stage the bundle without installing it.
+image or a local Dockerfile and build context. The CLI asks `sandboxd` to start
+a temporary builder VM. It connects to that VM and runs BuildKit there. The
+build creates a Debian or Ubuntu guest filesystem, adds sandboxctl's guest
+setup, then writes a bootable image bundle. The command installs the image by
+default. It can stage the bundle without installing it.
 
 The command-line parser, VM orchestration, build context handling, BuildKit
 configuration, guest provisioning, builder connection, and bundle finalizer
@@ -117,7 +135,8 @@ Dockerfile inputs.
 Files and folders: `cmd/sandboxctl/image/build/`, the shared packages that
 remain under `internal/imagebuild/`, image-build scripts under `scripts/`, and
 related RPC definitions under `proto/`, shared client-server settings under
-`internal/controlsettings/`, and server handlers under `cmd/sandboxd/daemon/`.
+`internal/controlsettings/`, and server handlers under
+`cmd/sandboxd/daemon/`.
 
 Extra check: run the matching test: `make manual-image-build`,
 `make manual-dockerfile-build`, or `make manual-dockerfile-rejections`.
