@@ -9,8 +9,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"sandboxctl/cmd/sandboxd/daemon"
 	"sandboxctl/cmd/sandboxd/network"
-	"sandboxctl/internal/daemon"
 	"sandboxctl/internal/hoststate"
 	"sandboxctl/internal/runtime"
 )

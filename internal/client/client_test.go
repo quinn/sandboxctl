@@ -2,35 +2,47 @@ package client
 
 import (
 	"context"
+	"net"
 	"path/filepath"
 	"regexp"
 	"testing"
 	"time"
 
 	"sandboxctl/internal/controlpb"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
-type testRuntime struct{ ready bool }
+type clientTestService struct {
+	controlpb.UnimplementedControlServiceServer
+}
 
-func (r testRuntime) Ready() bool { return r.ready }
+func (clientTestService) Ping(context.Context, *controlpb.PingRequest) (*controlpb.PingResponse, error) {
+	return &controlpb.PingResponse{Status: "ok"}, nil
+}
+
+func (clientTestService) HostStatus(context.Context, *controlpb.HostStatusRequest) (*controlpb.HostStatusResponse, error) {
+	return &controlpb.HostStatusResponse{DaemonVersion: "test-version", RuntimeReady: true}, nil
+}
 
 func TestClientCallsDaemonOverUnixSocket(t *testing.T) {
 	socketPath := filepath.Join(t.TempDir(), "control.sock")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	server := daemon.NewServer("test-version", testRuntime{ready: true})
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := grpc.NewServer()
+	controlpb.RegisterControlServiceServer(server, clientTestService{})
 	serveDone := make(chan error, 1)
-	go func() { serveDone <- daemon.ListenAndServe(ctx, socketPath, server) }()
+	go func() { serveDone <- server.Serve(listener) }()
 	t.Cleanup(func() {
-		cancel()
+		server.Stop()
 		select {
 		case err := <-serveDone:
-			if err != nil {
-				t.Errorf("stop daemon: %v", err)
+			if err != nil && err != grpc.ErrServerStopped {
+				t.Errorf("stop control test server: %v", err)
 			}
 		case <-time.After(2 * time.Second):
 			t.Error("daemon did not stop")
@@ -39,7 +51,6 @@ func TestClientCallsDaemonOverUnixSocket(t *testing.T) {
 
 	var connection *grpc.ClientConn
 	var service controlpb.ControlServiceClient
-	var err error
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		connection, service, err = Dial(context.Background(), socketPath)
@@ -76,8 +87,8 @@ func TestClientCallsDaemonOverUnixSocket(t *testing.T) {
 
 func TestClientInterceptorSetsFreshRequestMetadata(t *testing.T) {
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(
-		daemon.APIVersionMetadataKey, "stale-version",
-		daemon.RequestIDMetadataKey, "stale-request-id",
+		controlsettings.APIVersionMetadataKey, "stale-version",
+		controlsettings.RequestIDMetadataKey, "stale-request-id",
 	))
 	requestIDs := make([]string, 0, 2)
 	invoke := func(ctx context.Context, _ string, _, _ any, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
@@ -85,10 +96,10 @@ func TestClientInterceptorSetsFreshRequestMetadata(t *testing.T) {
 		if !ok {
 			t.Fatal("outgoing metadata is missing")
 		}
-		if versions := outgoing.Get(daemon.APIVersionMetadataKey); len(versions) != 1 || versions[0] != daemon.APIVersion {
+		if versions := outgoing.Get(controlsettings.APIVersionMetadataKey); len(versions) != 1 || versions[0] != controlsettings.APIVersion {
 			t.Fatalf("API-version metadata = %v", versions)
 		}
-		ids := outgoing.Get(daemon.RequestIDMetadataKey)
+		ids := outgoing.Get(controlsettings.RequestIDMetadataKey)
 		if len(ids) != 1 || !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(ids[0]) {
 			t.Fatalf("request-ID metadata = %v", ids)
 		}

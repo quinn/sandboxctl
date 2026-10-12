@@ -24,7 +24,7 @@ import (
 	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/config"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 	"sandboxctl/internal/imagebuild/bundle"
 	"sandboxctl/internal/imagebuild/installer"
 	sshconfig "sandboxctl/internal/ssh"
@@ -197,7 +197,7 @@ func run(arguments []string) error {
 			return fmt.Errorf("open built image bundle: %w", err)
 		}
 		defer image.Close()
-		installCtx, cancel := context.WithTimeout(context.Background(), daemon.MaxInstallDuration)
+		installCtx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxInstallDuration)
 		installed, installErr := installer.EnsureInstalled(installCtx, service, image)
 		cancel()
 		if installErr != nil {

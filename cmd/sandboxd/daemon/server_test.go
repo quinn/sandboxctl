@@ -18,8 +18,9 @@ import (
 	"testing"
 	"time"
 
+	"sandboxctl/cmd/sandboxd/daemon"
 	"sandboxctl/internal/controlpb"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 	"sandboxctl/internal/hoststate"
 	"sandboxctl/internal/imagebuild/manifest"
 
@@ -36,7 +37,7 @@ func TestServerValidatesMetadataAndReturnsRequestID(t *testing.T) {
 	service := controlpb.NewControlServiceClient(connection)
 
 	requestID := "0123456789abcdef0123456789abcdef"
-	ctx, cancel := callContext(daemon.APIVersion, requestID)
+	ctx, cancel := callContext(controlsettings.APIVersion, requestID)
 	defer cancel()
 	var responseMetadata metadata.MD
 	response, err := service.Ping(ctx, &controlpb.PingRequest{}, grpc.Header(&responseMetadata))
@@ -46,7 +47,7 @@ func TestServerValidatesMetadataAndReturnsRequestID(t *testing.T) {
 	if response.GetStatus() != "ok" {
 		t.Fatalf("Ping() status = %q, want ok", response.GetStatus())
 	}
-	if got := responseMetadata.Get(daemon.RequestIDMetadataKey); len(got) != 1 || got[0] != requestID {
+	if got := responseMetadata.Get(controlsettings.RequestIDMetadataKey); len(got) != 1 || got[0] != requestID {
 		t.Fatalf("response request ID = %v, want %q", got, requestID)
 	}
 }
@@ -61,8 +62,8 @@ func TestServerRejectsInvalidMetadata(t *testing.T) {
 		wantCode  codes.Code
 	}{
 		{name: "unsupported API version", api: "v2", requestID: "0123456789abcdef0123456789abcdef", wantCode: codes.FailedPrecondition},
-		{name: "missing request ID", api: daemon.APIVersion, wantCode: codes.InvalidArgument},
-		{name: "invalid request ID", api: daemon.APIVersion, requestID: "bad-id", wantCode: codes.InvalidArgument},
+		{name: "missing request ID", api: controlsettings.APIVersion, wantCode: codes.InvalidArgument},
+		{name: "invalid request ID", api: controlsettings.APIVersion, requestID: "bad-id", wantCode: codes.InvalidArgument},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -75,8 +76,8 @@ func TestServerRejectsInvalidMetadata(t *testing.T) {
 		})
 	}
 	ctx := metadata.AppendToOutgoingContext(context.Background(),
-		daemon.APIVersionMetadataKey, daemon.APIVersion,
-		daemon.RequestIDMetadataKey, "0123456789abcdef0123456789abcdef",
+		controlsettings.APIVersionMetadataKey, controlsettings.APIVersion,
+		controlsettings.RequestIDMetadataKey, "0123456789abcdef0123456789abcdef",
 	)
 	if _, err := service.Ping(ctx, &controlpb.PingRequest{}); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("Ping() without a deadline returned %v, want InvalidArgument", err)
@@ -99,7 +100,7 @@ func TestServerListsAndInspectsSavedInstances(t *testing.T) {
 	connection := startServerWithInstances(t, store)
 	service := controlpb.NewControlServiceClient(connection)
 
-	listContext, cancel := callContext(daemon.APIVersion, "11111111111111111111111111111111")
+	listContext, cancel := callContext(controlsettings.APIVersion, "11111111111111111111111111111111")
 	listed, err := service.ListInstances(listContext, &controlpb.ListInstancesRequest{})
 	cancel()
 	if err != nil {
@@ -112,7 +113,7 @@ func TestServerListsAndInspectsSavedInstances(t *testing.T) {
 		t.Fatalf("ListInstances() omitted instance fields: %v", listed.GetInstances()[0])
 	}
 
-	inspectContext, cancel := callContext(daemon.APIVersion, "22222222222222222222222222222222")
+	inspectContext, cancel := callContext(controlsettings.APIVersion, "22222222222222222222222222222222")
 	inspected, err := service.InspectInstance(inspectContext, &controlpb.InspectInstanceRequest{Name: "dev1"})
 	cancel()
 	if err != nil {
@@ -134,7 +135,7 @@ func TestInspectInstanceReportsInvalidAndMissingNames(t *testing.T) {
 		{name: "../etc", code: codes.InvalidArgument},
 		{name: "missing", code: codes.NotFound},
 	} {
-		ctx, cancel := callContext(daemon.APIVersion, "33333333333333333333333333333333")
+		ctx, cancel := callContext(controlsettings.APIVersion, "33333333333333333333333333333333")
 		_, err := service.InspectInstance(ctx, &controlpb.InspectInstanceRequest{Name: test.name})
 		cancel()
 		if got := status.Code(err); got != test.code {
@@ -161,7 +162,7 @@ func TestServerCreatesStoppedInstance(t *testing.T) {
 	}
 	connection := startServerWithInstances(t, manager)
 	service := controlpb.NewControlServiceClient(connection)
-	ctx, cancel := callContext(daemon.APIVersion, "44444444444444444444444444444444")
+	ctx, cancel := callContext(controlsettings.APIVersion, "44444444444444444444444444444444")
 	response, err := service.CreateInstance(ctx, &controlpb.CreateInstanceRequest{
 		Name: "dev1", Vcpus: 2, MemoryMib: 2048, StateDiskBytes: 1 << 30,
 		Image: "default", SshPublicKey: daemonTestPublicKey(),
@@ -177,7 +178,7 @@ func TestServerCreatesStoppedInstance(t *testing.T) {
 	if key, err := manager.Store.LoadPublicKey("dev1"); err != nil || key != daemonTestPublicKey() {
 		t.Fatalf("stored public key = %q, error = %v", key, err)
 	}
-	duplicateContext, duplicateCancel := callContext(daemon.APIVersion, "66666666666666666666666666666666")
+	duplicateContext, duplicateCancel := callContext(controlsettings.APIVersion, "66666666666666666666666666666666")
 	_, err = service.CreateInstance(duplicateContext, &controlpb.CreateInstanceRequest{
 		Name: "dev1", Vcpus: 2, MemoryMib: 2048, StateDiskBytes: 1 << 30,
 		Image: "default", SshPublicKey: daemonTestPublicKey(),
@@ -186,7 +187,7 @@ func TestServerCreatesStoppedInstance(t *testing.T) {
 	if status.Code(err) != codes.AlreadyExists {
 		t.Fatalf("duplicate CreateInstance() code = %s, want AlreadyExists (%v)", status.Code(err), err)
 	}
-	invalidContext, invalidCancel := callContext(daemon.APIVersion, "77777777777777777777777777777777")
+	invalidContext, invalidCancel := callContext(controlsettings.APIVersion, "77777777777777777777777777777777")
 	_, err = service.CreateInstance(invalidContext, &controlpb.CreateInstanceRequest{
 		Name: "../bad", Vcpus: 1, MemoryMib: 128, StateDiskBytes: 1 << 30,
 		Image: "default", SshPublicKey: daemonTestPublicKey(),
@@ -195,7 +196,7 @@ func TestServerCreatesStoppedInstance(t *testing.T) {
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("invalid CreateInstance() code = %s, want InvalidArgument (%v)", status.Code(err), err)
 	}
-	missingImageContext, missingImageCancel := callContext(daemon.APIVersion, "88888888888888888888888888888888")
+	missingImageContext, missingImageCancel := callContext(controlsettings.APIVersion, "88888888888888888888888888888888")
 	_, err = service.CreateInstance(missingImageContext, &controlpb.CreateInstanceRequest{
 		Name: "dev2", Vcpus: 1, MemoryMib: 128, StateDiskBytes: 1 << 30,
 		Image: "missing", SshPublicKey: daemonTestPublicKey(),
@@ -222,14 +223,14 @@ func TestServerDeletesOnlyStoppedInstances(t *testing.T) {
 	server := daemon.NewServerWithInstanceManager("test-version", runtime, manager)
 	connection := startServerWithGRPCServer(t, server)
 	service := controlpb.NewControlServiceClient(connection)
-	ctx, cancel := callContext(daemon.APIVersion, "adadadadadadadadadadadadadadadad")
+	ctx, cancel := callContext(controlsettings.APIVersion, "adadadadadadadadadadadadadadadad")
 	_, err = service.DeleteInstance(ctx, &controlpb.DeleteInstanceRequest{Name: "dev1"})
 	cancel()
 	if status.Code(err) != codes.FailedPrecondition || manager.deleted {
 		t.Fatalf("DeleteInstance() for running sandbox = %v, deleted=%t", err, manager.deleted)
 	}
 	runtime.running["dev1"] = false
-	ctx, cancel = callContext(daemon.APIVersion, "aeaeaeaeaeaeaeaeaeaeaeaeaeaeaeae")
+	ctx, cancel = callContext(controlsettings.APIVersion, "aeaeaeaeaeaeaeaeaeaeaeaeaeaeaeae")
 	response, err := service.DeleteInstance(ctx, &controlpb.DeleteInstanceRequest{Name: "dev1"})
 	cancel()
 	if err != nil || response.GetName() != "dev1" || !manager.deleted {
@@ -251,14 +252,14 @@ func TestServerResetsOnlyStoppedInstance(t *testing.T) {
 	runtime := &resetTestRuntimeController{testRuntimeController: testRuntimeController{running: map[string]bool{"dev1": true}}}
 	connection := startServerWithGRPCServer(t, daemon.NewServerWithInstanceManager("test-version", runtime, manager))
 	service := controlpb.NewControlServiceClient(connection)
-	ctx, cancel := callContext(daemon.APIVersion, "afafafafafafafafafafafafafafafaf")
+	ctx, cancel := callContext(controlsettings.APIVersion, "afafafafafafafafafafafafafafafaf")
 	_, err = service.ResetInstance(ctx, &controlpb.ResetInstanceRequest{Name: "dev1"})
 	cancel()
 	if status.Code(err) != codes.FailedPrecondition || manager.reset {
 		t.Fatalf("ResetInstance() for running sandbox = %v, reset=%t", err, manager.reset)
 	}
 	runtime.running["dev1"] = false
-	ctx, cancel = callContext(daemon.APIVersion, "bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf")
+	ctx, cancel = callContext(controlsettings.APIVersion, "bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf")
 	response, err := service.ResetInstance(ctx, &controlpb.ResetInstanceRequest{Name: "dev1"})
 	cancel()
 	if err != nil || response.GetInstance().GetName() != "dev1" || !manager.reset {
@@ -295,7 +296,7 @@ func TestServerImportsVerifiedImageStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := callContext(daemon.APIVersion, "77777777777777777777777777777777")
+	ctx, cancel := callContext(controlsettings.APIVersion, "77777777777777777777777777777777")
 	defer cancel()
 	stream, err := service.InstallImage(ctx)
 	if err != nil {
@@ -319,7 +320,7 @@ func TestServerImportsVerifiedImageStream(t *testing.T) {
 	if _, err := (hoststate.InstalledImages{Paths: paths}).ResolveBootImage("default", version); err != nil {
 		t.Fatalf("resolve imported image: %v", err)
 	}
-	listContext, listCancel := callContext(daemon.APIVersion, "88888888888888888888888888888888")
+	listContext, listCancel := callContext(controlsettings.APIVersion, "88888888888888888888888888888888")
 	listed, err := service.ListImages(listContext, &controlpb.ListImagesRequest{})
 	listCancel()
 	if err != nil || len(listed.GetImages()) != 1 || listed.GetImages()[0].GetName() != "default" || listed.GetImages()[0].GetVersion() != version {
@@ -332,7 +333,7 @@ func TestServerImportsVerifiedImageStream(t *testing.T) {
 	if err := manager.Store.Save(daemonTestInstance(instanceID, "holds-image")); err != nil {
 		t.Fatal(err)
 	}
-	blockedContext, blockedCancel := callContext(daemon.APIVersion, "abababababababababababababababab")
+	blockedContext, blockedCancel := callContext(controlsettings.APIVersion, "abababababababababababababababab")
 	_, err = service.DeleteImage(blockedContext, &controlpb.DeleteImageRequest{Name: "default", Version: version})
 	blockedCancel()
 	if status.Code(err) != codes.FailedPrecondition {
@@ -341,7 +342,7 @@ func TestServerImportsVerifiedImageStream(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(paths.Instances, "holds-image")); err != nil {
 		t.Fatal(err)
 	}
-	deleteContext, deleteCancel := callContext(daemon.APIVersion, "99999999999999999999999999999999")
+	deleteContext, deleteCancel := callContext(controlsettings.APIVersion, "99999999999999999999999999999999")
 	deleted, err := service.DeleteImage(deleteContext, &controlpb.DeleteImageRequest{Name: "default", Version: version})
 	deleteCancel()
 	if err != nil || deleted.GetName() != "default" || deleted.GetVersion() != version {
@@ -366,7 +367,7 @@ func TestServerStartsAndStopsInstanceThroughRuntimeController(t *testing.T) {
 	connection := startServerWithRuntime(t, store, runtime)
 	service := controlpb.NewControlServiceClient(connection)
 
-	startCtx, startCancel := callContext(daemon.APIVersion, "77777777777777777777777777777777")
+	startCtx, startCancel := callContext(controlsettings.APIVersion, "77777777777777777777777777777777")
 	started, err := service.StartInstance(startCtx, &controlpb.StartInstanceRequest{Name: "dev1"})
 	startCancel()
 	if err != nil {
@@ -376,14 +377,14 @@ func TestServerStartsAndStopsInstanceThroughRuntimeController(t *testing.T) {
 		t.Fatalf("StartInstance() response = %v", started.GetInstance())
 	}
 
-	listCtx, listCancel := callContext(daemon.APIVersion, "88888888888888888888888888888888")
+	listCtx, listCancel := callContext(controlsettings.APIVersion, "88888888888888888888888888888888")
 	listed, err := service.ListInstances(listCtx, &controlpb.ListInstancesRequest{})
 	listCancel()
 	if err != nil || len(listed.GetInstances()) != 1 || listed.GetInstances()[0].GetRuntimeState() != "running" {
 		t.Fatalf("ListInstances() after start = %v, %v", listed, err)
 	}
 
-	stopCtx, stopCancel := callContext(daemon.APIVersion, "99999999999999999999999999999999")
+	stopCtx, stopCancel := callContext(controlsettings.APIVersion, "99999999999999999999999999999999")
 	stopped, err := service.StopInstance(stopCtx, &controlpb.StopInstanceRequest{Name: "dev1", Force: true})
 	stopCancel()
 	if err != nil {
@@ -404,13 +405,13 @@ func TestServerRejectsStartAndStopForMissingInstance(t *testing.T) {
 	store := hoststate.Store{Paths: paths}
 	connection := startServerWithRuntime(t, store, &testRuntimeController{running: make(map[string]bool)})
 	service := controlpb.NewControlServiceClient(connection)
-	ctx, cancel := callContext(daemon.APIVersion, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	ctx, cancel := callContext(controlsettings.APIVersion, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	_, err := service.StartInstance(ctx, &controlpb.StartInstanceRequest{Name: "missing"})
 	cancel()
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("StartInstance() code = %s, want NotFound (%v)", status.Code(err), err)
 	}
-	ctx, cancel = callContext(daemon.APIVersion, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	ctx, cancel = callContext(controlsettings.APIVersion, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
 	_, err = service.StopInstance(ctx, &controlpb.StopInstanceRequest{Name: "missing"})
 	cancel()
 	if status.Code(err) != codes.NotFound {
@@ -440,7 +441,7 @@ func TestServerLogsRuntimeStartFailure(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
 	t.Cleanup(func() { slog.SetDefault(previousLogger) })
 
-	ctx, cancel := callContext(daemon.APIVersion, "abababababababababababababababab")
+	ctx, cancel := callContext(controlsettings.APIVersion, "abababababababababababababababab")
 	_, err = service.StartInstance(ctx, &controlpb.StartInstanceRequest{Name: "dev1"})
 	cancel()
 	if status.Code(err) != codes.FailedPrecondition {
@@ -665,19 +666,9 @@ func daemonTestInstance(id, name string) hoststate.Instance {
 
 func callContext(apiVersion, requestID string) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	pairs := []string{daemon.APIVersionMetadataKey, apiVersion}
+	pairs := []string{controlsettings.APIVersionMetadataKey, apiVersion}
 	if requestID != "" {
-		pairs = append(pairs, daemon.RequestIDMetadataKey, requestID)
+		pairs = append(pairs, controlsettings.RequestIDMetadataKey, requestID)
 	}
 	return metadata.AppendToOutgoingContext(ctx, pairs...), cancel
-}
-
-func ExampleNewRequestID() {
-	requestID, err := daemon.NewRequestID()
-	if err != nil {
-		fmt.Println("error")
-		return
-	}
-	fmt.Println(len(requestID))
-	// Output: 32
 }

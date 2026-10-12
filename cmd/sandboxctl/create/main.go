@@ -11,7 +11,7 @@ import (
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/config"
 	"sandboxctl/internal/controlpb"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 	sshconfig "sandboxctl/internal/ssh"
 )
 
@@ -54,7 +54,7 @@ func run(arguments []string) error {
 		return err
 	}
 	defer connection.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxCreateDuration)
+	ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxCreateDuration)
 	defer cancel()
 	response, err := service.CreateInstance(ctx, &controlpb.CreateInstanceRequest{
 		Name: options.Name, Vcpus: int32(options.VCPUs), MemoryMib: int32(options.MemoryMiB),
@@ -63,7 +63,7 @@ func run(arguments []string) error {
 	if err != nil {
 		return fmt.Errorf("create sandbox %s: %w", options.Name, err)
 	}
-	listContext, listCancel := context.WithTimeout(context.Background(), daemon.MaxOperationDuration)
+	listContext, listCancel := context.WithTimeout(context.Background(), controlsettings.MaxOperationDuration)
 	defer listCancel()
 	if err := ssh.RefreshConfig(listContext, service); err != nil {
 		return fmt.Errorf("created sandbox %s, but could not refresh SSH configuration; run sandboxctl ssh-config: %w", options.Name, err)

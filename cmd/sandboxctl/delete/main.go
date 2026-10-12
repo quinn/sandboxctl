@@ -13,7 +13,7 @@ import (
 	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/controlpb"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 )
 
 func main() {
@@ -38,7 +38,7 @@ func run(arguments []string) error {
 		return err
 	}
 	defer connection.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxDeleteDuration)
+	ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxDeleteDuration)
 	defer cancel()
 	response, err := service.DeleteInstance(ctx, &controlpb.DeleteInstanceRequest{Name: options.Name})
 	if err != nil {

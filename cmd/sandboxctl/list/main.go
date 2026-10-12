@@ -10,7 +10,7 @@ import (
 	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/controlpb"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func run(arguments []string) error {
 	}
 	defer connection.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxOperationDuration)
+	ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxOperationDuration)
 	defer cancel()
 	response, err := service.ListInstances(ctx, &controlpb.ListInstancesRequest{})
 	if err != nil {

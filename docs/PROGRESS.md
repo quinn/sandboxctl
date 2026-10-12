@@ -131,7 +131,7 @@ The current staged test bundle uses the upstream Ubuntu SquashFS without running
 - Set Go 1.27 as the minimum version in `go.mod` and the README build instructions.
 - Pinned gRPC v1.70.0 and compatible protobuf dependencies. Kept the Go module requirement at 1.27.0.
 - Buf lint passes with explicit exceptions for the unversioned protobuf package and its root-level schema file.
-- Added `cmd/sandboxd`, a Unix socket gRPC server, and a client package.
+- Added the `cmd/sandboxd` command and its Unix socket gRPC server package, plus a client package.
 - Added API-version and request-ID metadata interceptors. The client creates a request ID for each call. The server validates the metadata and returns the request ID in response metadata.
 - Added separate `Ping` and `HostStatus` RPCs. The schema has no negotiation RPC or versioned Go package path.
 - Added message-size limits and operation deadlines. The socket server refuses to replace an existing path and uses mode `0600` for its socket.

@@ -2,8 +2,6 @@ package daemon
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -16,26 +14,13 @@ import (
 	"time"
 
 	controlpb "sandboxctl/internal/controlpb"
+	"sandboxctl/internal/controlsettings"
 	"sandboxctl/internal/hoststate"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-)
-
-const (
-	APIVersionMetadataKey = "sandboxctl-api-version"
-	RequestIDMetadataKey  = "x-request-id"
-	APIVersion            = "v1"
-	MaxMessageSize        = 1 << 20
-	MaxOperationDuration  = 10 * time.Second
-	MaxCreateDuration     = 2 * time.Minute
-	MaxStartDuration      = 2 * time.Minute
-	MaxStopDuration       = 30 * time.Second
-	MaxResetDuration      = 3 * time.Minute
-	MaxDeleteDuration     = 30 * time.Second
-	MaxInstallDuration    = 30 * time.Minute
 )
 
 var requestIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
@@ -77,8 +62,8 @@ func newServerWithImageStore(version string, runtime RuntimeStatus, instances In
 
 func newServerConfigured(version string, runtime RuntimeStatus, instances InstanceStore, creator InstanceCreator, imagePaths *hoststate.Paths) *grpc.Server {
 	server := grpc.NewServer(
-		grpc.MaxRecvMsgSize(MaxMessageSize),
-		grpc.MaxSendMsgSize(MaxMessageSize),
+		grpc.MaxRecvMsgSize(controlsettings.MaxMessageSize),
+		grpc.MaxSendMsgSize(controlsettings.MaxMessageSize),
 		grpc.UnaryInterceptor(unaryInterceptor),
 		grpc.StreamInterceptor(streamInterceptor),
 	)
@@ -94,11 +79,11 @@ func streamInterceptor(server any, stream grpc.ServerStream, info *grpc.StreamSe
 	if !ok {
 		return status.Error(codes.InvalidArgument, "request metadata is required")
 	}
-	apiVersions := incoming.Get(APIVersionMetadataKey)
-	if len(apiVersions) != 1 || apiVersions[0] != APIVersion {
+	apiVersions := incoming.Get(controlsettings.APIVersionMetadataKey)
+	if len(apiVersions) != 1 || apiVersions[0] != controlsettings.APIVersion {
 		return status.Error(codes.FailedPrecondition, "unsupported API version")
 	}
-	requestIDs := incoming.Get(RequestIDMetadataKey)
+	requestIDs := incoming.Get(controlsettings.RequestIDMetadataKey)
 	if len(requestIDs) != 1 || !requestIDPattern.MatchString(requestIDs[0]) {
 		return status.Error(codes.InvalidArgument, "request identifier is missing or invalid")
 	}
@@ -106,13 +91,13 @@ func streamInterceptor(server any, stream grpc.ServerStream, info *grpc.StreamSe
 	if _, ok := ctx.Deadline(); !ok {
 		return status.Error(codes.InvalidArgument, "request deadline is required")
 	}
-	duration := MaxOperationDuration
+	duration := controlsettings.MaxOperationDuration
 	if info.FullMethod == controlpb.ControlService_InstallImage_FullMethodName {
-		duration = MaxInstallDuration
+		duration = controlsettings.MaxInstallDuration
 	}
 	ctx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
-	if err := grpc.SetHeader(ctx, metadata.Pairs(RequestIDMetadataKey, requestIDs[0])); err != nil {
+	if err := grpc.SetHeader(ctx, metadata.Pairs(controlsettings.RequestIDMetadataKey, requestIDs[0])); err != nil {
 		return status.Error(codes.Internal, "cannot set response request identifier")
 	}
 	started := time.Now()
@@ -134,11 +119,11 @@ func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerIn
 	if !ok {
 		return nil, status.Error(codes.InvalidArgument, "request metadata is required")
 	}
-	apiVersions := incoming.Get(APIVersionMetadataKey)
-	if len(apiVersions) != 1 || apiVersions[0] != APIVersion {
+	apiVersions := incoming.Get(controlsettings.APIVersionMetadataKey)
+	if len(apiVersions) != 1 || apiVersions[0] != controlsettings.APIVersion {
 		return nil, status.Error(codes.FailedPrecondition, "unsupported API version")
 	}
-	requestIDs := incoming.Get(RequestIDMetadataKey)
+	requestIDs := incoming.Get(controlsettings.RequestIDMetadataKey)
 	if len(requestIDs) != 1 || !requestIDPattern.MatchString(requestIDs[0]) {
 		return nil, status.Error(codes.InvalidArgument, "request identifier is missing or invalid")
 	}
@@ -148,23 +133,23 @@ func unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerIn
 	if _, ok := ctx.Deadline(); !ok {
 		return nil, status.Error(codes.InvalidArgument, "request deadline is required")
 	}
-	duration := MaxOperationDuration
+	duration := controlsettings.MaxOperationDuration
 	if info.FullMethod == controlpb.ControlService_CreateInstance_FullMethodName {
-		duration = MaxCreateDuration
+		duration = controlsettings.MaxCreateDuration
 	} else if info.FullMethod == controlpb.ControlService_DeleteImage_FullMethodName {
-		duration = MaxDeleteDuration
+		duration = controlsettings.MaxDeleteDuration
 	} else if info.FullMethod == controlpb.ControlService_StartInstance_FullMethodName {
-		duration = MaxStartDuration
+		duration = controlsettings.MaxStartDuration
 	} else if info.FullMethod == controlpb.ControlService_StopInstance_FullMethodName {
-		duration = MaxStopDuration
+		duration = controlsettings.MaxStopDuration
 	} else if info.FullMethod == controlpb.ControlService_ResetInstance_FullMethodName {
-		duration = MaxResetDuration
+		duration = controlsettings.MaxResetDuration
 	} else if info.FullMethod == controlpb.ControlService_DeleteInstance_FullMethodName {
-		duration = MaxDeleteDuration
+		duration = controlsettings.MaxDeleteDuration
 	}
 	ctx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
-	if err := grpc.SetHeader(ctx, metadata.Pairs(RequestIDMetadataKey, requestID)); err != nil {
+	if err := grpc.SetHeader(ctx, metadata.Pairs(controlsettings.RequestIDMetadataKey, requestID)); err != nil {
 		return nil, status.Error(codes.Internal, "cannot set response request identifier")
 	}
 	started := time.Now()
@@ -665,13 +650,4 @@ func Serve(ctx context.Context, listener net.Listener, server *grpc.Server) erro
 	}
 
 	return nil
-}
-
-// NewRequestID creates a random 128-bit request identifier.
-func NewRequestID() (string, error) {
-	var value [16]byte
-	if _, err := rand.Read(value[:]); err != nil {
-		return "", fmt.Errorf("create request identifier: %w", err)
-	}
-	return hex.EncodeToString(value[:]), nil
 }

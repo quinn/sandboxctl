@@ -13,7 +13,7 @@ import (
 
 	"sandboxctl/internal/client"
 	"sandboxctl/internal/config"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 	"sandboxctl/internal/disk"
 	"sandboxctl/internal/imagebuild/bundle"
 	"sandboxctl/internal/imagebuild/installer"
@@ -108,7 +108,7 @@ func (c *Context) installPackagedBuilder() error {
 		return err
 	}
 	defer connection.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxInstallDuration)
+	ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxInstallDuration)
 	defer cancel()
 	installed, err := installer.EnsureInstalled(ctx, service, image)
 	if err != nil {

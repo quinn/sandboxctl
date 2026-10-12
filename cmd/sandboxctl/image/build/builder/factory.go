@@ -21,7 +21,7 @@ import (
 	"sandboxctl/cmd/sandboxctl/image/build/guest"
 	"sandboxctl/internal/config"
 	"sandboxctl/internal/controlpb"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 
 	"google.golang.org/grpc"
 )
@@ -124,7 +124,7 @@ func (factory DaemonVMFactory) Start(ctx context.Context) (VM, error) {
 	}
 
 	vm := &daemonVM{service: factory.Service, name: name, knownHostsDir: instanceDir}
-	createCtx, cancel := context.WithTimeout(ctx, daemon.MaxCreateDuration)
+	createCtx, cancel := context.WithTimeout(ctx, controlsettings.MaxCreateDuration)
 	createResponse, err := factory.Service.CreateInstance(createCtx, &controlpb.CreateInstanceRequest{
 		Name: name, Vcpus: defaultBuilderVCPUs, MemoryMib: defaultBuilderMemoryMiB,
 		StateDiskBytes: defaultBuilderDiskBytes, Image: factory.Image, SshPublicKey: factory.SSHPublicKey,
@@ -145,7 +145,7 @@ func (factory DaemonVMFactory) Start(ctx context.Context) (VM, error) {
 		"vcpus", defaultBuilderVCPUs, "memory_mib", defaultBuilderMemoryMiB,
 		"state_disk_bytes", defaultBuilderDiskBytes)
 
-	startCtx, cancel := context.WithTimeout(ctx, daemon.MaxStartDuration)
+	startCtx, cancel := context.WithTimeout(ctx, controlsettings.MaxStartDuration)
 	vm.startAttempted = true
 	response, err := factory.Service.StartInstance(startCtx, &controlpb.StartInstanceRequest{Name: name})
 	cancel()
@@ -238,14 +238,14 @@ func (vm *daemonVM) Close(ctx context.Context) (closeErr error) {
 	}
 	var stopErr error
 	if vm.startAttempted {
-		stopCtx, cancel := context.WithTimeout(ctx, daemon.MaxStopDuration)
+		stopCtx, cancel := context.WithTimeout(ctx, controlsettings.MaxStopDuration)
 		_, stopErr = vm.service.StopInstance(stopCtx, &controlpb.StopInstanceRequest{Name: vm.name})
 		cancel()
 		if stopErr == nil {
 			slog.Info("builder sandbox stopped", "name", vm.name)
 		}
 	}
-	deleteCtx, cancel := context.WithTimeout(ctx, daemon.MaxDeleteDuration)
+	deleteCtx, cancel := context.WithTimeout(ctx, controlsettings.MaxDeleteDuration)
 	_, err := vm.service.DeleteInstance(deleteCtx, &controlpb.DeleteInstanceRequest{Name: vm.name})
 	cancel()
 	if err != nil {

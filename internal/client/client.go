@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"sandboxctl/internal/controlpb"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -36,8 +36,8 @@ func Dial(ctx context.Context, socketPath string) (*grpc.ClientConn, controlpb.C
 		grpc.WithUnaryInterceptor(clientInterceptor),
 		grpc.WithStreamInterceptor(clientStreamInterceptor),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallSendMsgSize(daemon.MaxMessageSize),
-			grpc.MaxCallRecvMsgSize(daemon.MaxMessageSize),
+			grpc.MaxCallSendMsgSize(controlsettings.MaxMessageSize),
+			grpc.MaxCallRecvMsgSize(controlsettings.MaxMessageSize),
 		),
 	)
 	if err != nil {
@@ -63,7 +63,7 @@ func Dial(ctx context.Context, socketPath string) (*grpc.ClientConn, controlpb.C
 }
 
 func clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, connection *grpc.ClientConn, method string, streamer grpc.Streamer, options ...grpc.CallOption) (grpc.ClientStream, error) {
-	requestID, err := daemon.NewRequestID()
+	requestID, err := controlsettings.NewRequestID()
 	if err != nil {
 		return nil, err
 	}
@@ -72,14 +72,14 @@ func clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, connect
 	if outgoing == nil {
 		outgoing = metadata.MD{}
 	}
-	outgoing.Set(daemon.APIVersionMetadataKey, daemon.APIVersion)
-	outgoing.Set(daemon.RequestIDMetadataKey, requestID)
+	outgoing.Set(controlsettings.APIVersionMetadataKey, controlsettings.APIVersion)
+	outgoing.Set(controlsettings.RequestIDMetadataKey, requestID)
 	ctx = metadata.NewOutgoingContext(ctx, outgoing)
 	return streamer(ctx, desc, connection, method, options...)
 }
 
 func clientInterceptor(ctx context.Context, method string, request, response any, connection *grpc.ClientConn, invoke grpc.UnaryInvoker, options ...grpc.CallOption) error {
-	requestID, err := daemon.NewRequestID()
+	requestID, err := controlsettings.NewRequestID()
 	if err != nil {
 		return err
 	}
@@ -88,8 +88,8 @@ func clientInterceptor(ctx context.Context, method string, request, response any
 	if outgoing == nil {
 		outgoing = metadata.MD{}
 	}
-	outgoing.Set(daemon.APIVersionMetadataKey, daemon.APIVersion)
-	outgoing.Set(daemon.RequestIDMetadataKey, requestID)
+	outgoing.Set(controlsettings.APIVersionMetadataKey, controlsettings.APIVersion)
+	outgoing.Set(controlsettings.RequestIDMetadataKey, requestID)
 	ctx = metadata.NewOutgoingContext(ctx, outgoing)
 	return invoke(ctx, method, request, response, connection, options...)
 }

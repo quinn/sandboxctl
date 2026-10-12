@@ -13,7 +13,7 @@ import (
 	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/controlpb"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 )
 
 func main() { cmdutil.Main(run) }
@@ -31,7 +31,7 @@ func run(arguments []string) error {
 		return err
 	}
 	defer connection.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxDeleteDuration)
+	ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxDeleteDuration)
 	defer cancel()
 	images, err := service.ListImages(ctx, &controlpb.ListImagesRequest{})
 	if err != nil {

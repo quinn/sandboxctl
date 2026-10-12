@@ -9,7 +9,7 @@ import (
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/config"
 	"sandboxctl/internal/controlpb"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 	sshconfig "sandboxctl/internal/ssh"
 )
 
@@ -37,7 +37,7 @@ func run(arguments []string) error {
 		return err
 	}
 	defer connection.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxOperationDuration)
+	ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxOperationDuration)
 	defer cancel()
 	if _, err := service.InspectInstance(ctx, &controlpb.InspectInstanceRequest{Name: arguments[0]}); err != nil {
 		return fmt.Errorf("inspect sandbox %s: %w", arguments[0], err)

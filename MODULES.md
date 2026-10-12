@@ -25,8 +25,8 @@ those files from the schema. Do not edit generated files by hand.
 
 Files and folders: `proto/`, `buf.yaml`, `buf.gen.yaml`, generated files in
 `internal/controlpb/`, protocol metadata and validation in
-`internal/controlproto/`, and related client and daemon code in
-`internal/client/` and `internal/daemon/`.
+`internal/controlsettings/`, client code in `internal/client/`, and server code in
+`cmd/sandboxd/daemon/`.
 
 Extra check: run `make generate`, then `make check`.
 
@@ -116,7 +116,8 @@ Dockerfile inputs.
 
 Files and folders: `cmd/sandboxctl/image/build/`, the shared packages that
 remain under `internal/imagebuild/`, image-build scripts under `scripts/`, and
-related RPC definitions and handlers under `proto/` and `internal/daemon/`.
+related RPC definitions under `proto/`, shared client-server settings under
+`internal/controlsettings/`, and server handlers under `cmd/sandboxd/daemon/`.
 
 Extra check: run the matching test: `make manual-image-build`,
 `make manual-dockerfile-build`, or `make manual-dockerfile-rejections`.
@@ -132,8 +133,8 @@ allocation only after cleanup. Reset replaces the writable state disk for a
 stopped sandbox.
 
 Files and folders: lifecycle commands under `cmd/sandboxctl/`, shared
-operations in `internal/app/`, RPC handlers in `internal/daemon/`, VM control
-in `internal/runtime/`, records and allocations in `internal/store/`,
+operations in `internal/app/`, RPC handlers in `cmd/sandboxd/daemon/`, VM
+control in `internal/runtime/`, records and allocations in `internal/store/`,
 `internal/hoststate/`, disk handling in `internal/disk/`, and TAP handling in
 `cmd/sandboxd/network/`.
 

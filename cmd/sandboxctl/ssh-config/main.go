@@ -9,7 +9,7 @@ import (
 	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
 	"sandboxctl/internal/config"
-	"sandboxctl/internal/daemon"
+	"sandboxctl/internal/controlsettings"
 	sshconfig "sandboxctl/internal/ssh"
 )
 
@@ -34,7 +34,7 @@ func run(arguments []string) error {
 		return err
 	}
 	defer connection.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), daemon.MaxOperationDuration)
+	ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxOperationDuration)
 	defer cancel()
 	if err := manager.RefreshConfig(ctx, service); err != nil {
 		return err
