@@ -24,9 +24,6 @@ install:
 	fi
 	yay -Bi "$(CURDIR)/packaging/local"
 
-clean-builder:
-	./scripts/stage-builder-image.sh --clean
-
 host-install: build
 	sudo env PATH="$(CURDIR)/bin:$$PATH" "$(CURDIR)/bin/sandboxctl" host install --operator "$$(id -un)"
 
@@ -48,14 +45,8 @@ generate:
 proto-lint:
 	buf lint
 
-download-builder-tools:
-	./scripts/download-builder-tools.sh
-
-download-builder-base-assets:
-	./scripts/download-builder-base-assets.sh
-
-guest-initramfs:
-	./scripts/build-guest-initramfs.sh
+clean-builder:
+	./scripts/stage-builder-image.sh --clean
 
 stage-builder-image:
 	./scripts/stage-builder-image.sh
