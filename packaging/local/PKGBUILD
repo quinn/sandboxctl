@@ -1,5 +1,5 @@
 pkgname=sandboxctl-local
-pkgver=0.1.0.r107.gb192912
+pkgver=0.1.0.r109.g625f626
 pkgrel=1
 pkgdesc='Manage local Firecracker development sandboxes'
 arch=('x86_64')
@@ -43,6 +43,16 @@ find_builder_bundle() {
 	done < <(find "$images_dir" -mindepth 3 -maxdepth 3 -type f -name manifest.json -print0)
 }
 
+copy_builder_bundle() {
+	local source_bundle="$1" images_dir="$2"
+	local image_name version destination
+	image_name=$(basename "$(dirname "$(dirname "$source_bundle")")")
+	version=$(basename "$(dirname "$source_bundle")")
+	destination="$images_dir/$image_name/$version"
+	install -d -m700 "$destination"
+	cp -a "$source_bundle/." "$destination/"
+}
+
 pkgver() {
 	local project_root="$startdir/../.."
 	local count hash
@@ -64,25 +74,22 @@ build() {
 	cd "$srcdir/sandboxctl"
 	make build
 	local package_images="$srcdir/package-data/sandboxctl/images"
-	local package_bundle cached_bundle data_home
-	package_bundle=$(find_builder_bundle "$package_images")
-	if [[ -n $package_bundle ]]; then
-		printf 'Using the builder image already in the package build directory: %s\n' "$package_bundle"
-		return
-	fi
-	data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
-	cached_bundle=$(find_builder_bundle "$data_home/sandboxctl/images")
+	local package_bundle cached_bundle cache_home cache_images
+	cache_home=${XDG_CACHE_HOME:-"$HOME/.cache"}
+	cache_images="$cache_home/sandboxctl/images"
+	cached_bundle=$(find_builder_bundle "$cache_images")
 	if [[ -n $cached_bundle ]]; then
-		local image_name version destination
-		image_name=$(basename "$(dirname "$(dirname "$cached_bundle")")")
-		version=$(basename "$(dirname "$cached_bundle")")
-		destination="$package_images/$image_name/$version"
-		install -d -m700 "${destination%/*}"
-		cp -a "$cached_bundle" "$destination"
-		printf 'Copied the staged builder image into the package build directory: %s\n' "$destination"
+		copy_builder_bundle "$cached_bundle" "$package_images"
+		printf 'Using the cached builder image: %s\n' "$cached_bundle"
 		return
 	fi
 	XDG_DATA_HOME="$srcdir/package-data" IMAGE_NAME=auto make stage-builder-image
+	package_bundle=$(find_builder_bundle "$package_images")
+	if [[ -z $package_bundle ]]; then
+		printf 'The builder image bundle was not created during package build.\n' >&2
+		return 1
+	fi
+	copy_builder_bundle "$package_bundle" "$cache_images"
 }
 
 package() {
