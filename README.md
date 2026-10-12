@@ -64,14 +64,15 @@ protected image store. You do not need to build or select the builder image.
 Build a guest image from the pinned Ubuntu 24.04 base image:
 
 ```sh
-sandboxctl image build dev-image --guest-version 24.04
+sandboxctl image build dev-image
 ```
 
 When you do not set `--base-image`, `--context`, or `--dockerfile`, the command
-uses the pinned Ubuntu 24.04 base image. The build supports Ubuntu and Debian.
-It uses the installed `builder` image by default. Use `--distribution debian`
-for a Debian base image. You can set another base image with a registry name
-and an immutable Secure Hash Algorithm 256-bit (SHA-256) digest:
+uses the pinned Ubuntu 24.04 base image and guest version. The build supports
+Ubuntu and Debian. It uses the installed `builder` image by default. Set
+`--guest-version` for an explicit base image or Dockerfile build. You can set
+another base image with a registry name and an immutable Secure Hash Algorithm
+256-bit (SHA-256) digest:
 
 ```sh
 sandboxctl image build dev-image \

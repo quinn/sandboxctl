@@ -86,13 +86,13 @@ Add these options:
 
 | Option | Rule |
 | --- | --- |
-| `--guest-version VERSION` | Require the built guest's `VERSION_ID` to match this value. |
+| `--guest-version VERSION` | Require the built guest's `VERSION_ID` to match this value. Default to `24.04` only for the pinned Ubuntu base image. Require this option for other build inputs. |
 | `--dockerfile PATH` | Select a regular local Dockerfile. Resolve PATH from the current directory. Default to `Dockerfile` in the context directory. |
 | `--context DIRECTORY` | Select the local context directory. Selecting this option selects Dockerfile input. Default to `.` in Dockerfile mode. |
 | `--target NAME` | Select a Dockerfile stage. Default to the final stage. |
 | `--build-arg NAME=VALUE` | Set one build argument. Permit repeated options with different names. |
 
-Use the pinned Ubuntu 24.04 base image when no input mode is selected.
+Use the pinned Ubuntu 24.04 base image and guest version when no input mode is selected.
 `--base-image` selects base-image mode and overrides that default.
 `--dockerfile`, `--context`, `--target`, or `--build-arg` selects Dockerfile
 mode. In Dockerfile mode, infer `<context>/Dockerfile` when `--dockerfile` is

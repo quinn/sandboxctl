@@ -46,19 +46,19 @@ func run(arguments []string) error {
 		for _, instance := range response.GetInstances() {
 			output.Instances = append(output.Instances, listInstanceJSON{
 				Name: instance.GetName(), State: instance.GetRuntimeState(), GuestIP: instance.GetGuestIp(),
-				SSHAlias: instance.GetSshAlias(), ImageVersion: instance.GetImageVersion(),
+				SSHAlias: instance.GetSshAlias(), Image: instance.GetImage(),
 				VCPUs: instance.GetVcpus(), MemoryMiB: instance.GetMemoryMib(),
 				StateDiskBytes: instance.GetStateDiskBytes(),
 			})
 		}
 		return json.NewEncoder(os.Stdout).Encode(output)
 	}
-	fmt.Fprintln(os.Stdout, "NAME\tSTATE\tADDRESS\tSSH ALIAS\tIMAGE VERSION\tCPUS\tMEMORY\tSTATE DISK")
+	fmt.Fprintln(os.Stdout, "NAME\tSTATE\tADDRESS\tSSH ALIAS\tIMAGE\tCPUS\tMEMORY\tSTATE DISK")
 	for _, instance := range response.GetInstances() {
 		diskGiB := float64(instance.GetStateDiskBytes()) / (1024 * 1024 * 1024)
 		fmt.Fprintf(os.Stdout, "%s\t%s\t%s\t%s\t%s\t%d\t%d MiB\t%.1f GiB\n",
 			instance.GetName(), instance.GetRuntimeState(), instance.GetGuestIp(), instance.GetSshAlias(),
-			instance.GetImageVersion(), instance.GetVcpus(), instance.GetMemoryMib(), diskGiB)
+			instance.GetImage(), instance.GetVcpus(), instance.GetMemoryMib(), diskGiB)
 	}
 	return nil
 }
@@ -73,7 +73,7 @@ type listInstanceJSON struct {
 	State          string `json:"state"`
 	GuestIP        string `json:"guest_ip"`
 	SSHAlias       string `json:"ssh_alias"`
-	ImageVersion   string `json:"image_version"`
+	Image          string `json:"image"`
 	VCPUs          int32  `json:"vcpus"`
 	MemoryMiB      int32  `json:"memory_mib"`
 	StateDiskBytes int64  `json:"state_disk_bytes"`

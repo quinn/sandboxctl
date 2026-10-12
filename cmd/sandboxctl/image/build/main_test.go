@@ -25,7 +25,7 @@ func TestParseDefaultsToPinnedBaseImageWhenNoInputIsSet(t *testing.T) {
 	options, err := parse([]string{
 		"--builder-image", "builder",
 		"--builder-version", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		"--guest-version", "24.04", "dev-image",
+		"dev-image",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -33,8 +33,23 @@ func TestParseDefaultsToPinnedBaseImageWhenNoInputIsSet(t *testing.T) {
 	if options.BaseImage != defaultBaseImage {
 		t.Fatalf("base image = %q, want default %q", options.BaseImage, defaultBaseImage)
 	}
+	if options.GuestVersion != defaultGuestVersion {
+		t.Fatalf("guest version = %q, want default %q", options.GuestVersion, defaultGuestVersion)
+	}
 	if options.Dockerfile != "" || options.ContextDir != "" {
 		t.Fatalf("Dockerfile input was set for base-image default: %#v", options)
+	}
+}
+
+func TestParseRequiresGuestVersionForExplicitBaseImage(t *testing.T) {
+	_, err := parse([]string{
+		"--base-image", "ubuntu:24.04@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"--builder-image", "builder",
+		"--builder-version", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		"dev-image",
+	})
+	if err == nil {
+		t.Fatal("parse accepted an explicit base image without a guest version")
 	}
 }
 

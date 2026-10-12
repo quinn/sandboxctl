@@ -945,7 +945,7 @@ Text output must contain:
 - Runtime state.
 - Guest address.
 - SSH alias.
-- Image version.
+- Image name.
 - CPU count.
 - Memory size.
 - State-disk virtual size.
