@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Download and verify the pinned BuildKit tools used inside builder VMs.
 set -euo pipefail
 
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)

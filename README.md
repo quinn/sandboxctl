@@ -230,17 +230,27 @@ make check
 make build
 ```
 
-These manual targets start virtual machines. They need KVM access and an
-installed, configured sandboxd service:
+The end-to-end (E2E) suite exercises the installed command and daemon. Install
+the Arch package and configure the host first. Run the suite as the configured
+operator:
+
+```sh
+make e2e
+```
+
+The suite does not install packages or use `sudo`. It uses a private user-data
+directory under `tmp/e2e/` and removes test resources after successful checks.
+See [e2e/README.md](e2e/README.md) for requirements and details.
+
+You can also run one manual VM check at a time. These targets need KVM access
+and an installed, configured `sandboxd` service:
 
 - `make manual-bootstrap-test` checks guest bootstrap and SSH.
 - `make manual-builder-test` checks the builder image and its tools.
 - `make manual-image-build` checks the guest image build pipeline and stages
   its output bundle.
 - `make manual-dockerfile-build` checks a local Dockerfile build, context
-  filtering, build arguments, VM boot, SSH, and state persistence. Edit the
-  builder name and digest in the Makefile when the installed test builder
-  changes.
+  filtering, build arguments, VM boot, SSH, and state persistence.
 - `make manual-dockerfile-rejections` checks invalid Dockerfile builds,
   guest metadata, and context size limits. It confirms that failed builds do
   not publish an image.

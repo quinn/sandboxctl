@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Build the guest initramfs with the overlay and bootstrap programs.
 set -Eeuo pipefail
 
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)

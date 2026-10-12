@@ -55,8 +55,8 @@ the user-facing image build operation.
 The active asset scripts download the pinned kernel and Ubuntu SquashFS used
 by the builder image. They build the guest initramfs. `stage-builder-image.sh`
 uses these files to prepare the builder image. The Phase 1 proof and its
-state-disk helpers are under `tests/phase1/`. Manual validation scripts are
-under `tests/manual/`.
+state-disk helpers are under `tests/phase1/`. Manual validation scripts and
+the complete installed-package E2E suite are under `e2e/`.
 
 The builder scripts prepare the internal builder VM image. `builder-base.Dockerfile`
 defines the seed filesystem. `download-builder-tools.sh` downloads and checks
@@ -78,8 +78,8 @@ host-side Podman staging workflow.
 
 Files and folders: active image and builder scripts under `scripts/`,
 `scripts/builder-base.Dockerfile`, `internal/imagebuild/`,
-`cmd/sandboxctl/image/`, manual tests under `tests/manual/`, and related
-targets in `Makefile`.
+`cmd/sandboxctl/image/`, tests under `e2e/`, and related targets in `Makefile`
+and `e2e/e2e.make`.
 
 Extra check: check the syntax of each changed script. Run
 `make stage-builder-image` when the staged builder image itself needs testing.
@@ -99,7 +99,7 @@ Files and folders: `cmd/guest/overlay-init/`,
 initramfs scripts under `scripts/`. The overlay initramfs installs the guest
 bootstrap binary and service. The guest image provisioning script and service
 setup are under `cmd/sandboxctl/image/build/provision/`. Manual guest tests are
-under `tests/manual/`.
+under `e2e/steps/`.
 
 Extra check: run `make manual-bootstrap-test`.
 
@@ -107,11 +107,11 @@ Extra check: run `make manual-bootstrap-test`.
 
 Keep the temporary direct Firecracker proof and its state-disk helpers in
 `tests/phase1/`. Keep manual tests that start real sandboxes in
-`tests/manual/`. These files validate the runtime. They are not runtime or
-package scripts.
+`e2e/steps/`. Keep the full installed-package suite in `e2e/`. These files
+validate the runtime. They are not runtime or package scripts.
 
-Files and folders: `tests/phase1/`, `tests/manual/`, and the proof and manual
-test targets in `Makefile`.
+Files and folders: `tests/phase1/`, `e2e/`, and the proof and E2E targets in
+`Makefile` and `e2e/e2e.make`.
 
 Extra check: run the relevant target, such as `make phase1-overlay-proof` or
 the matching `make manual-*` target. Run `bash -n` on changed shell scripts.

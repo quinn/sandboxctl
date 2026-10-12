@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Build and stage the packaged builder VM image from pinned inputs.
 set -Eeuo pipefail
 umask 077
 

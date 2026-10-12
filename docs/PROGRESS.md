@@ -58,9 +58,12 @@ packaged version is installed.
 Last updated: 2026-10-11
 
 Moved the Phase 1 proof runner and state-disk helpers to `tests/phase1/`.
-Moved manual validation scripts to `tests/manual/`. The root Makefile includes
-the Phase 1 targets from `tests/phase1/phase1.make`. Active builder asset
-scripts remain under `scripts/` because the package build uses them.
+The end-to-end suite and its manual test steps now live under `e2e/`. The root
+Makefile includes the Phase 1 targets from `tests/phase1/phase1.make` and the
+E2E targets from `e2e/e2e.make`. Active builder asset scripts remain under
+`scripts/` because the package build uses them. `make e2e` requires an
+installed package and configured host. It runs as the operator and uses the
+installed `sandboxctl` command.
 
 ## Authority and order
 
@@ -204,7 +207,7 @@ The current staged test bundle uses the upstream Ubuntu SquashFS without running
 - The image version now derives from the manifest fields and artifact digests. The manifest rejects changed metadata or artifacts under an old version.
 - Added streamed image import over gRPC. The CLI verifies local artifacts before transfer. sandboxd verifies chunk order, size, and digest, then atomically publishes read-only artifacts in the root-owned image store.
 - Added `sandboxctl image install NAME --version VERSION`. It reads bundles from the XDG data directory.
-- Added a local test-image staging script for the Phase 1 kernel, initramfs, and Ubuntu SquashFS. It now lives under `tests/manual/` and runs through `make stage-bootstrap-test-image`.
+- Added a local test-image staging script for the Phase 1 kernel, initramfs, and Ubuntu SquashFS. It now lives under `e2e/steps/` and runs through `make stage-bootstrap-test-image`.
 - The jailed SDK configuration now uses the required kernel arguments from the validated image manifest.
 - The initramfs archive now uses reproducible metadata. Running `make stage-bootstrap-test-image` twice produces the same pinned version and reuses the staged bundle.
 - Gave the Phase 1 downloader a separate checksum file. This avoids failures when a manual test changes `root.ext4` in the shared asset directory.

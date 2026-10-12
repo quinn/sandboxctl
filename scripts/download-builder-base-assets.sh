@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Download and verify the pinned kernel and root filesystem for the builder image.
 set -euo pipefail
 
 readonly asset_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp/config/images/default"
