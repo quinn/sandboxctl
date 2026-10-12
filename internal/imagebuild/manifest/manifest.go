@@ -27,7 +27,7 @@ var (
 	digestPattern  = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	versionPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	artifactNames  = []string{"vmlinux", "initramfs.cpio.gz", "root.squashfs"}
-	requiredArgs   = []string{"console=ttyS0", "rdinit=/init"}
+	requiredArgs   = []string{"console=ttyS0", "rdinit=/guest-overlay-init"}
 )
 
 // Artifact records the exact size and SHA-256 digest of one image file.

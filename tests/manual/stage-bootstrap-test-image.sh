@@ -61,7 +61,7 @@ manifest = {
     "kernel_version": "6.1.155",
     "guest": {"distribution": "Ubuntu", "version": "24.04"},
     "artifacts": artifacts,
-    "kernel_args": ["console=ttyS0", "panic=1", "reboot=k", "rdinit=/init"],
+    "kernel_args": ["console=ttyS0", "panic=1", "reboot=k", "rdinit=/guest-overlay-init"],
     "provenance": "Firecracker CI v1.15 kernel and Ubuntu 24.04 SquashFS; sandboxctl overlay initramfs",
 }
 hasher = hashlib.sha256()

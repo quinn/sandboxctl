@@ -25,7 +25,7 @@ func TestStagePublishesVerifiedImageBundle(t *testing.T) {
 		Firecracker: "1.17.x", KernelVersion: "6.1.155",
 		Guest:      manifest.Guest{Distribution: "Ubuntu", Version: "24.04"},
 		Artifacts:  make(map[string]manifest.Artifact),
-		KernelArgs: []string{"console=ttyS0", "rdinit=/init"}, Provenance: "builder seed",
+		KernelArgs: []string{"console=ttyS0", "rdinit=/guest-overlay-init"}, Provenance: "builder seed",
 	}
 	for name, content := range artifacts {
 		digest := sha256.Sum256(content)

@@ -267,7 +267,7 @@ image = {
     "kernel_version": "6.1.155",
     "guest": {"distribution": "Ubuntu", "version": "24.04"},
     "artifacts": artifacts,
-    "kernel_args": ["console=ttyS0", "panic=1", "reboot=k", "rdinit=/init"],
+    "kernel_args": ["console=ttyS0", "panic=1", "reboot=k", "rdinit=/guest-overlay-init"],
     "provenance": (
         f"Ubuntu OCI index {ubuntu_digest}; APT snapshot {apt_snapshot}; "
         f"ca-certificates 20240203; BuildKit v0.34.0 archive SHA-256 {buildkit_digest}; "

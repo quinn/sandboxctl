@@ -288,7 +288,7 @@ func TestServerImportsVerifiedImageStream(t *testing.T) {
 	imageManifest := manifest.Manifest{
 		SchemaVersion: 1, Name: "default", Architecture: "x86_64", Firecracker: "1.17.x",
 		KernelVersion: "6.1.155", Guest: manifest.Guest{Distribution: "Ubuntu", Version: "24.04"},
-		Artifacts: artifactInfo, KernelArgs: []string{"console=ttyS0", "rdinit=/init"}, Provenance: "test",
+		Artifacts: artifactInfo, KernelArgs: []string{"console=ttyS0", "rdinit=/guest-overlay-init"}, Provenance: "test",
 	}
 	version := manifest.VersionForManifest(imageManifest)
 	imageManifest.Version = version

@@ -8,7 +8,7 @@ import (
 )
 
 // KernelArgs contains the command-line arguments for the overlay proof guest.
-const KernelArgs = "console=ttyS0 panic=1 reboot=k rdinit=/init"
+const KernelArgs = "console=ttyS0 panic=1 reboot=k rdinit=/guest-overlay-init"
 
 // Configuration describes the isolated Phase 1 storage proof.
 func Configuration(kernel, initramfs, squashfs, stateDisk, socket, log string) firecracker.Config {

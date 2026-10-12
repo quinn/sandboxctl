@@ -113,7 +113,7 @@ func imageFixture(t *testing.T) ([]byte, map[string][]byte, string) {
 		SchemaVersion: manifest.SchemaVersion, Name: "default",
 		Architecture: "x86_64", Firecracker: "1.17.x", KernelVersion: "6.1.155",
 		Guest:     manifest.Guest{Distribution: "Ubuntu", Version: "24.04"},
-		Artifacts: artifactInfo, KernelArgs: []string{"console=ttyS0", "panic=1", "reboot=k", "rdinit=/init"}, Provenance: "unit-test",
+		Artifacts: artifactInfo, KernelArgs: []string{"console=ttyS0", "panic=1", "reboot=k", "rdinit=/guest-overlay-init"}, Provenance: "unit-test",
 	}
 	version := manifest.VersionForManifest(image)
 	image.Version = version

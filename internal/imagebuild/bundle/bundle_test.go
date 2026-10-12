@@ -77,7 +77,7 @@ func writeTestBundle(t *testing.T) string {
 		KernelVersion: "6.1.155",
 		Guest:         manifest.Guest{Distribution: "Ubuntu", Version: "24.04"},
 		Artifacts:     artifacts,
-		KernelArgs:    []string{"console=ttyS0", "rdinit=/init"},
+		KernelArgs:    []string{"console=ttyS0", "rdinit=/guest-overlay-init"},
 		Provenance:    "test bundle",
 	}
 	image.Version = manifest.VersionForManifest(image)

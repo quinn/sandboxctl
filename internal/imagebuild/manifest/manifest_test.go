@@ -57,7 +57,7 @@ func validManifest(t *testing.T) []byte {
 			"initramfs.cpio.gz": {Size: 2, SHA256: strings.Repeat("c", 64)},
 			"root.squashfs":     {Size: 3, SHA256: strings.Repeat("d", 64)},
 		},
-		KernelArgs: []string{"console=ttyS0", "rdinit=/init"}, Provenance: "test",
+		KernelArgs: []string{"console=ttyS0", "rdinit=/guest-overlay-init"}, Provenance: "test",
 	}
 	image.Version = VersionForManifest(image)
 	data, err := json.Marshal(image)
