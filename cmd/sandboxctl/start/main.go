@@ -5,14 +5,22 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"sandboxctl/internal/app"
 	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
+	"sandboxctl/internal/config"
 	"sandboxctl/internal/controlpb"
 	"sandboxctl/internal/controlsettings"
+	sshconfig "sandboxctl/internal/ssh"
 )
+
+type startOptions struct {
+	app.StartOptions
+	CopyCodexAuth bool
+}
 
 func main() {
 	cmdutil.Main(run)
@@ -31,37 +39,71 @@ func run(arguments []string) error {
 		if err != nil {
 			return err
 		}
-		return command.Start(options)
+		return command.Start(options.StartOptions)
 	}
 	connection, service, err := client.Dial(context.Background(), client.DefaultSocketPath)
 	if err != nil {
 		return err
 	}
 	defer connection.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxStartDuration)
-	defer cancel()
-	response, err := service.StartInstance(ctx, &controlpb.StartInstanceRequest{Name: options.Name})
+	return startSandbox(context.Background(), service, options, os.Stdout, func(ctx context.Context, instance *controlpb.Instance) error {
+		paths, err := config.Resolve()
+		if err != nil {
+			return err
+		}
+		manager := sshconfig.Manager{Paths: paths}
+		if err := manager.PrepareKey(); err != nil {
+			return err
+		}
+		if err := manager.RefreshConfig(ctx, service); err != nil {
+			return err
+		}
+		return manager.CopyCodexAuth(ctx, instance.GetName(), instance.GetGuestIp())
+	})
+}
+
+func startSandbox(ctx context.Context, service controlpb.ControlServiceClient, options startOptions, output io.Writer, copyAuth func(context.Context, *controlpb.Instance) error) error {
+	startCtx, cancel := context.WithTimeout(ctx, controlsettings.MaxStartDuration)
+	response, err := service.StartInstance(startCtx, &controlpb.StartInstanceRequest{Name: options.Name})
+	cancel()
 	if err != nil {
 		return fmt.Errorf("start sandbox %s: %w", options.Name, err)
 	}
-	fmt.Fprintf(os.Stdout, "Started sandbox %s.\n", response.GetInstance().GetName())
-	fmt.Fprintf(os.Stdout, "SSH alias: %s\n", response.GetInstance().GetSshAlias())
+	instance := response.GetInstance()
+	if instance == nil || instance.GetName() != options.Name {
+		return errors.New("sandboxd returned an invalid start response")
+	}
+	fmt.Fprintf(output, "Started sandbox %s.\n", instance.GetName())
+	fmt.Fprintf(output, "SSH alias: %s\n", instance.GetSshAlias())
+	if !options.CopyCodexAuth {
+		return nil
+	}
+	copyCtx, cancel := context.WithTimeout(ctx, controlsettings.MaxStartDuration)
+	defer cancel()
+	if err := copyAuth(copyCtx, instance); err != nil {
+		return fmt.Errorf("sandbox %s is running, but the Codex login copy failed: %w", options.Name, err)
+	}
+	fmt.Fprintln(output, "Copied the Codex login file.")
 	return nil
 }
 
-func parse(arguments []string) (app.StartOptions, error) {
+func parse(arguments []string) (startOptions, error) {
 	flags := flag.NewFlagSet("start", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
 	dryRun := flags.Bool("dry-run", false, "Print the Firecracker SDK configuration and do not start the VM.")
+	copyAuth := flags.Bool("copy-codex-auth", false, "Copy the host Codex login file to the guest. Replace the guest login file.")
 	if err := flags.Parse(cmdutil.PositionalArgumentLast(arguments)); err != nil {
-		return app.StartOptions{}, fmt.Errorf("parse start options: %w", err)
+		return startOptions{}, fmt.Errorf("parse start options: %w", err)
 	}
 	if flags.NArg() != 1 {
-		return app.StartOptions{}, errors.New("usage: sandboxctl start NAME [--dry-run]")
+		return startOptions{}, errors.New("usage: sandboxctl start NAME [--dry-run | --copy-codex-auth]")
+	}
+	if *dryRun && *copyAuth {
+		return startOptions{}, errors.New("--copy-codex-auth cannot be used with --dry-run")
 	}
 	name := flags.Arg(0)
 	if err := cmdutil.ValidateSandboxName(name); err != nil {
-		return app.StartOptions{}, err
+		return startOptions{}, err
 	}
-	return app.StartOptions{Name: name, DryRun: *dryRun}, nil
+	return startOptions{StartOptions: app.StartOptions{Name: name, DryRun: *dryRun}, CopyCodexAuth: *copyAuth}, nil
 }

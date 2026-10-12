@@ -33,7 +33,7 @@ Usage:
   sandboxctl image delete NAME [--yes]
   sandboxctl image build NAME --base-image IMAGE@sha256:DIGEST --guest-version VERSION [--install=false] [--builder-image NAME --builder-version sha256:DIGEST] [--distribution debian|ubuntu]
   sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]
-  sandboxctl start NAME [--dry-run]
+  sandboxctl start NAME [--dry-run | --copy-codex-auth]
   sandboxctl stop NAME [--force]
   sandboxctl reset NAME
   sandboxctl delete NAME [--yes]
@@ -51,6 +51,7 @@ Image delete removes an installed image that no saved sandbox uses.
 Image build runs a fixed build service in a temporary builder VM, stages a verified bundle, and installs it by default. Set --install=false to stage it only.
 Create requires an installed image.
 Start requires an installed image, a prepared TAP device, and KVM access.
+Start with --copy-codex-auth replaces the guest Codex login file with the host file.
 Delete removes a stopped sandbox and its writable state disk.
 Reset replaces only a stopped sandbox's writable state disk.
 Read docs/CONTINUE.md before you use it with important data.`)

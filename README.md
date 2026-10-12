@@ -153,6 +153,71 @@ the image by default. Set `--install=false` to defer installation. The command
 then prints the install command. Install the image before you create a
 sandbox from it.
 
+## Build a Codex guest image
+
+Build the Codex example image:
+
+```sh
+sandboxctl image build codex-image \
+  --context ./examples/codex \
+  --guest-version 24.04
+```
+
+The example pins Ubuntu 24.04 and Codex 0.160.0. It verifies the Codex archive
+with its release SHA-256 digest. It installs the standalone Linux x86-64
+binary, Git, and ripgrep. Node.js is not required. The image contains no
+account credentials. To update Codex, change both `CODEX_VERSION` and
+`CODEX_SHA256` in the Dockerfile.
+
+Edit `examples/codex/AGENTS.md` to set the base coding rules. Provisioning
+copies it from `/etc/skel/.codex/AGENTS.md` to `/home/dev/.codex/AGENTS.md`
+when it creates the `dev` account. Codex loads these global rules before
+repository rules. See [Codex instruction
+discovery](https://developers.openai.com/codex/guides/agents-md).
+
+Create and start a sandbox from this image:
+
+```sh
+sandboxctl create agent1 --image codex-image --cpus 2 --memory 4096
+sandboxctl start agent1
+ssh sandbox-agent1
+```
+
+Sign in from the guest terminal:
+
+```sh
+codex login --device-auth
+codex login status
+```
+
+Enable device code login in your ChatGPT security settings first. Open the
+printed link in your host browser. Enter the printed code. The login uses
+your ChatGPT subscription. See the [Codex authentication
+instructions](https://developers.openai.com/codex/auth#login-on-headless-devices).
+
+The login stays on the sandbox's private writable disk. Stop and start keep
+it. Reset and delete remove it.
+
+To copy your host login instead, add `--copy-codex-auth` when you start the
+sandbox:
+
+```sh
+sandboxctl start agent1 --copy-codex-auth
+```
+
+The command reads `$CODEX_HOME/auth.json`. It uses `~/.codex/auth.json` when
+`CODEX_HOME` is not set. It waits up to two minutes for the guest SSH port and
+the transfer. SSH can ask you to accept the guest host key. The command copies
+the file to the SSH user's `~/.codex/auth.json`. It replaces any existing guest
+login. It sets directory mode `0700` and file mode `0600`. The transfer uses
+SSH standard input. Credentials do not enter the daemon API or image.
+
+The flag applies to this start command only. Without the flag, the command
+does not read your Codex login. If the host file is missing or the transfer
+fails, the command returns an error. The sandbox stays running. The flag
+requires file-based Codex credentials. It cannot copy credentials from an
+operating system keyring. Do not combine it with `--dry-run`.
+
 ## Create and use a sandbox
 
 Create a sandbox from the installed image, then start it:

@@ -1,5 +1,39 @@
 # Implementation progress
 
+## Codex guest image example
+
+Added `examples/codex/Dockerfile` for a Ubuntu 24.04 guest with Codex 0.160.0.
+The base image uses the existing pinned digest. The Codex archive uses the
+SHA-256 digest from the official release metadata. The image uses the
+standalone Linux x86-64 binary. It includes Git and ripgrep. The build
+context includes only the Dockerfile, ignore file, and base `AGENTS.md`.
+The image installs the rules in `/etc/skel/.codex/AGENTS.md` with mode `0600`.
+The `.codex` directory uses mode `0700`. Provisioning copies these rules
+into the `dev` account's Codex home when it creates the account.
+Account credentials remain outside the image.
+
+The Codex guest image example is complete. Added `--copy-codex-auth` to
+`sandboxctl start`. The explicit flag replaces the guest login on each use.
+The CLI reads `$CODEX_HOME/auth.json`, or `~/.codex/auth.json` by default.
+It waits for the guest SSH port. It transfers the file through the normal
+SSH alias after guest bootstrap. The transfer writes a temporary private
+file, checks its byte count, and atomically replaces the guest file.
+Directory mode is `0700`. File mode is `0600`. Credentials stay outside
+the daemon API and image. A copy failure returns an error and leaves the
+sandbox running. The flag cannot be combined with `--dry-run`.
+
+The Codex login transfer and base rules example are complete. Parser and workflow tests
+cover the explicit flag, startup errors, copy errors, and invalid daemon
+responses. Transfer tests cover host paths, missing and invalid host files,
+SSH wait cancellation, replacement, private permissions, partial input,
+directory symlinks, and temporary-file cleanup. The next task is to build
+the Codex image and confirm the startup transfer and subscription login in
+a live guest.
+
+Checks: The Codex archive digest matches official release metadata.
+`gofmt`, `go vet ./...`, `go test ./...`, `make build`, and `git diff --check` passed.
+The image build and live Codex login have not run.
+
 The project now uses AGPL-3.0-or-later for original sandboxctl code. The
 official GNU license text is in `LICENSE`. The Arch packages install it and
 the third-party license texts. `docs/LICENSING.md` records the dependency
