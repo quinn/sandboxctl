@@ -12,8 +12,10 @@ import (
 
 	"sandboxctl/internal/client"
 	"sandboxctl/internal/cmdutil"
+	"sandboxctl/internal/config"
 	"sandboxctl/internal/controlpb"
 	"sandboxctl/internal/controlsettings"
+	"sandboxctl/internal/taskgit"
 )
 
 func main() {
@@ -41,14 +43,17 @@ func run(arguments []string) error {
 		return err
 	}
 	defer connection.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxDeleteDuration)
+	ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxOperationDuration)
 	defer cancel()
-	response, err := service.DeleteInstance(ctx, &controlpb.DeleteInstanceRequest{Name: options.Name})
+	response, err := service.InspectInstance(ctx, &controlpb.InspectInstanceRequest{Name: options.Name})
 	if err != nil {
-		return fmt.Errorf("delete sandbox %s: %w", options.Name, err)
+		return fmt.Errorf("inspect sandbox %s before deletion: %w", options.Name, err)
 	}
-	fmt.Fprintf(os.Stdout, "Deleted sandbox %s.\n", response.GetName())
-	return nil
+	paths, err := config.Resolve()
+	if err != nil {
+		return err
+	}
+	return taskgit.New(paths, service, os.Stdout).Delete(context.Background(), []*controlpb.Instance{response.GetInstance()})
 }
 
 func runImageDelete(options deleteOptions) error {
@@ -77,16 +82,11 @@ func runImageDelete(options deleteOptions) error {
 			return err
 		}
 	}
-	for _, instance := range instances {
-		ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxDeleteDuration)
-		deleted, err := service.DeleteInstance(ctx, &controlpb.DeleteInstanceRequest{Name: instance.GetName()})
-		cancel()
-		if err != nil {
-			return fmt.Errorf("delete sandbox %s: %w", instance.GetName(), err)
-		}
-		fmt.Fprintf(os.Stdout, "Deleted sandbox %s.\n", deleted.GetName())
+	paths, err := config.Resolve()
+	if err != nil {
+		return err
 	}
-	return nil
+	return taskgit.New(paths, service, os.Stdout).Delete(context.Background(), instances)
 }
 
 func selectImageSandboxes(instances []*controlpb.Instance, image string) ([]*controlpb.Instance, []string) {
@@ -147,6 +147,7 @@ func confirmImage(image string, instances []*controlpb.Instance, input *os.File,
 		fmt.Fprintf(output, "  %s\n", instance.GetName())
 	}
 	fmt.Fprintln(output, "It will release their private state disks and host allocations.")
+	fmt.Fprintln(output, "It will pull attached Git tasks before deletion.")
 	fmt.Fprintf(errorsOutput, "Delete all %d sandboxes for image %s? [y/N] ", len(instances), image)
 	answer, err := bufio.NewReader(input).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
@@ -165,6 +166,7 @@ func confirm(name string, input *os.File, output, errorsOutput *os.File) error {
 	}
 	fmt.Fprintf(output, "This will delete sandbox %s and its private state disk.\n", name)
 	fmt.Fprintln(output, "It will release the sandbox UID, GID, address, and TAP allocation.")
+	fmt.Fprintln(output, "It will pull an attached Git task before deletion.")
 	fmt.Fprintf(errorsOutput, "Delete sandbox %s? [y/N] ", name)
 	answer, err := bufio.NewReader(input).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {

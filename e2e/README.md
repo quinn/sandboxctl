@@ -39,3 +39,7 @@ to `sandboxctl` from `PATH`.
 The shell scripts and Make targets for this suite live in `e2e/`. The suite
 does not need a separate Go command. Put a future Go helper used only by this
 suite under `cmd/e2e/`.
+
+The existing lifecycle steps run create and start from `/`.
+This keeps those checks outside a Git repository.
+They do not attach the source checkout as a sandbox task.

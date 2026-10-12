@@ -270,6 +270,9 @@ sandboxctl delete dev1
 Delete asks for confirmation.
 Add `--yes` to skip the prompt.
 The tool refuses to delete a running sandbox.
+After confirmation, delete runs `sandboxctl pull` for an attached repository before it removes the sandbox.
+If the pull fails, delete keeps the sandbox and returns an error.
+`--yes` skips confirmation but still requires a successful pull.
 Delete does not remove the shared image.
 
 Delete all sandboxes that use one image with:
@@ -282,6 +285,8 @@ The command lists the matching sandboxes and asks for confirmation.
 It deletes them only when all are stopped.
 Stop running sandboxes first.
 Add `--yes` to skip the prompt in a script.
+The command pulls results from all matching task sandboxes before it deletes any of them.
+If any pull fails, it keeps all matching sandboxes and returns an error.
 
 The default state disk is 20 GiB.
 Set `--disk-size` when you create a sandbox to choose another size.
@@ -295,6 +300,145 @@ Get the address from `sandboxctl list` and the known-hosts path from `sandboxctl
 ```sh
 ssh-keygen -R GUEST_ADDRESS -f KNOWN_HOSTS_PATH
 ```
+
+## Share code with a sandbox
+
+Each sandbox holds one coding task.
+The sandbox name is also the Git branch name and Git remote name.
+Run `sandboxctl create` or `sandboxctl start` from your host repository to attach it to the sandbox.
+Code setup runs as part of these commands.
+Git transfers use the generated OpenSSH alias and the managed SSH key.
+The host starts the transfer connections.
+The guest does not need SSH access to the host or credentials for a remote Git service.
+
+### Create and start a task sandbox
+
+Commit the code that you want the agent to use.
+Create a sandbox with a name that identifies the task:
+
+```sh
+sandboxctl create fix-parser --image codex-image
+sandboxctl start fix-parser --copy-codex-auth
+```
+
+Create records the host repository and starting commit.
+It creates the host branch `fix-parser` at that commit without changing your current branch or working files.
+It creates host Git remote `fix-parser` for the guest's bare repository.
+Start boots the guest and waits for SSH readiness.
+It creates the guest's bare Git repository and pushes the starting commit to branch `fix-parser`.
+A bare repository stores commits and branches without a working directory.
+Start creates a guest working directory and checks out branch `fix-parser`.
+It configures Git remote `fix-parser` in the guest working directory.
+It prints the guest working directory path.
+The guest repository uses your host Git author name and email address.
+If these values are not configured, it uses `Sandbox agent <dev@sandbox.local>`.
+
+| Setting | Value for this sandbox |
+| --- | --- |
+| Sandbox name | `fix-parser` |
+| Git branch | `fix-parser` |
+| Git remote | `fix-parser` |
+| SSH alias | `sandbox-fix-parser` |
+| Guest bare repository | `/home/dev/repos/fix-parser.git` |
+| Guest working directory | `/home/dev/work/fix-parser` |
+
+If the sandbox was created outside a Git repository, run its first start from the repository that you want to attach.
+Start performs the same host setup when it first attaches a repository.
+Later starts use the saved repository association and preserve the guest's existing commits and working files.
+Create a separate sandbox for each independent task.
+The commands reject an existing branch or remote with the same name unless it belongs to this sandbox.
+
+The transfer includes committed files and their Git history.
+It does not include uncommitted edits or untracked files.
+It does not copy host Git credentials or hooks.
+The host repository and guest working directory remain separate.
+
+### Publish the agent's work
+
+Connect to the guest working directory:
+
+```sh
+ssh sandbox-fix-parser
+cd /home/dev/work/fix-parser
+codex
+```
+
+Have the agent run the project checks and commit its changes on `fix-parser`.
+Publish the commits to the guest's bare repository:
+
+```sh
+git push fix-parser fix-parser
+```
+
+This push uses a local guest path.
+It does not connect to the host.
+Uncommitted changes remain in the guest working directory until the agent commits them.
+
+### Pull and review results
+
+Pull the sandbox's results from the host:
+
+```sh
+sandboxctl pull fix-parser
+```
+
+The command uses the saved host repository association.
+It publishes the guest branch `fix-parser` to the guest's bare repository and fetches it through host remote `fix-parser`.
+It includes committed guest work even when the agent has not pushed it yet.
+It prints the starting commit, result commit, and change summary.
+Git stores the fetched result as `fix-parser/fix-parser`.
+The first name identifies the remote.
+The second name identifies the branch.
+Pull does not check out a host branch or merge the result into your current branch.
+It also saves `/REPORT.md` under `$XDG_STATE_HOME/sandboxctl/reports/fix-parser/` when the guest report exists.
+It uses mode `0700` for the report directory and mode `0600` for the report file.
+The saved report is `$XDG_STATE_HOME/sandboxctl/reports/fix-parser/REPORT.md`.
+Reports must be smaller than 4 MiB.
+
+Pull waits for guest SSH readiness.
+If the sandbox is stopped, pull starts it temporarily and stops it after the transfer.
+If the sandbox is running, pull leaves it running.
+The command refuses to report success when the guest working directory has uncommitted edits or untracked files.
+Commit the required files before you pull.
+Pull does not create commits or discard guest changes.
+Each task transfer has a ten-minute deadline.
+
+Review the commits and diff:
+
+```sh
+git log HEAD..fix-parser/fix-parser
+git diff HEAD...fix-parser/fix-parser
+```
+
+Apply the reviewed commits when your current branch can advance directly to the result:
+
+```sh
+git merge --ff-only fix-parser/fix-parser
+```
+
+If your host branch has diverged, use a normal merge or cherry-pick after you review the changes.
+
+### Delete a task sandbox
+
+Stop the sandbox and request deletion:
+
+```sh
+sandboxctl stop fix-parser
+sandboxctl delete fix-parser
+```
+
+After you confirm deletion, the command runs the same pull flow before it removes the sandbox.
+It temporarily starts the stopped guest to retrieve the commits and report.
+It stops the guest before it deletes the state disk.
+If startup, pull, or shutdown fails, deletion stops and the sandbox remains available for recovery.
+Deletion keeps the host branch, Git remote, fetched results, and saved report.
+Sandboxes without an attached repository do not require a Git pull.
+
+The guest repository and working directory stay on the sandbox's private writable disk.
+Stop and start keep them.
+Reset and delete remove them.
+Run `sandboxctl pull` before you reset a task sandbox.
+Delete pulls the results automatically.
 
 ## Commands
 
@@ -312,6 +456,9 @@ ssh-keygen -R GUEST_ADDRESS -f KNOWN_HOSTS_PATH
 - `sandboxctl image delete` removes an installed image that no saved sandbox uses.
 - `sandboxctl create`, `start`, `stop`, `reset`, and `delete` manage sandboxes.
   Use `sandboxctl delete --image IMAGE` to delete all stopped sandboxes for an image.
+  Delete pulls task results before it removes a sandbox.
+- `sandboxctl pull` retrieves a sandbox's committed code and report into the saved host repository and state directory.
+  It preserves the host working files and restores a temporarily started sandbox to the stopped state.
 - `sandboxctl list` shows sandbox state.
 - `sandboxctl ssh` runs a command through the generated SSH alias.
 - `sandboxctl ssh-config` prints the SSH `Include` instruction and refreshes the managed SSH file.
@@ -361,6 +508,10 @@ The reset test also starts a guest and needs KVM access:
 
 The operator's SSH keys and generated SSH files stay in the user's config, data, and state directories.
 Privileged state and installed images stay under `/var/lib/sandboxctl`.
+Git task associations stay under `$XDG_STATE_HOME/sandboxctl/tasks/`.
+They record the host repository, starting commit, and sandbox identity.
+Git and SSH task operations run as the operator.
+They do not send host repository paths to sandboxd.
 
 Each sandbox has its own writable state disk.
 The base image is shared and read-only.

@@ -1,5 +1,34 @@
 # Implementation progress
 
+## Git task workflow
+
+Implemented the Git task workflow in README.md.
+Create records the current repository and starting commit.
+Start can attach a repository and prepares the guest's bare repository and task checkout.
+The sandbox name identifies the branch and remote.
+Task records use the daemon's stable instance ID to reject stale associations.
+Private XDG state stores task records, operation locks, and reports.
+Git and SSH transfers run in the operator CLI.
+The daemon protocol uses its existing lifecycle methods.
+Git is now a host package dependency.
+The Codex guest's base rules cover the task branch and remote, committing and publishing work, and the private `/REPORT.md` handoff.
+
+`sandboxctl pull` publishes committed guest work, fetches it into a host remote-tracking branch, and saves `/REPORT.md` when present.
+It rejects dirty guest work and preserves host working files.
+It temporarily starts stopped guests and restores stopped state after success or failure.
+Cleanup uses its own deadline after cancellation.
+Delete pulls every attached task before it deletes any selected sandbox.
+Startup, pull, or stop failures retain the selected sandboxes.
+Deleted tasks retain host branches, remotes, fetched results, and reports.
+
+Focused tests use real Git repositories and guest shell scripts with a local transport and simulated daemon lifecycle.
+They cover round trips, source and guest edits, branch and remote conflicts, stable identity, interrupted setup, cancellation, and guarded deletion.
+The existing VM lifecycle checks run outside Git to avoid attaching the source checkout.
+The implementation phase is complete.
+`gofmt`, `go vet ./...`, `go test ./...`, `make build`, shell syntax checks, and `git diff --check` pass.
+The next task is a live guest check on the supported host.
+This command environment has no `/dev/kvm`, so live VM validation has not run.
+
 ## Codex guest image example
 
 Added `examples/codex/Dockerfile` for a Ubuntu 24.04 guest with Codex 0.160.0.

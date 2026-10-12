@@ -13,6 +13,7 @@ import (
 	"sandboxctl/internal/controlpb"
 	"sandboxctl/internal/controlsettings"
 	sshconfig "sandboxctl/internal/ssh"
+	"sandboxctl/internal/taskgit"
 )
 
 const defaultStateDiskGiB = 20
@@ -54,6 +55,13 @@ func run(arguments []string) error {
 		return err
 	}
 	defer connection.Close()
+	tasks := taskgit.New(paths, service, os.Stdout)
+	prepareCtx, prepareCancel := context.WithTimeout(context.Background(), controlsettings.MaxOperationDuration)
+	candidate, err := tasks.Discover(prepareCtx, options.Name)
+	prepareCancel()
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), controlsettings.MaxCreateDuration)
 	defer cancel()
 	response, err := service.CreateInstance(ctx, &controlpb.CreateInstanceRequest{
@@ -69,6 +77,15 @@ func run(arguments []string) error {
 		return fmt.Errorf("created sandbox %s, but could not refresh SSH configuration; run sandboxctl ssh-config: %w", options.Name, err)
 	}
 	instance := response.GetInstance()
+	if instance == nil || instance.GetName() != options.Name {
+		return errors.New("sandboxd returned an invalid create response")
+	}
+	attachCtx, attachCancel := context.WithTimeout(context.Background(), controlsettings.MaxOperationDuration)
+	err = tasks.Attach(attachCtx, instance, candidate)
+	attachCancel()
+	if err != nil {
+		return fmt.Errorf("created sandbox %s, but Git task setup failed; run sandboxctl start %s to retry: %w", options.Name, options.Name, err)
+	}
 	fmt.Fprintf(os.Stdout, "Created sandbox %s.\n", instance.GetName())
 	fmt.Fprintf(os.Stdout, "SSH alias: sandbox-%s\n", instance.GetName())
 	fmt.Fprintf(os.Stdout, "Guest address: %s\n", instance.GetGuestIp())

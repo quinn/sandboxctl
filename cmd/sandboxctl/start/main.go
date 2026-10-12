@@ -15,6 +15,7 @@ import (
 	"sandboxctl/internal/controlpb"
 	"sandboxctl/internal/controlsettings"
 	sshconfig "sandboxctl/internal/ssh"
+	"sandboxctl/internal/taskgit"
 )
 
 type startOptions struct {
@@ -46,11 +47,12 @@ func run(arguments []string) error {
 		return err
 	}
 	defer connection.Close()
-	return startSandbox(context.Background(), service, options, os.Stdout, func(ctx context.Context, instance *controlpb.Instance) error {
-		paths, err := config.Resolve()
-		if err != nil {
-			return err
-		}
+	paths, err := config.Resolve()
+	if err != nil {
+		return err
+	}
+	tasks := taskgit.New(paths, service, os.Stdout)
+	return startSandbox(context.Background(), tasks.Start, options, os.Stdout, func(ctx context.Context, instance *controlpb.Instance) error {
 		manager := sshconfig.Manager{Paths: paths}
 		if err := manager.PrepareKey(); err != nil {
 			return err
@@ -62,14 +64,16 @@ func run(arguments []string) error {
 	})
 }
 
-func startSandbox(ctx context.Context, service controlpb.ControlServiceClient, options startOptions, output io.Writer, copyAuth func(context.Context, *controlpb.Instance) error) error {
-	startCtx, cancel := context.WithTimeout(ctx, controlsettings.MaxStartDuration)
-	response, err := service.StartInstance(startCtx, &controlpb.StartInstanceRequest{Name: options.Name})
+func startSandbox(ctx context.Context, start func(context.Context, string) (*controlpb.Instance, error), options startOptions, output io.Writer, copyAuth func(context.Context, *controlpb.Instance) error) error {
+	startCtx, cancel := context.WithTimeout(ctx, taskgit.TransferTimeout)
+	instance, err := start(startCtx, options.Name)
 	cancel()
 	if err != nil {
+		if instance != nil {
+			return fmt.Errorf("sandbox %s is running, but Git task setup failed: %w", options.Name, err)
+		}
 		return fmt.Errorf("start sandbox %s: %w", options.Name, err)
 	}
-	instance := response.GetInstance()
 	if instance == nil || instance.GetName() != options.Name {
 		return errors.New("sandboxd returned an invalid start response")
 	}

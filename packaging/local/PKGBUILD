@@ -6,7 +6,7 @@ arch=('x86_64')
 url='https://github.com/quinn/sandboxctl'
 license=('AGPL-3.0-or-later' 'Apache-2.0' 'BSD-2-Clause' 'BSD-3-Clause' 'ISC' 'MIT' 'MPL-2.0')
 options=('!strip')
-depends=('e2fsprogs' 'iproute2' 'nftables' 'openssh')
+depends=('e2fsprogs' 'git' 'iproute2' 'nftables' 'openssh')
 makedepends=('cpio' 'curl' 'git' 'go>=1.27' 'gzip' 'podman' 'python' 'squashfs-tools')
 provides=('sandboxctl')
 conflicts=('sandboxctl' 'sandboxctl-git')

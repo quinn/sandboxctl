@@ -66,6 +66,11 @@ func (s *startService) StartInstance(ctx context.Context, request *controlpb.Sta
 	return s.response, s.err
 }
 
+func (s *startService) start(ctx context.Context, name string) (*controlpb.Instance, error) {
+	response, err := s.StartInstance(ctx, &controlpb.StartInstanceRequest{Name: name})
+	return response.GetInstance(), err
+}
+
 func TestStartCopiesOnlyWhenRequested(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		service := &startService{response: &controlpb.StartInstanceResponse{Instance: &controlpb.Instance{
@@ -73,7 +78,7 @@ func TestStartCopiesOnlyWhenRequested(t *testing.T) {
 		}}}
 		var output bytes.Buffer
 		copies := 0
-		err := startSandbox(context.Background(), service, startOptions{
+		err := startSandbox(context.Background(), service.start, startOptions{
 			StartOptions: app.StartOptions{Name: "dev1"}, CopyCodexAuth: enabled,
 		}, &output, func(ctx context.Context, instance *controlpb.Instance) error {
 			copies++
@@ -98,7 +103,7 @@ func TestStartFailureDoesNotCopy(t *testing.T) {
 	startErr := errors.New("startup failed")
 	service := &startService{err: startErr}
 	var output bytes.Buffer
-	err := startSandbox(context.Background(), service, startOptions{
+	err := startSandbox(context.Background(), service.start, startOptions{
 		StartOptions: app.StartOptions{Name: "dev1"}, CopyCodexAuth: true,
 	}, &output, func(context.Context, *controlpb.Instance) error {
 		t.Fatal("copied after a start failure")
@@ -113,7 +118,7 @@ func TestCopyFailureReportsRunningSandbox(t *testing.T) {
 	copyErr := errors.New("host auth.json is missing")
 	service := &startService{response: &controlpb.StartInstanceResponse{Instance: &controlpb.Instance{Name: "dev1"}}}
 	var output bytes.Buffer
-	err := startSandbox(context.Background(), service, startOptions{
+	err := startSandbox(context.Background(), service.start, startOptions{
 		StartOptions: app.StartOptions{Name: "dev1"}, CopyCodexAuth: true,
 	}, &output, func(context.Context, *controlpb.Instance) error { return copyErr })
 	if !errors.Is(err, copyErr) || !strings.Contains(err.Error(), "is running") {
@@ -127,7 +132,7 @@ func TestCopyFailureReportsRunningSandbox(t *testing.T) {
 func TestInvalidStartResponseDoesNotCopy(t *testing.T) {
 	for _, response := range []*controlpb.StartInstanceResponse{nil, {}, {Instance: &controlpb.Instance{Name: "other"}}} {
 		service := &startService{response: response}
-		err := startSandbox(context.Background(), service, startOptions{
+		err := startSandbox(context.Background(), service.start, startOptions{
 			StartOptions: app.StartOptions{Name: "dev1"}, CopyCodexAuth: true,
 		}, &bytes.Buffer{}, func(context.Context, *controlpb.Instance) error {
 			t.Fatal("copied after an invalid start response")

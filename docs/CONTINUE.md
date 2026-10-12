@@ -1,11 +1,13 @@
 # Continuation
 
-The next phase is Dockerfile guest image input. Read
-[DOCKERFILE-IMAGE-BUILDS.md](DOCKERFILE-IMAGE-BUILDS.md) before implementation.
-The plan keeps BuildKit inside the temporary builder VM. Required guest
-provisioning follows the user build. `CMD` and `ENTRYPOINT` do not control VM
-startup. First prove the two-build OCI layout path and source pinning with
-the pinned BuildKit version. The command options are not implemented yet.
+The active phase is the Git task workflow documented in README.md.
+Create and start attach one repository to a sandbox.
+The branch and remote use the sandbox name.
+The operator CLI stores the association in private XDG state and uses Git over SSH.
+`sandboxctl pull` retrieves committed work and the guest report.
+Delete pulls all attached tasks before it removes any selected sandbox.
+The next task is a live guest check on a host with KVM access.
+See PROGRESS.md for completed checks and remaining validation.
 
 The Arch package build now creates and includes the pinned builder image.
 `sandboxctl init` verifies it and installs it through the daemon image stream.

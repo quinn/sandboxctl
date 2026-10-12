@@ -95,6 +95,26 @@ func waitForSSH(ctx context.Context, address string) error {
 	}
 }
 
+// WaitReady waits for guest SSH and verifies completed guest bootstrap.
+func (m Manager) WaitReady(ctx context.Context, name, address string) error {
+	if err := cmdutil.ValidateSandboxName(name); err != nil {
+		return err
+	}
+	ip := net.ParseIP(address)
+	if ip == nil || ip.To4() == nil {
+		return errors.New("the guest SSH address must be an IPv4 address")
+	}
+	if err := waitForSSH(ctx, net.JoinHostPort(ip.String(), "22")); err != nil {
+		return err
+	}
+	command := exec.CommandContext(ctx, "/usr/bin/ssh", "-T", "-o", "ConnectTimeout=5", "-o", "ConnectionAttempts=1", "--", "sandbox-"+name, "test -r /var/lib/sandboxctl/bootstrap-complete")
+	command.Stderr = os.Stderr
+	if err := command.Run(); err != nil {
+		return fmt.Errorf("check guest SSH readiness: %w", err)
+	}
+	return nil
+}
+
 func codexAuthArguments(name string, size int) []string {
 	remote := fmt.Sprintf(`set -eu
 umask 077

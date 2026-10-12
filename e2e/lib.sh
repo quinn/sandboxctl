@@ -32,5 +32,10 @@ fi
 export SANDBOXCTL_BIN=$sandboxctl_bin
 
 e2e_sandboxctl() {
-  "$SANDBOXCTL_BIN" "$@"
+	# Lifecycle checks do not attach the source checkout as a Git task.
+	if [[ ${1:-} == create || ${1:-} == start ]]; then
+		(cd / && "$SANDBOXCTL_BIN" "$@")
+	else
+		"$SANDBOXCTL_BIN" "$@"
+	fi
 }

@@ -35,6 +35,7 @@ Usage:
   sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]
   sandboxctl start NAME [--dry-run | --copy-codex-auth]
   sandboxctl stop NAME [--force]
+  sandboxctl pull NAME
   sandboxctl reset NAME
   sandboxctl delete NAME [--yes]
   sandboxctl list
@@ -52,7 +53,12 @@ Image build runs a fixed build service in a temporary builder VM, stages a verif
 Create requires an installed image.
 Start requires an installed image, a prepared TAP device, and KVM access.
 Start with --copy-codex-auth replaces the guest Codex login file with the host file.
+Create and start attach a Git repository from the current directory.
+The sandbox name identifies the Git branch and remote.
+Pull retrieves committed task results and the guest report.
+Pull temporarily starts a stopped sandbox and stops it after the transfer.
 Delete removes a stopped sandbox and its writable state disk.
+Delete pulls attached Git task results before it removes any selected sandbox.
 Reset replaces only a stopped sandbox's writable state disk.
 Read docs/CONTINUE.md before you use it with important data.`)
 }
