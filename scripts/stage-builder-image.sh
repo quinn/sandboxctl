@@ -6,9 +6,9 @@ umask 077
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source_dir="$repo_dir/tmp/config/images/default"
 tools_dir="$repo_dir/tmp/config/builder/tools/v0.34.0"
-cache_home=${XDG_CACHE_HOME:-"$HOME/.cache"}
+data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
 image_name=${IMAGE_NAME:-builder}
-image_root="$cache_home/sandboxctl/images/$image_name"
+image_root="$data_home/sandboxctl/images/$image_name"
 apt_snapshot=20261009T000000Z
 ubuntu_index_digest=sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254
 buildkit_archive_sha256=14813b1fb2a40082114e6d386c6fc5e7dd5298176ce7ee1a18bc33e73e109ac3
@@ -26,9 +26,9 @@ fi
 if [[ ${1:-} == --clean ]]; then
   if [[ -e $image_root || -L $image_root ]]; then
     rm -rf -- "$image_root"
-    printf 'Removed cached builder image: %s\n' "$image_root"
+    printf 'Removed staged builder image: %s\n' "$image_root"
   else
-    printf 'No cached builder image at %s\n' "$image_root"
+    printf 'No staged builder image at %s\n' "$image_root"
   fi
   exit 0
 elif [[ ${1:-} == --check ]]; then
@@ -44,14 +44,14 @@ import sys
 
 root = pathlib.Path(sys.argv[1])
 expected_name = sys.argv[2]
-print(f"Builder image cache: {root}")
+print(f"Builder image path: {root}")
 if not root.exists():
-    print("No cached builder image.")
+    print("No staged builder image.")
     raise SystemExit(0)
 
 bundles = sorted(root.iterdir(), key=lambda path: path.name)
 if not bundles:
-    print("No cached builder bundles.")
+    print("No staged builder bundles.")
     raise SystemExit(0)
 
 for bundle in bundles:
@@ -110,16 +110,16 @@ fi
 
 if [[ -d $image_root ]]; then
   while IFS= read -r -d '' manifest_path; do
-    cached_bundle=${manifest_path%/manifest.json}
+    staged_bundle=${manifest_path%/manifest.json}
     complete=1
     for artifact in manifest.json vmlinux initramfs.cpio.gz root.squashfs; do
-      if [[ ! -s $cached_bundle/$artifact || -L $cached_bundle/$artifact ]]; then
+      if [[ ! -s $staged_bundle/$artifact || -L $staged_bundle/$artifact ]]; then
         complete=0
         break
       fi
     done
     if [[ $complete == 1 ]]; then
-      printf 'Builder image already cached at %s\n' "$cached_bundle"
+      printf 'Builder image already staged at %s\n' "$staged_bundle"
       printf 'Use make clean-builder to remove it before building a fresh image.\n'
       exit 0
     fi

@@ -3,6 +3,9 @@ set -Eeuo pipefail
 umask 077
 
 e2e_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_dir=$(cd -- "$e2e_root/.." && pwd)
+run_id="$(date +%s)-$$"
+export E2E_RUN_ID=$run_id
 # shellcheck source=lib.sh
 source "$e2e_root/lib.sh"
 
@@ -24,14 +27,7 @@ if [[ -n $repo_bin && $installed_bin == "$repo_bin" ]]; then
 fi
 export SANDBOXCTL_BIN=$installed_bin
 
-run_id="$(date +%s)-$$"
-export E2E_RUN_ID=$run_id
-e2e_state="$repo_dir/tmp/e2e/$run_id"
-install -d -m 0700 "$e2e_state/data" "$e2e_state/config" "$e2e_state/state"
-export E2E_WORK_DIR="$e2e_state"
-export XDG_DATA_HOME="$e2e_state/data"
-export XDG_CONFIG_HOME="$e2e_state/config"
-export XDG_STATE_HOME="$e2e_state/state"
+e2e_state=$E2E_WORK_DIR
 export E2E_CLEANUP=1
 export E2E_GUEST_IMAGE="guest-e2e-$run_id"
 

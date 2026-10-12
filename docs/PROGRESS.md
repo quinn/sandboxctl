@@ -5,6 +5,17 @@ official GNU license text is in `LICENSE`. The Arch packages install it and
 the third-party license texts. `docs/LICENSING.md` records the dependency
 review and retained E2B, Firecracker, and BuildKit terms.
 
+## User-owned image bundles
+
+Use `$XDG_DATA_HOME/sandboxctl/images/NAME/DIGEST/` as the single user-owned
+image location. Image staging, installation input, package building, and manual
+builder tests use this path. The Arch package copies the staged builder bundle
+into its temporary package data before installation. `sandboxd` keeps its
+separate root-owned runtime image store under `/var/lib/sandboxctl/images/`.
+Moved the existing builder bundle from `~/.cache/sandboxctl/images/` into the
+XDG data image store. The stage script reuses the moved bundle. Shell syntax,
+package metadata, `make check`, and `git diff --check` pass.
+
 ## Dockerfile image build
 
 Image builds install the finished image by default. Set `--install=false` to

@@ -24,11 +24,12 @@ SquashFS tools. It needs network access to download pinned image assets and
 package data. The image-build tests also need access to Ubuntu's container
 registry and package servers.
 
-The suite stores its private user data under `tmp/e2e/`. It also writes test
-logs under `tmp/logs/`. It removes test sandboxes and images after successful
-checks. If a check fails while a sandbox is running, the suite leaves that
-sandbox available for diagnosis. Use the name and console log path printed by
-the failed step to inspect it. Stop and delete the sandbox after diagnosis.
+The suite stores its private data and logs under `tmp/e2e/`. It ignores XDG
+directory settings from the caller. It removes test sandboxes and images after
+successful checks. If a check fails while a sandbox is running, the suite
+leaves that sandbox available for diagnosis. Use the name and console log path
+printed by the failed step to inspect it. Stop and delete the sandbox after
+diagnosis.
 
 You can run one step with its Make target, such as `make manual-bootstrap-test`
 or `make manual-dockerfile-build`. A step uses `SANDBOXCTL_BIN` when you set

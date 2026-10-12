@@ -2,8 +2,19 @@
 
 e2e_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd -- "$e2e_root/.." && pwd)
-: "${XDG_CONFIG_HOME:=$HOME/.config}"
-export XDG_CONFIG_HOME
+
+e2e_run_id=${E2E_RUN_ID:-manual}
+if [[ ! $e2e_run_id =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  printf 'Invalid E2E run ID.\n' >&2
+  return 1 2>/dev/null || exit 1
+fi
+
+E2E_WORK_DIR="$repo_dir/tmp/e2e/$e2e_run_id"
+export E2E_WORK_DIR
+export XDG_CONFIG_HOME="$E2E_WORK_DIR/config"
+export XDG_DATA_HOME="$E2E_WORK_DIR/data"
+export XDG_STATE_HOME="$E2E_WORK_DIR/state"
+install -d -m 0700 "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME"
 
 if [[ -n ${SANDBOXCTL_BIN:-} ]]; then
   sandboxctl_bin=$SANDBOXCTL_BIN

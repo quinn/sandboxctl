@@ -61,16 +61,16 @@ the complete installed-package E2E suite are under `e2e/`.
 The builder scripts prepare the internal builder VM image. `builder-base.Dockerfile`
 defines the seed filesystem. `download-builder-tools.sh` downloads and checks
 the pinned BuildKit tools. `stage-builder-image.sh` first checks the builder
-cache at `$XDG_CACHE_HOME/sandboxctl/images/builder/`, or `~/.cache` when the
-variable is not set. It exits without building when a complete bundle exists.
+image at `$XDG_DATA_HOME/sandboxctl/images/builder/`, or
+`~/.local/share/sandboxctl/images/builder/` when the variable is not set. It
+exits without building when a complete bundle exists.
 Otherwise, it downloads the required assets and tools, builds the initramfs,
-uses Podman to build the seed, and stages the VM image bundle in the cache.
-`make clean-builder` calls this script with `--clean` to remove the cached
-bundle. The package recipe copies the cached bundle into its package staging
-directory. This is a development and packaging step. `sandboxctl image build`
-does not build
-the internal builder image; it uses an installed builder image to build a
-guest image.
+uses Podman to build the seed, and stages the VM image bundle in the user image
+store. `make clean-builder` calls this script with `--clean` to remove the
+staged builder bundle. The package recipe copies the staged bundle into its
+package staging directory. This is a development and packaging step.
+`sandboxctl image build` does not build the internal builder image; it uses an
+installed builder image to build a guest image.
 
 The Go packages in `internal/imagebuild/` handle image manifests, bundles, and
 installation. The command in `cmd/sandboxctl/image/build/` parses user options

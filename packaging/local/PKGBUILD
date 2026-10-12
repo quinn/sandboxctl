@@ -1,5 +1,5 @@
 pkgname=sandboxctl-local
-pkgver=0.1.0.r109.g625f626
+pkgver=0.1.0.r114.g8e2f8ae
 pkgrel=1
 pkgdesc='Manage local Firecracker development sandboxes'
 arch=('x86_64')
@@ -74,16 +74,16 @@ build() {
 	cd "$srcdir/sandboxctl"
 	make build
 	local package_images="$srcdir/package-data/sandboxctl/images"
-	local cached_bundle cache_home cache_images
-	cache_home=${XDG_CACHE_HOME:-"$HOME/.cache"}
-	cache_images="$cache_home/sandboxctl/images"
+	local staged_bundle data_home data_images
+	data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
+	data_images="$data_home/sandboxctl/images"
 	make stage-builder-image
-	cached_bundle=$(find_builder_bundle "$cache_images")
-	if [[ -z $cached_bundle ]]; then
+	staged_bundle=$(find_builder_bundle "$data_images")
+	if [[ -z $staged_bundle ]]; then
 		printf 'The builder image bundle was not created during package build.\n' >&2
 		return 1
 	fi
-	copy_builder_bundle "$cached_bundle" "$package_images"
+	copy_builder_bundle "$staged_bundle" "$package_images"
 }
 
 package() {

@@ -4,11 +4,9 @@ umask 077
 
 # shellcheck source=../lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
-log_dir="$repo_dir/tmp/logs"
-data_home="${XDG_DATA_HOME:-$repo_dir/tmp/image-build-data}"
+log_dir="$E2E_WORK_DIR/logs"
+data_home="$E2E_WORK_DIR/data"
 export XDG_DATA_HOME="$data_home"
-export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$repo_dir/tmp/image-build-config}"
-export XDG_STATE_HOME="${XDG_STATE_HOME:-$repo_dir/tmp/image-build-state}"
 mkdir -p "$log_dir"
 chmod 0700 "$log_dir"
 log_file="$log_dir/image-build-test.log"

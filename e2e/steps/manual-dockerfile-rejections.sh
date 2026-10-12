@@ -4,11 +4,9 @@ umask 077
 
 # shellcheck source=../lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
-data_home="${XDG_DATA_HOME:-$repo_dir/tmp/dockerfile-rejection-data}"
+data_home="$E2E_WORK_DIR/data"
 export XDG_DATA_HOME="$data_home"
-export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-export XDG_STATE_HOME="${XDG_STATE_HOME:-$repo_dir/tmp/dockerfile-rejection-state}"
-log_dir="$repo_dir/tmp/logs"
+log_dir="$E2E_WORK_DIR/logs"
 mkdir -p "$log_dir"
 chmod 0700 "$log_dir"
 log_file="$log_dir/dockerfile-rejection-test.log"

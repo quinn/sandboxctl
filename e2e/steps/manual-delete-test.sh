@@ -4,7 +4,7 @@ set -euo pipefail
 # shellcheck source=../lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 repository_root=$repo_dir
-log_path="$repository_root/tmp/logs/delete-test.log"
+log_path="$E2E_WORK_DIR/logs/delete-test.log"
 mkdir -p "$(dirname -- "$log_path")"
 umask 077
 chmod 0700 "$(dirname -- "$log_path")"

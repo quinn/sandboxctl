@@ -4,7 +4,7 @@ umask 077
 
 # shellcheck source=../lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
-log_dir="$repo_dir/tmp/logs"
+log_dir="$E2E_WORK_DIR/logs"
 mkdir -p "$log_dir"
 chmod 0700 "$log_dir"
 log_file="$log_dir/builder-test.log"
@@ -21,10 +21,9 @@ done
 
 name="builder-$(date +%s)-$$"
 alias="sandbox-$name"
-data_home="${XDG_DATA_HOME:-$repo_dir/tmp/test-data}"
-cache_home="$repo_dir/tmp/test-cache"
-XDG_CACHE_HOME="$cache_home" IMAGE_NAME="$name" make -C "$repo_dir" stage-builder-image
-image_root="$cache_home/sandboxctl/images/$name"
+data_home="$E2E_WORK_DIR/data"
+XDG_DATA_HOME="$data_home" IMAGE_NAME="$name" make -C "$repo_dir" stage-builder-image
+image_root="$data_home/sandboxctl/images/$name"
 manifest=$(find "$image_root" -mindepth 2 -maxdepth 2 -type f -name manifest.json -printf '%T@ %p\n' | sort -nr | sed -n '1s/^[^ ]* //p')
 if [[ -z $manifest ]]; then
   printf 'The staged builder image is missing. Run make stage-builder-image.\n' >&2

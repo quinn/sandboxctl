@@ -759,6 +759,7 @@ Use:
 
     $XDG_DATA_HOME/sandboxctl/
       keys/
+      images/NAME/DIGEST/
 
     $XDG_STATE_HOME/sandboxctl/
       known_hosts
@@ -767,6 +768,8 @@ Use:
       downloads/
 
 Do not place privileged instance state in an operator-writable directory.
+Keep user-owned image bundles in `images/NAME/DIGEST/`. Stream bundles to
+sandboxd for installation in the root-owned image store.
 
 ### 12.3 Instance record
 

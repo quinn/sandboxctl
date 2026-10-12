@@ -4,7 +4,7 @@ umask 077
 
 # shellcheck source=../lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
-log_dir="$repo_dir/tmp/logs"
+log_dir="$E2E_WORK_DIR/logs"
 mkdir -p "$log_dir"
 chmod 0700 "$log_dir"
 log_file="$log_dir/guest-bootstrap-test.log"
@@ -21,7 +21,7 @@ done
 
 name="bootstrap-$(date +%s)-$$"
 alias="sandbox-$name"
-test_data_home="${XDG_DATA_HOME:-$repo_dir/tmp/test-data}"
+test_data_home="$E2E_WORK_DIR/data"
 XDG_DATA_HOME="$test_data_home" IMAGE_NAME="$name" make -C "$repo_dir" stage-bootstrap-test-image
 image_root="$test_data_home/sandboxctl/images/$name"
 
@@ -55,7 +55,7 @@ XDG_DATA_HOME="$test_data_home" e2e_sandboxctl image install "$name" --version "
 e2e_sandboxctl create "$name" --cpus 2 --memory 2048 --disk-size 1 --image "$name"
 e2e_sandboxctl start "$name"
 
-ssh_output=$(mktemp "$repo_dir/tmp/logs/.guest-bootstrap-ssh.XXXXXX")
+ssh_output=$(mktemp "$log_dir/.guest-bootstrap-ssh.XXXXXX")
 trap 'rm -f -- "$ssh_output"' EXIT
 wait_for_guest_bootstrap() {
   local boot=$1

@@ -18,10 +18,10 @@ make install
 ```
 
 The target uses `yay`. It downloads the pinned Firecracker release from GitHub.
-The package build reuses the cached builder image when one exists. Otherwise,
-it builds the image during package creation. The cache is in
-`$XDG_CACHE_HOME/sandboxctl/images/builder/`. It uses `~/.cache` when
-`XDG_CACHE_HOME` is not set. Run `make clean-builder` to clear this cache and
+The package build reuses the staged builder image when one exists. Otherwise,
+it builds the image during package creation. The image is in
+`$XDG_DATA_HOME/sandboxctl/images/builder/`. It uses `~/.local/share` when
+`XDG_DATA_HOME` is not set. Run `make clean-builder` to remove this image and
 force a fresh build. This does not remove an installed builder image. The
 package includes the image at `/usr/share/sandboxctl/builder`. Package
 installation does not import the image into sandboxd. Podman is a package
@@ -92,10 +92,10 @@ Use this command to install a staged image:
 sandboxctl image install dev-image --version sha256:IMAGE_DIGEST
 ```
 
-The command stores a built image under
-`$XDG_DATA_HOME/sandboxctl/images/NAME/VERSION/`. The default
-`XDG_DATA_HOME` is `~/.local/share`. List images in the protected image store
-with:
+Image builds store user-owned bundles under
+`$XDG_DATA_HOME/sandboxctl/images/NAME/DIGEST/`. Image installation reads a
+bundle from this path and sends it to `sandboxd`. The default `XDG_DATA_HOME`
+is `~/.local/share`. List installed images in the protected store with:
 
 ```sh
 sandboxctl image list

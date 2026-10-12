@@ -3,7 +3,7 @@ set -euo pipefail
 
 # shellcheck source=../lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
-data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
+data_home="$E2E_WORK_DIR/data"
 image_name=${IMAGE_NAME:-default}
 source_dir="$repo_dir/tmp/config/images/default"
 initramfs="$repo_dir/tmp/config/initramfs/overlay-initramfs.cpio.gz"

@@ -4,7 +4,7 @@ umask 077
 
 # shellcheck source=../lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
-log_dir="$repo_dir/tmp/logs"
+log_dir="$E2E_WORK_DIR/logs"
 mkdir -p "$log_dir"
 chmod 0700 "$log_dir"
 log_file="$log_dir/reset-test.log"
