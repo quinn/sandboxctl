@@ -625,6 +625,7 @@ For a sandbox named dev1, generate:
 
     Host sandbox-dev1
         HostName 172.30.0.2
+        HostKeyAlias sandbox-instance-0123456789abcdef0123456789abcdef
         User dev
         Port 22
         IdentityFile "/home/USER/.local/share/sandboxctl/keys/dev1_ed25519"
@@ -678,6 +679,16 @@ Keep strict host-key checking active.
 Use the managed known-hosts file:
 
     $XDG_STATE_HOME/sandboxctl/known_hosts
+
+Set `HostKeyAlias` to `sandbox-instance-` followed by the daemon's stable instance identifier.
+Use the same host-key alias for the sandbox name and its numeric guest address.
+Do not use the sandbox name or address as the trusted identity.
+A recreated sandbox has a new identifier and requires new trust.
+Keep the same host-key alias across stop and start operations.
+Do not copy trust from old address entries when upgrading the SSH configuration.
+The first connection after that upgrade requires host-key confirmation.
+Reset retains the instance identifier but replaces the guest host keys.
+After reset, require verified explicit removal of the old entry before accepting the new key.
 
 The first interactive connection can ask the user to trust the guest host key.
 

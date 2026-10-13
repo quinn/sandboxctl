@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"sandboxctl/cmd/sandboxctl/image/build/buildcontext"
+)
 
 func TestParseImageBuildOptions(t *testing.T) {
 	arguments := []string{
@@ -102,6 +108,54 @@ func TestParseInfersDockerfileFromContext(t *testing.T) {
 	}
 	if options.Dockerfile != "image/Dockerfile" || options.ContextDir != "./image" {
 		t.Fatalf("parsed inferred Dockerfile options = %#v", options)
+	}
+}
+
+func TestDockerfileOptionsSnapshotRelativeContexts(t *testing.T) {
+	root := t.TempDir()
+	contextDir := filepath.Join(root, "examples", "codex")
+	if err := os.MkdirAll(contextDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	dockerfile := []byte("FROM ubuntu:24.04\nCOPY AGENTS.md /etc/skel/.codex/AGENTS.md\n")
+	if err := os.WriteFile(filepath.Join(contextDir, "Dockerfile"), dockerfile, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(contextDir, "AGENTS.md"), []byte("Keep task changes on the task branch.\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("examples/codex", filepath.Join(root, "context-link")); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+	for _, test := range []struct {
+		name     string
+		args     []string
+		wantName string
+	}{
+		{name: "relative context with inferred Dockerfile", args: []string{"--context", "./examples/codex"}, wantName: "Dockerfile"},
+		{name: "relative context and Dockerfile", args: []string{"--context", "examples/codex", "--dockerfile", "examples/codex/Dockerfile"}, wantName: "Dockerfile"},
+		{name: "relative context with absolute Dockerfile", args: []string{"--context", "./examples/codex", "--dockerfile", filepath.Join(contextDir, "Dockerfile")}, wantName: "Dockerfile"},
+		{name: "absolute context with relative Dockerfile", args: []string{"--context", contextDir, "--dockerfile", "examples/codex/Dockerfile"}, wantName: "Dockerfile"},
+		{name: "default current directory context", args: []string{"--dockerfile", "examples/codex/Dockerfile"}, wantName: "examples/codex/Dockerfile"},
+		{name: "relative symlink context", args: []string{"--context", "context-link"}, wantName: "Dockerfile"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			args := append([]string{"codex"}, test.args...)
+			args = append(args, "--guest-version", "24.04", "--builder-image", "builder", "--builder-version", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+			selected, err := parse(args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			snapshot, err := buildcontext.Create(buildcontext.Options{ContextDir: selected.ContextDir, Dockerfile: selected.Dockerfile, TempDir: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer snapshot.Close()
+			if snapshot.DockerfileName != test.wantName || string(snapshot.Dockerfile) != string(dockerfile) || snapshot.ArchiveBytes == 0 {
+				t.Fatalf("invalid snapshot: %+v", snapshot)
+			}
+		})
 	}
 }
 

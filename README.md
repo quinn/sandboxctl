@@ -59,6 +59,15 @@ After you create a sandbox, check that OpenSSH reads its managed configuration w
 ssh -G sandbox-NAME
 ```
 
+The generated `HostKeyAlias` uses the sandbox's instance identifier.
+Host-key checks use this identifier for both the sandbox alias and its guest address.
+Recreating a sandbox creates a new identity, even when the name or address is reused.
+Stopping and starting a sandbox retain its identity and trusted host key.
+SSH asks you to trust the host key on the first interactive connection.
+After upgrading from address-based host-key checks, connect once to confirm each sandbox's key.
+The tool keeps old address entries but does not transfer their trust to an instance identifier.
+SSH still rejects a changed host key for the same instance.
+
 ## Build and install a guest image
 
 `sandboxctl init` imports the builder image from the Arch package through the privileged service.
@@ -294,11 +303,14 @@ Set `--disk-size` when you create a sandbox to choose another size.
 Run `sandboxctl help` for command syntax.
 
 Reset creates new guest SSH host keys.
-Before you connect again, remove the old host key for the guest address.
-Get the address from `sandboxctl list` and the known-hosts path from `sandboxctl paths`, then run:
+Reset retains the instance identifier.
+Verify the new key before you remove the old trusted key.
+Get the `hostkeyalias` value from `ssh -G sandbox-NAME`.
+Get the known-hosts path from `sandboxctl paths`.
+Then remove the old entry with:
 
 ```sh
-ssh-keygen -R GUEST_ADDRESS -f KNOWN_HOSTS_PATH
+ssh-keygen -R INSTANCE_HOST_KEY_ALIAS -f KNOWN_HOSTS_PATH
 ```
 
 ## Share code with a sandbox
@@ -466,6 +478,16 @@ Delete pulls the results automatically.
 - `sandboxctl version` prints the version.
 
 ## Development checks
+
+Command dispatch, start, completion, and failure diagnostics use the debug log level.
+Set `DEBUG=true` to print these diagnostics:
+
+```sh
+DEBUG=true sandboxctl list
+```
+
+These diagnostics are hidden when `DEBUG` is unset or has another value.
+Command output and error messages remain visible.
 
 Run the code checks and build the local commands with:
 

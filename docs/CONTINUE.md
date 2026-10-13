@@ -1,5 +1,14 @@
 # Continuation
 
+The SSH configuration now binds host-key trust to the daemon's stable instance identifier with `HostKeyAlias`.
+Stop and start keep the alias.
+Recreated sandboxes get a new alias even when the name or address is reused.
+Reset keeps the alias and requires verified explicit host-key replacement.
+The workspace passes formatting, vet, tests, and build.
+The system CLI has not been upgraded.
+Install the updated CLI before confirming the current `weight-tracker` host key and retrying deletion.
+The `codex` example image is built and installed.
+
 The active phase is the Git task workflow documented in README.md.
 Create and start attach one repository to a sandbox.
 The branch and remote use the sandbox name.

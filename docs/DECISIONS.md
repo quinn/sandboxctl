@@ -93,6 +93,13 @@ The tool stores the key under `$XDG_DATA_HOME/sandboxctl/keys`. It does not writ
 
 The tool stores host keys in `$XDG_STATE_HOME/sandboxctl/known_hosts`.
 
+The daemon-backed SSH configuration uses `HostKeyAlias sandbox-instance-ID`.
+The daemon's stable instance identifier defines host-key trust.
+Reused sandbox names and guest addresses do not reuse trust.
+Existing address entries remain in the managed file but do not transfer trust to an instance.
+Stop and start retain the trusted identity.
+Reset retains the identity and requires explicit verified replacement of its host key.
+
 Strict host-key checking remains active. The first connection can ask the user to accept the host key.
 
 The first release uses an unencrypted client key. The file mode and directory mode protect the key. A later release can use a private `ssh-agent`.

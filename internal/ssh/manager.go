@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -25,10 +26,13 @@ type Manager struct {
 
 // HostEntry contains the connection values for one managed sandbox.
 type HostEntry struct {
-	Name    string
-	Address string
-	User    string
+	InstanceID string
+	Name       string
+	Address    string
+	User       string
 }
+
+var instanceID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 // PrepareKey creates the private XDG directories and the operator SSH key.
 func (m Manager) PrepareKey() error {
@@ -161,6 +165,9 @@ func (m Manager) WriteConfigEntries(entries []HostEntry) error {
 		if err := cmdutil.ValidateSandboxName(entry.Name); err != nil {
 			return err
 		}
+		if !instanceID.MatchString(entry.InstanceID) {
+			return fmt.Errorf("sandbox %q has an invalid instance identifier", entry.Name)
+		}
 		ip := net.ParseIP(entry.Address)
 		if ip == nil || ip.To4() == nil {
 			return fmt.Errorf("sandbox %q has an invalid IPv4 address", entry.Name)
@@ -176,6 +183,7 @@ func (m Manager) WriteConfigEntries(entries []HostEntry) error {
 		fmt.Fprintf(&content, `
 Host sandbox-%s %s
     HostName %s
+    HostKeyAlias sandbox-instance-%s
     User %s
     Port 22
     IdentityFile %s
@@ -184,7 +192,7 @@ Host sandbox-%s %s
     GlobalKnownHostsFile /dev/null
     StrictHostKeyChecking ask
     CheckHostIP no
-`, entry.Name, ip.String(), ip.String(), quoteConfigValue(entry.User),
+`, entry.Name, ip.String(), ip.String(), entry.InstanceID, quoteConfigValue(entry.User),
 			quoteConfigValue(m.Paths.PrivateKey()), quoteConfigValue(m.Paths.KnownHosts))
 	}
 	file, err := os.CreateTemp(m.Paths.ConfigDir, ".ssh_config-*")
@@ -217,7 +225,7 @@ func (m Manager) RefreshConfig(ctx context.Context, service controlpb.ControlSer
 	}
 	entries := make([]HostEntry, 0, len(response.GetInstances()))
 	for _, instance := range response.GetInstances() {
-		entries = append(entries, HostEntry{Name: instance.GetName(), Address: instance.GetGuestIp(), User: instance.GetSshUser()})
+		entries = append(entries, HostEntry{InstanceID: instance.GetId(), Name: instance.GetName(), Address: instance.GetGuestIp(), User: instance.GetSshUser()})
 	}
 	return m.WriteConfigEntries(entries)
 }

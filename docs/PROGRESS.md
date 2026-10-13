@@ -1,5 +1,44 @@
 # Implementation progress
 
+## SSH host-key identity
+
+Host-key isolation by sandbox instance identifier is complete in the workspace.
+The daemon-backed SSH fragment now sets `HostKeyAlias sandbox-instance-ID` for each sandbox alias and guest address.
+The CLI validates the daemon identifier before it changes the fragment.
+Recreated sandboxes receive separate trust even when names or addresses are reused.
+Configuration refresh preserves all known-hosts entries.
+Existing sandboxes require host-key confirmation when they first use the new alias.
+Reset keeps the identifier and still requires verified explicit host-key replacement.
+Tests cover daemon identifier transfer, invalid identifiers, restart, address changes, name and address reuse, and deletion.
+OpenSSH configuration resolution and known-host lookup checks cover these cases.
+`gofmt`, `go vet ./...`, `go test ./...`, `make build`, and `git diff --check` pass.
+The system CLI has not been upgraded.
+The next task is installation of the updated CLI and first-use host-key confirmation for the current `weight-tracker` instance before deletion.
+
+## Relative Dockerfile build context
+
+Fixed image builds with a relative `--context` directory.
+The snapshot builder now resolves the context to an absolute path before it resolves symbolic links and checks Dockerfile containment.
+Regression tests cover inferred and explicit Dockerfiles, relative and absolute path combinations, the default current-directory context, and relative symbolic-link contexts.
+Containment tests still reject Dockerfiles outside the context, including symbolic-link escapes.
+`gofmt`, `go vet ./...`, `go test ./...`, `make build`, and `git diff --check` pass.
+The relative context fix is complete.
+The fixed CLI built and installed the `codex` example image with `--context ./examples/codex` on 2026-10-13.
+The installed version is `sha256:dce89132919c2fc0a9e35f81ab1b44c5f7b83777e62e57d883c67b8026e13e80`.
+The build removed its temporary builder sandbox.
+Deleting `weight-tracker` remains blocked by a changed SSH host key.
+The logs confirm deletion of the old instance and reuse of its address by a new instance.
+The instance-based host-key fix above removes the old address entry from this new instance's trust lookup after the CLI upgrade.
+
+## CLI debug diagnostics
+
+Command dispatch, start, completion, and failure diagnostics now use the debug log level.
+Both CLI entry points enable that level only when `DEBUG=true`.
+Normal command output and error messages remain visible.
+Subprocess tests cover dispatch and helper logging, disabled values, successful commands, and errors.
+This change is complete.
+`gofmt`, `go vet ./...`, `go test ./...`, `make build`, and `git diff --check` pass.
+
 ## Git task workflow
 
 Implemented the Git task workflow in README.md.

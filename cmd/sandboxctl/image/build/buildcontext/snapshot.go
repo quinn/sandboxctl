@@ -72,7 +72,11 @@ func Create(options Options) (_ *Snapshot, returnErr error) {
 	if options.ContextDir == "" || options.Dockerfile == "" || options.TempDir == "" {
 		return nil, errors.New("context directory, Dockerfile, and private temporary directory are required")
 	}
-	contextRoot, err := filepath.EvalSymlinks(options.ContextDir)
+	contextRoot, err := filepath.Abs(options.ContextDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve context directory path: %w", err)
+	}
+	contextRoot, err = filepath.EvalSymlinks(contextRoot)
 	if err != nil {
 		return nil, fmt.Errorf("resolve context directory: %w", err)
 	}

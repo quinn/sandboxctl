@@ -120,6 +120,24 @@ func TestCreateRejectsDockerfileOutsideContext(t *testing.T) {
 	}
 }
 
+func TestCreateRejectsOutsideDockerfileWithRelativeContext(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "context"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "Dockerfile"), "FROM ubuntu\n", 0o600)
+	if err := os.Symlink("../Dockerfile", filepath.Join(root, "context", "Dockerfile")); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+	for _, dockerfile := range []string{"Dockerfile", "context/Dockerfile"} {
+		_, err := Create(Options{ContextDir: "./context", Dockerfile: dockerfile, TempDir: t.TempDir()})
+		if err == nil || !strings.Contains(err.Error(), "Dockerfile must be inside the build context") {
+			t.Fatalf("outside Dockerfile %q = %v", dockerfile, err)
+		}
+	}
+}
+
 func TestCreateProducesDeterministicArchive(t *testing.T) {
 	root := t.TempDir()
 	contextDir := filepath.Join(root, "context")
