@@ -21,7 +21,7 @@ const (
 	// DefaultRoot is the root-owned directory for persistent sandboxd state.
 	DefaultRoot = "/var/lib/sandboxctl"
 	// InstanceSchemaVersion is the current privileged instance record version.
-	InstanceSchemaVersion = 2
+	InstanceSchemaVersion = 3
 )
 
 var safeName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
@@ -77,7 +77,7 @@ func (p Paths) Ensure() error {
 	return nil
 }
 
-// Instance is the daemon-owned version-2 instance record.
+// Instance is the daemon-owned version-3 instance record.
 // Unknown JSON fields are retained when a record is read and written again.
 type Instance struct {
 	SchemaVersion  int                        `json:"schema_version"`
@@ -98,7 +98,16 @@ type Instance struct {
 	GuestMAC       string                     `json:"guest_mac"`
 	SSHUser        string                     `json:"ssh_user"`
 	SSHAlias       string                     `json:"ssh_alias"`
+	Forwards       []Forward                  `json:"forwards,omitempty"`
+	ForwardHostKey string                     `json:"forward_host_key,omitempty"`
 	Extra          map[string]json.RawMessage `json:"-"`
+}
+
+// Forward identifies one saved guest TCP port mapping.
+type Forward struct {
+	GuestPort         uint16 `json:"guest_port"`
+	PreferredHostPort uint16 `json:"preferred_host_port,omitempty"`
+	LastHostPort      uint16 `json:"last_host_port"`
 }
 
 // RuntimeRecord identifies one running Firecracker process and its jail.
@@ -318,7 +327,7 @@ func (s Store) RemoveRuntime(name string, expected RuntimeRecord) error {
 	return nil
 }
 
-// Load reads and validates the version-2 instance record for name.
+// Load reads an instance record and migrates version 2 in memory.
 func (s Store) Load(name string) (Instance, error) {
 	if !safeName.MatchString(name) {
 		return Instance{}, ErrInvalidName
@@ -335,6 +344,9 @@ func (s Store) Load(name string) (Instance, error) {
 	if err := json.Unmarshal(data, &instance); err != nil {
 		return Instance{}, fmt.Errorf("decode instance record: %w", err)
 	}
+	if instance.SchemaVersion == 2 {
+		instance.SchemaVersion = InstanceSchemaVersion
+	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return Instance{}, fmt.Errorf("decode instance fields: %w", err)
@@ -345,6 +357,7 @@ func (s Store) Load(name string) (Instance, error) {
 		"image": true, "image_version": true, "host_uid": true, "host_gid": true,
 		"subnet": true, "host_ip": true, "guest_ip": true, "tap_device": true,
 		"guest_mac": true, "ssh_user": true, "ssh_alias": true,
+		"forwards": true, "forward_host_key": true,
 	}
 	instance.Extra = make(map[string]json.RawMessage)
 	for key, value := range fields {
@@ -358,7 +371,7 @@ func (s Store) Load(name string) (Instance, error) {
 	return instance, nil
 }
 
-// List returns all saved version-2 instances in name order.
+// List returns all saved instances in name order.
 func (s Store) List() ([]Instance, error) {
 	entries, err := os.ReadDir(s.Paths.Instances)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -404,7 +417,7 @@ func (s Store) RemoveInstance(instance Instance) error {
 	if err != nil {
 		return fmt.Errorf("read instance directory: %w", err)
 	}
-	allowed := map[string]bool{"instance.json": true, "authorized_key": true, "state.ext4": true, "console.log": true, "runtime.json": true}
+	allowed := map[string]bool{"instance.json": true, "authorized_key": true, "state.ext4": true, "console.log": true, "runtime.json": true, "forward_ed25519": true}
 	if len(entries) > len(allowed) {
 		return errors.New("instance directory contains unexpected files")
 	}
@@ -460,6 +473,16 @@ func (s Store) RemoveInstance(instance Instance) error {
 }
 
 func validate(instance Instance) error {
+	if len(instance.Forwards) > 32 {
+		return errors.New("sandbox has more than 32 port mappings")
+	}
+	seenPorts := make(map[uint16]bool)
+	for _, forward := range instance.Forwards {
+		if forward.GuestPort == 0 || seenPorts[forward.GuestPort] || (forward.PreferredHostPort != 0 && forward.PreferredHostPort < 1024) || forward.LastHostPort < 1024 {
+			return errors.New("invalid saved port mapping")
+		}
+		seenPorts[forward.GuestPort] = true
+	}
 	if !safeName.MatchString(instance.Name) {
 		return errors.New("invalid sandbox name")
 	}

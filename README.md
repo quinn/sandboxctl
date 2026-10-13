@@ -177,11 +177,14 @@ sandboxctl image build codex-image \
 ```
 
 The example pins Ubuntu 24.04 and Codex 0.160.0.
-It verifies the Codex archive with its release SHA-256 digest.
-It installs the standalone Linux x86-64 binary, Git, and ripgrep.
+It uses the [documented standalone installer](https://developers.openai.com/codex/cli/) with an explicit release version.
+The installer verifies the native package with the release SHA-256 digest.
+It installs the complete Codex package, Git, and ripgrep.
 Node.js is not required.
+The image stores the package under `/usr/local/lib/codex` and exposes `codex` in `/usr/local/bin`.
+The installation-only `CODEX_HOME` setting does not change the guest's login or rules directory.
 The image contains no account credentials.
-To update Codex, change both `CODEX_VERSION` and `CODEX_SHA256` in the Dockerfile.
+To update Codex, change `CODEX_VERSION` in the Dockerfile.
 
 Edit `examples/codex/AGENTS.md` to set the base coding rules.
 Provisioning copies it from `/etc/skel/.codex/AGENTS.md` to `/home/dev/.codex/AGENTS.md` when it creates the `dev` account.
@@ -312,6 +315,95 @@ Then remove the old entry with:
 ```sh
 ssh-keygen -R INSTANCE_HOST_KEY_ALIAS -f KNOWN_HOSTS_PATH
 ```
+
+## Forward a guest port to the host
+
+Use `sandboxctl forward` to reach a guest service through a host port.
+The command forwards Transmission Control Protocol (TCP) connections through SSH.
+Start the sandbox before you forward a port.
+Run the guest service on `127.0.0.1` or `0.0.0.0`.
+
+For a guest service on port 3000, run this command on the host:
+
+```sh
+sandboxctl forward dev1 3000
+```
+
+The argument selects the guest port.
+The command reuses the last assigned host port for this mapping when it is available.
+For a new mapping, it first tries the guest port as the host port when that port is at least 1024.
+If that host port is in use, it selects another available host port automatically.
+The command prints the selected host address and port.
+Open that address in your browser when the guest service is a web server.
+Connections go to `127.0.0.1:3000` inside `dev1`.
+The host listener binds to `127.0.0.1` and is available only on this host.
+
+Set a preferred host port with `HOST_PORT:GUEST_PORT`:
+
+```sh
+sandboxctl forward dev1 8080:3000
+```
+
+The first port is the preferred host port.
+The second port is the guest port.
+If port 8080 is in use, the command selects another available host port and prints it.
+Use the printed host port to connect.
+Host ports range from 1024 to 65535.
+Guest ports range from 1 to 65535.
+
+The CLI sends the mapping to `sandboxd` through its Unix socket.
+The first registration installs a separate daemon forwarding public key in the guest.
+The CLI uses your operator key through native Go SSH for this setup.
+It asks for confirmation when the instance host key has not been trusted.
+The daemon keeps its private forwarding key in the sandbox's root-owned directory.
+The guest key permits only local TCP forwarding to loopback ports.
+It cannot start a shell, run a command, or open reverse forwarding.
+The daemon creates and manages the SSH connection with Go's `golang.org/x/crypto/ssh` package.
+It checks the sandbox instance's trusted host key.
+It listens on the selected host port and forwards each connection through SSH to the guest port.
+The command prints the selected endpoint and returns.
+Forwarding continues after you close the terminal.
+The guest service can start after the forward is configured.
+Use `--list` to check whether the SSH connection is active.
+The daemon retries interrupted connections.
+Each sandbox supports up to 32 mappings and 128 active connections.
+
+List the saved mappings and their current state with:
+
+```sh
+sandboxctl forward dev1 --list
+```
+
+Remove a mapping by its guest port with:
+
+```sh
+sandboxctl forward dev1 --remove 3000
+```
+
+Removing a mapping closes its listener and active forwarded connections.
+
+### Saved port mappings
+
+The daemon saves mappings in the sandbox's root-owned instance record at `/var/lib/sandboxctl/instances/NAME/instance.json`.
+Each mapping contains the guest port, preferred host port when supplied, and last assigned host port.
+The record's instance identifier binds the mappings to that sandbox.
+The file uses mode `0600`.
+The instance directory uses mode `0700`.
+The daemon writes the record atomically.
+
+Later starts reuse the saved host port when it is available.
+A new preferred host port replaces the saved preference.
+If the saved port is in use, the daemon selects another port and updates the record.
+Stop closes listeners and forwarded connections while preserving the mappings.
+Start restores saved forwards automatically.
+A daemon restart restores forwards only for running sandboxes whose process identity has been verified.
+Recreating a sandbox gives it a new instance identifier and a new mapping record.
+Reset preserves mappings and clears the daemon's trusted host key.
+Verify the new fingerprint before you remove the old instance entry from the managed known-hosts file.
+Run `sandboxctl forward NAME GUEST_PORT` to trust the new key and reinstall forwarding access.
+Use `--replace-host-key` when you must replace an existing daemon host-key pin.
+This option still requires successful verification against the operator's managed known-hosts file.
+Delete removes the sandbox's saved mappings.
 
 ## Share code with a sandbox
 
@@ -473,6 +565,10 @@ Delete pulls the results automatically.
   It preserves the host working files and restores a temporarily started sandbox to the stopped state.
 - `sandboxctl list` shows sandbox state.
 - `sandboxctl ssh` runs a command through the generated SSH alias.
+- `sandboxctl forward NAME [HOST_PORT:]GUEST_PORT` forwards a guest TCP port to the host loopback address.
+  It selects another host port automatically when the preferred port is in use.
+  The daemon manages the connection after the command returns.
+  Use `--list` to show mappings and `--remove GUEST_PORT` to remove one.
 - `sandboxctl ssh-config` prints the SSH `Include` instruction and refreshes the managed SSH file.
 - `sandboxctl paths` prints the user and host data paths.
 - `sandboxctl version` prints the version.

@@ -55,7 +55,11 @@ FROM ubuntu:24.04@sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca0
 ARG BUILD_MARKER
 COPY . /opt/docker-context
 COPY payload/probe /usr/local/bin/sandboxctl-context-probe
+COPY --chown=1234:2345 --chmod=0700 payload/probe /opt/owned-probe
 RUN printf '%s\n' "$BUILD_MARKER" > /etc/sandboxctl-build-argument
+RUN install -d -m 0700 /etc/skel/.codex \
+    && printf 'private guest rules\n' > /etc/skel/.codex/AGENTS.md \
+    && chmod 0600 /etc/skel/.codex/AGENTS.md
 
 FROM build AS runtime
 USER 65534:65534
@@ -122,9 +126,9 @@ trap 'cleanup_ssh_output; cleanup_context' EXIT
 deadline=$((SECONDS + 120))
 while (( SECONDS < deadline )); do
   if timeout --foreground --kill-after=1s 5s ssh -F "$ssh_config" -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$ssh_known_hosts" -o GlobalKnownHostsFile=/dev/null "$alias" \
-    'test "$(ps -p 1 -o comm= | xargs)" = systemd && test "$(cat /etc/sandboxctl-build-argument)" = '"$build_marker"' && test -x /usr/local/bin/sandboxctl-context-probe && test "$(/usr/local/bin/sandboxctl-context-probe)" = "context executable passed" && test ! -e /opt/docker-context/ignored.txt && test -z "${IMAGE_BUILD_ENV:-}" && test "$(id -un)" = dev && test -r /var/lib/sandboxctl/bootstrap-complete' \
+    'test "$(ps -p 1 -o comm= | xargs)" = systemd && test "$(cat /etc/sandboxctl-build-argument)" = '"$build_marker"' && test -x /usr/local/bin/sandboxctl-context-probe && test "$(/usr/local/bin/sandboxctl-context-probe)" = "context executable passed" && test ! -e /opt/docker-context/ignored.txt && test -z "${IMAGE_BUILD_ENV:-}" && test "$(id -un)" = dev && test -r /var/lib/sandboxctl/bootstrap-complete && test -O "$HOME/.codex" && test -O "$HOME/.codex/AGENTS.md" && test -r "$HOME/.codex/AGENTS.md" && test "$(stat -c %a "$HOME/.codex")" = 700 && test "$(stat -c %a "$HOME/.codex/AGENTS.md")" = 600 && test "$(stat -c %u:%g /opt/owned-probe)" = 1234:2345' \
     >"$ssh_output" 2>&1; then
-    printf 'PASS Dockerfile image, local COPY, ignore rules, build arguments, VM PID 1, and public-key SSH.\n'
+    printf 'PASS Dockerfile image, file ownership, private guest rules, local COPY, ignore rules, build arguments, VM PID 1, and public-key SSH.\n'
     break
   fi
   sleep 2

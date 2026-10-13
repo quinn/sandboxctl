@@ -1,12 +1,57 @@
 # Continuation
 
+## Port forwarding
+
+The workspace implements `sandboxctl forward NAME [HOST_PORT:]GUEST_PORT`.
+The daemon saves mappings in version 3 instance records.
+It migrates version 2 records when they are read.
+It binds host loopback ports and uses a separate forwarding key through native Go SSH.
+The first registration installs the restricted public key in the guest.
+Guest setup uses the operator key from XDG storage.
+The daemon does not read that operator key.
+`--list` reports saved mappings and connection errors.
+`--remove GUEST_PORT` closes the listener and its streams.
+Stop closes tunnels.
+Start and daemon reconciliation restore mappings for verified running instances.
+Reset preserves mappings and clears the forwarding host-key pin.
+The new CLI and daemon must both be installed before use.
+Existing images need no rebuild for this feature.
+Verification results are recorded in `docs/PROGRESS.md`.
+
+
+The Codex example now uses the documented native installer at `https://chatgpt.com/codex/install.sh` with release 0.160.0.
+It installs the complete package and requires no Node.js runtime.
+The previous example copied only the CLI binary and failed during normal startup.
+The running `weight-tracker` guest was repaired with the official installer.
+Normal Codex startup reached the sign-in screen.
+No login or model task was performed during that check.
+The updated example image was built and staged at `sha256:9132d988263d0947a63726421e682e64f197e19c61af19ec2a884d0390b6a6a6`.
+The running guest uses the old installed image and already has the repaired package in its writable disk.
+Replace the installed image after the operator requests removal of the dependent sandbox.
+
+The guest image builder now preserves numeric ownership and file modes through tar export and extraction inside the builder VM.
+The former local exporter assigned root ownership to private skeleton files.
+The operator created a new `weight-tracker` sandbox from the installed `codex` image.
+Its Codex directory ownership was repaired in the running guest.
+The fixed workspace CLI built and staged a corrected `codex` image.
+The live build passed guest home and SSH ownership validation before creating SquashFS.
+The operator requested deletion of the sandbox and replacement of the old image.
+The Git pull and deletion of the new `weight-tracker` sandbox succeeded.
+The old installed image was removed.
+The corrected `codex` image is installed at `sha256:a33d40dd666c63823d3b2eded7af7bf6f59b60f6102eb91b885d9a4885f35cf8`.
+At completion of that image replacement, no sandboxes remained.
+Required Go checks, build, and shell syntax checks pass.
+See PROGRESS.md for image staging and installation status.
+
 The SSH configuration now binds host-key trust to the daemon's stable instance identifier with `HostKeyAlias`.
 Stop and start keep the alias.
 Recreated sandboxes get a new alias even when the name or address is reused.
 Reset keeps the alias and requires verified explicit host-key replacement.
 The workspace passes formatting, vet, tests, and build.
-The system CLI has not been upgraded.
-Install the updated CLI before confirming the current `weight-tracker` host key and retrying deletion.
+The operator reinstalled the system CLI on 2026-10-13.
+The live SSH identity check passed after the operator approved the current instance's fingerprint.
+The automatic Git pull and deletion of `weight-tracker` succeeded.
+At completion of that deletion, no sandboxes remained.
 The `codex` example image is built and installed.
 
 The active phase is the Git task workflow documented in README.md.

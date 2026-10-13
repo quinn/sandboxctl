@@ -147,7 +147,8 @@ Treat this group as a trusted host-operator group.
 
 sandboxd must use a restrictive umask.
 
-sandboxd must not listen on a Transmission Control Protocol (TCP) socket.
+The control API must use only the Unix socket.
+sandboxd may bind Transmission Control Protocol (TCP) listeners on `127.0.0.1` for registered guest port forwards.
 
 sandboxd must not expose the Firecracker application programming interface
 (API) socket outside the jail and managed runtime directories.
@@ -186,6 +187,7 @@ Allowed operation groups are:
 - Instance create, inspect, list, start, stop, reset, and delete.
 - Runtime status.
 - Bounded log retrieval.
+- Guest TCP forward preparation, registration, listing, and removal.
 
 The API must not provide:
 
@@ -652,7 +654,7 @@ The command must rebuild the fragment from authoritative instance state.
 
 Create one Ed25519 client key for each sandbox.
 
-Store private keys only under:
+Store operator private keys only under:
 
     $XDG_DATA_HOME/sandboxctl/keys
 
@@ -660,11 +662,11 @@ Use mode 0700 for the key directory.
 
 Use mode 0600 for each private key.
 
-The private key remains owned by the operator.
+The operator private key remains owned by the operator.
 
 Send only the public key to sandboxd and the guest.
 
-Do not store private-key data in:
+Do not store operator private-key data in:
 
 - Instance records.
 - MMDS.
@@ -787,7 +789,7 @@ sandboxd for installation in the root-owned image store.
 The privileged instance record must contain:
 
     {
-      "schema_version": 2,
+      "schema_version": 3,
       "id": "stable-random-id",
       "name": "dev1",
       "created_at": "2026-10-03T14:00:00Z",
@@ -804,7 +806,9 @@ The privileged instance record must contain:
       "tap_device": "sc000001",
       "guest_mac": "06:00:ac:10:00:02",
       "ssh_user": "dev",
-      "ssh_alias": "sandbox-dev1"
+      "ssh_alias": "sandbox-dev1",
+      "forwards": [],
+      "forward_host_key": ""
     }
 
 Do not store an operator private-key path in privileged state unless it is display-only and never opened by sandboxd.
@@ -965,6 +969,47 @@ Text output must contain:
 - State-disk virtual size.
 
 JSON output must have a schema version.
+
+### 13.11 Port forwarding
+
+    sandboxctl forward NAME [HOST_PORT:]GUEST_PORT
+    sandboxctl forward NAME --list
+    sandboxctl forward NAME --remove GUEST_PORT
+
+The sandbox must be running when a mapping is added.
+Host ports range from 1024 to 65535.
+Guest ports range from 1 to 65535.
+The host port is an optional preference.
+Bind the listener directly and keep it open.
+If the preferred or saved port is in use, bind port zero to select a free port.
+Expose listeners only on host `127.0.0.1`.
+Forward TCP connections only to guest `127.0.0.1`.
+Use `golang.org/x/crypto/ssh` in the daemon.
+Share one SSH connection for each sandbox.
+Bound the number of mappings and active connections.
+The CLI must return after registration and print the assigned endpoint.
+
+Save each mapping's guest port, preferred host port, and last assigned host port in `instance.json`.
+Migrate version 2 records explicitly to version 3 without discarding unknown fields.
+Serialize record changes with start, stop, reset, and delete.
+Stop must close listeners and active connections.
+Start and daemon reconciliation must restore saved mappings for verified running instances.
+Delete must remove saved mappings and the forwarding key.
+Reset must retain mappings and clear the trusted forwarding host key.
+After reset, require explicit host-key trust before restoring the mappings.
+
+Create one daemon-owned Ed25519 forwarding key for each instance.
+Store its private part in `forward_ed25519` with mode `0600` in the private instance directory.
+Never open an operator private key in the daemon.
+The preparation RPC may return only the forwarding public key and instance identity.
+The CLI uses the operator key and managed known-hosts file to install the public key through native Go SSH.
+Use a separate guest key file that bootstrap does not replace.
+Restrict this key to local TCP forwarding to guest loopback ports.
+Reject shell, command, terminal, agent, and X11 access for this key.
+Verify the guest host key before the daemon connects.
+The registration RPC accepts only typed ports, an expected instance identifier, and a trusted public host key.
+Require `--replace-host-key` to change an existing forwarding host-key pin.
+Do not accept generic guest commands or filesystem paths through this API.
 
 ## 14. Lifecycle states
 

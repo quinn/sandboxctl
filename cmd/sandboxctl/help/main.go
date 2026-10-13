@@ -35,6 +35,9 @@ Usage:
   sandboxctl create NAME [--cpus N] [--memory MiB] [--disk-size GiB] [--image NAME]
   sandboxctl start NAME [--dry-run | --copy-codex-auth]
   sandboxctl stop NAME [--force]
+  sandboxctl forward NAME [HOST_PORT:]GUEST_PORT [--replace-host-key]
+  sandboxctl forward NAME --list
+  sandboxctl forward NAME --remove GUEST_PORT
   sandboxctl pull NAME
   sandboxctl reset NAME
   sandboxctl delete NAME [--yes]
@@ -55,6 +58,8 @@ Start requires an installed image, a prepared TAP device, and KVM access.
 Start with --copy-codex-auth replaces the guest Codex login file with the host file.
 Create and start attach a Git repository from the current directory.
 The sandbox name identifies the Git branch and remote.
+Forward saves a background TCP mapping on the host loopback address.
+Forward selects a free host port if the preferred port is in use.
 Pull retrieves committed task results and the guest report.
 Pull temporarily starts a stopped sandbox and stops it after the transfer.
 Delete removes a stopped sandbox and its writable state disk.

@@ -38,6 +38,18 @@ service ControlService {
   // Deletes a stopped sandbox instance and releases its host allocation.
   rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse);
 
+  // Creates the instance forwarding key and returns its public part.
+  rpc PrepareForward(PrepareForwardRequest) returns (PrepareForwardResponse);
+
+  // Saves and starts a guest TCP port mapping.
+  rpc AddForward(AddForwardRequest) returns (AddForwardResponse);
+
+  // Lists saved mappings and their current state.
+  rpc ListForwards(ListForwardsRequest) returns (ListForwardsResponse);
+
+  // Removes one mapping and closes its connections.
+  rpc RemoveForward(RemoveForwardRequest) returns (RemoveForwardResponse);
+
   // Imports a pinned image manifest and its fixed boot artifacts.
   rpc InstallImage(stream InstallImageRequest) returns (InstallImageResponse);
 }
@@ -165,6 +177,72 @@ message DeleteInstanceResponse {
   // Names the deleted sandbox.
   string name = 1;
 }
+
+message PrepareForwardRequest {
+  // Names the running sandbox.
+  string name = 1;
+}
+
+message PrepareForwardResponse {
+  // Contains the expected instance identity and guest address.
+  Instance instance = 1;
+  // Gives the daemon forwarding public key.
+  string public_key = 2;
+  // Gives the previously trusted guest host key, when present.
+  string host_key = 3;
+}
+
+message AddForwardRequest {
+  // Names the running sandbox.
+  string name = 1;
+  // Guards against sandbox replacement during guest setup.
+  string instance_id = 2;
+  // Gives the guest loopback TCP port.
+  uint32 guest_port = 3;
+  // Gives an optional preferred host port.
+  optional uint32 preferred_host_port = 4;
+  // Gives the guest public host key verified by the operator.
+  string host_key = 5;
+  // Authorizes replacement of an existing host-key pin.
+  bool replace_host_key = 6;
+}
+
+message Forward {
+  // Gives the guest loopback TCP port.
+  uint32 guest_port = 1;
+  // Gives the preferred host port, or zero when absent.
+  uint32 preferred_host_port = 2;
+  // Gives the assigned or last assigned host loopback port.
+  uint32 host_port = 3;
+  // Reports active, connecting, stopped, or error.
+  string state = 4;
+  // Explains a connection or restoration failure.
+  string error = 5;
+}
+
+message AddForwardResponse {
+  // Contains the registered mapping.
+  Forward forward = 1;
+}
+
+message ListForwardsRequest {
+  // Names the sandbox.
+  string name = 1;
+}
+
+message ListForwardsResponse {
+  // Contains the mappings in guest port order.
+  repeated Forward forwards = 1;
+}
+
+message RemoveForwardRequest {
+  // Names the sandbox.
+  string name = 1;
+  // Gives the guest port to remove.
+  uint32 guest_port = 2;
+}
+
+message RemoveForwardResponse {}
 
 message InstallImageRequest {
   // Names the image in the installed image store.

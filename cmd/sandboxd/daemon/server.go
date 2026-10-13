@@ -15,6 +15,7 @@ import (
 
 	controlpb "sandboxctl/internal/controlpb"
 	"sandboxctl/internal/controlsettings"
+	"sandboxctl/internal/forward"
 	"sandboxctl/internal/hoststate"
 
 	"google.golang.org/grpc"
@@ -60,7 +61,7 @@ func newServerWithImageStore(version string, runtime RuntimeStatus, instances In
 	return newServerConfigured(version, runtime, instances, creator, &paths)
 }
 
-func newServerConfigured(version string, runtime RuntimeStatus, instances InstanceStore, creator InstanceCreator, imagePaths *hoststate.Paths) *grpc.Server {
+func newServerConfigured(version string, runtime RuntimeStatus, instances InstanceStore, creator InstanceCreator, imagePaths *hoststate.Paths, forwarding ...*forward.Manager) *grpc.Server {
 	server := grpc.NewServer(
 		grpc.MaxRecvMsgSize(controlsettings.MaxMessageSize),
 		grpc.MaxSendMsgSize(controlsettings.MaxMessageSize),
@@ -70,7 +71,11 @@ func newServerConfigured(version string, runtime RuntimeStatus, instances Instan
 	controller, _ := runtime.(RuntimeController)
 	deleter, _ := creator.(InstanceDeleter)
 	resetter, _ := creator.(InstanceResetter)
-	controlpb.RegisterControlServiceServer(server, &service{version: version, runtime: runtime, controller: controller, instances: instances, creator: creator, deleter: deleter, resetter: resetter, imagePaths: imagePaths, imageSlot: make(chan struct{}, 1)})
+	var forwards *forward.Manager
+	if len(forwarding) > 0 {
+		forwards = forwarding[0]
+	}
+	controlpb.RegisterControlServiceServer(server, &service{forwards: forwards, version: version, runtime: runtime, controller: controller, instances: instances, creator: creator, deleter: deleter, resetter: resetter, imagePaths: imagePaths, imageSlot: make(chan struct{}, 1)})
 	return server
 }
 
@@ -179,6 +184,7 @@ type service struct {
 	resetter   InstanceResetter
 	imagePaths *hoststate.Paths
 	imageSlot  chan struct{}
+	forwards   *forward.Manager
 }
 
 // InstanceStore provides saved instance records to the control service.
@@ -373,6 +379,11 @@ func (s *service) CreateInstance(ctx context.Context, request *controlpb.CreateI
 }
 
 func (s *service) StartInstance(ctx context.Context, request *controlpb.StartInstanceRequest) (*controlpb.StartInstanceResponse, error) {
+	unlock, lockErr := s.lockForwarding(ctx)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock()
 	if s.controller == nil || s.instances == nil {
 		return nil, status.Error(codes.FailedPrecondition, "sandbox runtime is unavailable")
 	}
@@ -402,10 +413,20 @@ func (s *service) StartInstance(ctx context.Context, request *controlpb.StartIns
 		slog.Error("start sandbox failed", "name", instance.Name, "error", err)
 		return nil, status.Error(codes.FailedPrecondition, "cannot start sandbox")
 	}
+	if s.forwards != nil {
+		if err := s.forwards.Restore(instance); err != nil {
+			slog.Warn("restore forwards failed", "name", instance.Name, "error", err)
+		}
+	}
 	return &controlpb.StartInstanceResponse{Instance: s.protocolInstance(instance)}, nil
 }
 
 func (s *service) StopInstance(ctx context.Context, request *controlpb.StopInstanceRequest) (*controlpb.StopInstanceResponse, error) {
+	unlock, lockErr := s.lockForwarding(ctx)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock()
 	if s.controller == nil || s.instances == nil {
 		return nil, status.Error(codes.FailedPrecondition, "sandbox runtime is unavailable")
 	}
@@ -418,6 +439,9 @@ func (s *service) StopInstance(ctx context.Context, request *controlpb.StopInsta
 	}
 	if err != nil {
 		return nil, status.Error(codes.Internal, "cannot read sandbox state")
+	}
+	if s.forwards != nil {
+		s.forwards.Suspend(instance.Name)
 	}
 	if err := s.controller.Stop(ctx, instance.Name, request.GetForce()); err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -432,6 +456,11 @@ func (s *service) StopInstance(ctx context.Context, request *controlpb.StopInsta
 }
 
 func (s *service) ResetInstance(ctx context.Context, request *controlpb.ResetInstanceRequest) (*controlpb.ResetInstanceResponse, error) {
+	unlock, lockErr := s.lockForwarding(ctx)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock()
 	if s.instances == nil || s.resetter == nil {
 		return nil, status.Error(codes.FailedPrecondition, "state disk reset is unavailable")
 	}
@@ -451,7 +480,15 @@ func (s *service) ResetInstance(ctx context.Context, request *controlpb.ResetIns
 	}
 	slog.Info("resetting sandbox state disk", "name", instance.Name, "instance_id", instance.ID, "size_bytes", instance.StateDiskBytes)
 	if err := runtimeResetter.ResetStopped(ctx, instance, func() error {
-		return s.resetter.Reset(ctx, instance)
+		if err := s.resetter.Reset(ctx, instance); err != nil {
+			return err
+		}
+		if s.forwards != nil {
+			s.forwards.Suspend(instance.Name)
+			instance.ForwardHostKey = ""
+			return s.forwards.Store.Save(instance)
+		}
+		return nil
 	}); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, status.Error(codes.Canceled, "reset request was canceled")
@@ -466,6 +503,11 @@ func (s *service) ResetInstance(ctx context.Context, request *controlpb.ResetIns
 }
 
 func (s *service) DeleteInstance(ctx context.Context, request *controlpb.DeleteInstanceRequest) (*controlpb.DeleteInstanceResponse, error) {
+	unlock, lockErr := s.lockForwarding(ctx)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock()
 	if s.instances == nil || s.deleter == nil {
 		return nil, status.Error(codes.FailedPrecondition, "instance deletion is unavailable")
 	}
@@ -483,7 +525,12 @@ func (s *service) DeleteInstance(ctx context.Context, request *controlpb.DeleteI
 	if err != nil {
 		return nil, status.Error(codes.Internal, "cannot read sandbox state")
 	}
-	if err := runtimeDeleter.DeleteStopped(ctx, instance, func() error { return s.deleter.Delete(instance) }); err != nil {
+	if err := runtimeDeleter.DeleteStopped(ctx, instance, func() error {
+		if s.forwards != nil {
+			s.forwards.Suspend(instance.Name)
+		}
+		return s.deleter.Delete(instance)
+	}); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, status.Error(codes.Canceled, "delete request was canceled")
 		}

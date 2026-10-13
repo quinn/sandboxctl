@@ -211,6 +211,12 @@ Set a fixed root user, working directory, and provisioning environment. Copy
 and run the existing provisioning script. This avoids inheriting container
 environment settings or executing inherited `ONBUILD` instructions again.
 
+For step 10, export a tar archive and extract it inside the builder VM.
+Preserve numeric guest owners and file modes during extraction.
+Do not use BuildKit's local directory exporter for the guest root filesystem.
+That exporter assigns the buildctl user's ownership to the exported files.
+Check that the exported home and SSH directories belong to the guest `dev` account before creating SquashFS.
+
 BuildKit v0.34.0 documents named OCI layouts and frontend context aliases in
 its [buildctl reference](https://github.com/moby/buildkit/blob/v0.34.0/docs/reference/buildctl.md).
 Its [README](https://github.com/moby/buildkit/blob/v0.34.0/README.md) documents

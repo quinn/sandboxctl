@@ -11,6 +11,7 @@ import (
 
 	"sandboxctl/cmd/sandboxd/daemon"
 	"sandboxctl/cmd/sandboxd/network"
+	"sandboxctl/internal/forward"
 	"sandboxctl/internal/hoststate"
 	"sandboxctl/internal/runtime"
 )
@@ -63,9 +64,12 @@ func run(arguments []string) error {
 			APISocket:         "firecracker.socket",
 		},
 	}
-	server := daemon.NewServerWithImageStore("0.1.0-dev", supervisor, manager, paths)
+	forwards := forward.New(manager.Store, func(name string) bool { return supervisor.RuntimeState(name) == "running" })
+	server := daemon.NewServerWithForwarding("0.1.0-dev", supervisor, manager, paths, forwards)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go forwards.Run(ctx)
+	defer forwards.Close()
 	if *systemdSocket {
 		file := os.NewFile(3, "systemd-control-socket")
 		listener, err := daemon.ActivatedListener(os.Getenv("LISTEN_PID"), os.Getenv("LISTEN_FDS"), os.Getpid(), file)

@@ -30,6 +30,10 @@ const (
 	ControlService_StopInstance_FullMethodName    = "/sandboxctl.ControlService/StopInstance"
 	ControlService_ResetInstance_FullMethodName   = "/sandboxctl.ControlService/ResetInstance"
 	ControlService_DeleteInstance_FullMethodName  = "/sandboxctl.ControlService/DeleteInstance"
+	ControlService_PrepareForward_FullMethodName  = "/sandboxctl.ControlService/PrepareForward"
+	ControlService_AddForward_FullMethodName      = "/sandboxctl.ControlService/AddForward"
+	ControlService_ListForwards_FullMethodName    = "/sandboxctl.ControlService/ListForwards"
+	ControlService_RemoveForward_FullMethodName   = "/sandboxctl.ControlService/RemoveForward"
 	ControlService_InstallImage_FullMethodName    = "/sandboxctl.ControlService/InstallImage"
 )
 
@@ -59,6 +63,14 @@ type ControlServiceClient interface {
 	ResetInstance(ctx context.Context, in *ResetInstanceRequest, opts ...grpc.CallOption) (*ResetInstanceResponse, error)
 	// Deletes a stopped sandbox instance and releases its host allocation.
 	DeleteInstance(ctx context.Context, in *DeleteInstanceRequest, opts ...grpc.CallOption) (*DeleteInstanceResponse, error)
+	// Creates the instance forwarding key and returns its public part.
+	PrepareForward(ctx context.Context, in *PrepareForwardRequest, opts ...grpc.CallOption) (*PrepareForwardResponse, error)
+	// Saves and starts a guest TCP port mapping.
+	AddForward(ctx context.Context, in *AddForwardRequest, opts ...grpc.CallOption) (*AddForwardResponse, error)
+	// Lists saved mappings and their current state.
+	ListForwards(ctx context.Context, in *ListForwardsRequest, opts ...grpc.CallOption) (*ListForwardsResponse, error)
+	// Removes one mapping and closes its connections.
+	RemoveForward(ctx context.Context, in *RemoveForwardRequest, opts ...grpc.CallOption) (*RemoveForwardResponse, error)
 	// Imports a pinned image manifest and its fixed boot artifacts.
 	InstallImage(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[InstallImageRequest, InstallImageResponse], error)
 }
@@ -181,6 +193,46 @@ func (c *controlServiceClient) DeleteInstance(ctx context.Context, in *DeleteIns
 	return out, nil
 }
 
+func (c *controlServiceClient) PrepareForward(ctx context.Context, in *PrepareForwardRequest, opts ...grpc.CallOption) (*PrepareForwardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareForwardResponse)
+	err := c.cc.Invoke(ctx, ControlService_PrepareForward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlServiceClient) AddForward(ctx context.Context, in *AddForwardRequest, opts ...grpc.CallOption) (*AddForwardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddForwardResponse)
+	err := c.cc.Invoke(ctx, ControlService_AddForward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlServiceClient) ListForwards(ctx context.Context, in *ListForwardsRequest, opts ...grpc.CallOption) (*ListForwardsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListForwardsResponse)
+	err := c.cc.Invoke(ctx, ControlService_ListForwards_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlServiceClient) RemoveForward(ctx context.Context, in *RemoveForwardRequest, opts ...grpc.CallOption) (*RemoveForwardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveForwardResponse)
+	err := c.cc.Invoke(ctx, ControlService_RemoveForward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlServiceClient) InstallImage(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[InstallImageRequest, InstallImageResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &ControlService_ServiceDesc.Streams[0], ControlService_InstallImage_FullMethodName, cOpts...)
@@ -220,6 +272,14 @@ type ControlServiceServer interface {
 	ResetInstance(context.Context, *ResetInstanceRequest) (*ResetInstanceResponse, error)
 	// Deletes a stopped sandbox instance and releases its host allocation.
 	DeleteInstance(context.Context, *DeleteInstanceRequest) (*DeleteInstanceResponse, error)
+	// Creates the instance forwarding key and returns its public part.
+	PrepareForward(context.Context, *PrepareForwardRequest) (*PrepareForwardResponse, error)
+	// Saves and starts a guest TCP port mapping.
+	AddForward(context.Context, *AddForwardRequest) (*AddForwardResponse, error)
+	// Lists saved mappings and their current state.
+	ListForwards(context.Context, *ListForwardsRequest) (*ListForwardsResponse, error)
+	// Removes one mapping and closes its connections.
+	RemoveForward(context.Context, *RemoveForwardRequest) (*RemoveForwardResponse, error)
 	// Imports a pinned image manifest and its fixed boot artifacts.
 	InstallImage(grpc.ClientStreamingServer[InstallImageRequest, InstallImageResponse]) error
 	mustEmbedUnimplementedControlServiceServer()
@@ -264,6 +324,18 @@ func (UnimplementedControlServiceServer) ResetInstance(context.Context, *ResetIn
 }
 func (UnimplementedControlServiceServer) DeleteInstance(context.Context, *DeleteInstanceRequest) (*DeleteInstanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteInstance not implemented")
+}
+func (UnimplementedControlServiceServer) PrepareForward(context.Context, *PrepareForwardRequest) (*PrepareForwardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrepareForward not implemented")
+}
+func (UnimplementedControlServiceServer) AddForward(context.Context, *AddForwardRequest) (*AddForwardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddForward not implemented")
+}
+func (UnimplementedControlServiceServer) ListForwards(context.Context, *ListForwardsRequest) (*ListForwardsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListForwards not implemented")
+}
+func (UnimplementedControlServiceServer) RemoveForward(context.Context, *RemoveForwardRequest) (*RemoveForwardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveForward not implemented")
 }
 func (UnimplementedControlServiceServer) InstallImage(grpc.ClientStreamingServer[InstallImageRequest, InstallImageResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method InstallImage not implemented")
@@ -487,6 +559,78 @@ func _ControlService_DeleteInstance_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlService_PrepareForward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareForwardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServiceServer).PrepareForward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlService_PrepareForward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServiceServer).PrepareForward(ctx, req.(*PrepareForwardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlService_AddForward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddForwardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServiceServer).AddForward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlService_AddForward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServiceServer).AddForward(ctx, req.(*AddForwardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlService_ListForwards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListForwardsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServiceServer).ListForwards(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlService_ListForwards_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServiceServer).ListForwards(ctx, req.(*ListForwardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlService_RemoveForward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveForwardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlServiceServer).RemoveForward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlService_RemoveForward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlServiceServer).RemoveForward(ctx, req.(*RemoveForwardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlService_InstallImage_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(ControlServiceServer).InstallImage(&grpc.GenericServerStream[InstallImageRequest, InstallImageResponse]{ServerStream: stream})
 }
@@ -544,6 +688,22 @@ var ControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteInstance",
 			Handler:    _ControlService_DeleteInstance_Handler,
+		},
+		{
+			MethodName: "PrepareForward",
+			Handler:    _ControlService_PrepareForward_Handler,
+		},
+		{
+			MethodName: "AddForward",
+			Handler:    _ControlService_AddForward_Handler,
+		},
+		{
+			MethodName: "ListForwards",
+			Handler:    _ControlService_ListForwards_Handler,
+		},
+		{
+			MethodName: "RemoveForward",
+			Handler:    _ControlService_RemoveForward_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

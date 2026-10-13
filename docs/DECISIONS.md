@@ -19,6 +19,25 @@ The `sandboxctl` front end uses generic external-subcommand dispatch. It finds
 Subcommand executables own their command behavior. The `sandboxd` executable
 does not use this dispatcher.
 
+## Guest port forwarding
+
+`sandboxd` manages TCP forwarding listeners on host `127.0.0.1`.
+The control API continues to use only the Unix socket.
+Use `golang.org/x/crypto/ssh` for setup and forwarding.
+Share one daemon SSH connection for each sandbox.
+Save mappings and the trusted guest public host key in the instance record.
+Use a separate daemon-owned forwarding key for each stable instance identifier.
+The daemon must not open operator private keys.
+The CLI installs the restricted forwarding public key through operator SSH access.
+A separate guest key file preserves forwarding access across bootstrap runs in existing images.
+The guest policy permits local TCP forwarding only to loopback ports.
+The forwarding key cannot run commands or request a terminal.
+Use the last assigned host port on restart when it is free.
+Bind port zero when a preferred or saved host port is occupied.
+Keep the bound listener to avoid a port-selection race.
+Clear the forwarding host-key pin after reset.
+Require explicit operator host-key verification before forwarding resumes.
+
 ## Runtime
 
 The runtime uses the Firecracker Go Software Development Kit (SDK) v1.0.0.

@@ -1,8 +1,93 @@
 # Implementation progress
 
+## Port forwarding implementation
+
+Daemon-managed forwarding is complete in the workspace.
+`sandboxctl forward NAME [HOST_PORT:]GUEST_PORT` registers a saved mapping and returns its host endpoint.
+`--list` reports saved mappings and tunnel errors.
+`--remove GUEST_PORT` removes a mapping and closes its listener and streams.
+Host listeners bind only to `127.0.0.1`.
+An occupied preferred or saved port triggers direct port-zero allocation.
+The daemon shares one native Go SSH connection for each sandbox.
+It retries interrupted connections and checks the pinned guest host key on each connection.
+Each sandbox supports 32 mappings and 128 active connections.
+Version 3 instance records store mappings and the trusted public host key.
+Version 2 records migrate in memory and use version 3 on their next save.
+Unknown record fields survive migration and updates.
+Lifecycle and forwarding operations serialize record changes.
+Stop closes tunnels and retains mappings.
+Start and daemon reconciliation restore mappings for verified running instances.
+Delete removes the forwarding key and saved mappings.
+Reset preserves mappings and clears the forwarding host-key pin.
+The CLI installs a separate restricted public key through native Go SSH.
+The daemon does not read operator private keys.
+A separate guest key file survives bootstrap in existing images.
+The guest key cannot run commands, obtain a terminal, open reverse forwarding, or connect to other guest addresses.
+The CLI uses the existing managed known-hosts file and stable instance alias.
+Changed operator host keys remain rejected until the operator verifies and updates trust.
+The runtime specification, README, command help, continuation notes, and design decisions describe the implemented behavior.
+The SSH dependency is pinned at `golang.org/x/crypto` v0.58.0.
+The dependency license inventory includes the updated pinned modules.
+`gofmt`, `go vet ./...`, `go test ./...`, Buf lint, `make build`, and `git diff --check` pass.
+Race checks pass for forwarding, host state, operator SSH, and daemon RPC packages.
+Tests cover parser bounds, schema migration, key privacy, port collisions, saved-port reuse, daemon restart, process identity, key changes, mapping limits, write failure, cancellation, removal, and stop cleanup.
+Native SSH integration tests verify shared connections and byte transfer.
+A temporary OpenSSH server verifies the actual restricted-key policy.
+The installed daemon and a live VM have not been used for a full forwarding round trip.
+No host service installation or restart was performed.
+The next task is installation of the updated CLI and daemon when the operator requests it.
+
+## Codex package installation
+
+The documented standalone Codex installation is implemented.
+Codex 0.160.0 requires a complete local package for its default background server startup.
+The example previously copied only the CLI binary.
+The Dockerfile now runs `https://chatgpt.com/codex/install.sh` with an explicit release version and non-interactive installation.
+The installer verifies package release checksums.
+The image stores the complete package in `/usr/local/lib/codex` and exposes its command in `/usr/local/bin`.
+The image does not set `CODEX_HOME` for guest sessions.
+The guest retains its login and rules under `/home/dev/.codex`.
+The example places the operator's curated-plugin cache blocker in `/etc/skel`.
+Provisioning copies it when it creates `dev`.
+This step does not require `sudo` or an existing guest home during the Dockerfile build.
+The build checks package metadata, helper binaries, and the CLI version.
+Node.js is not required.
+The same installer repaired the running `weight-tracker` guest at Codex 0.160.0.
+Normal startup reached the sign-in screen without the incomplete-package error.
+The startup check exited without signing in or submitting a task.
+`gofmt`, `go vet ./...`, `go test ./...`, and `git diff --check` pass.
+The updated example built and staged `codex` at `sha256:9132d988263d0947a63726421e682e64f197e19c61af19ec2a884d0390b6a6a6` on 2026-10-13.
+The build removed its temporary builder sandbox.
+The staged image has not been installed because the running guest uses the old installed image.
+The running guest already has the repaired complete package.
+The next task is replacement of the installed image when the operator requests removal of its dependent sandbox.
+
+## Guest filesystem ownership
+
+Ownership preservation in guest image export is complete in the workspace.
+The running `weight-tracker` guest reported a root-owned `/home/dev/.codex` directory with mode `0700`.
+BuildKit's local directory exporter assigned root ownership to all exported files.
+Guest bootstrap repaired the home and SSH directory owners but did not repair the skeleton files.
+The builder now exports a tar archive and extracts it inside the builder VM with numeric owners and original file modes.
+The builder checks ownership of the guest home and SSH directories before creating SquashFS.
+The running guest's Codex directory and rules now belong to `dev` with modes `0700` and `0600`.
+An extraction regression test covers numeric ownership, private modes, executable files, and symbolic and hard links.
+The manual Dockerfile check covers private skeleton rules and a custom non-root owner.
+`gofmt`, `go vet ./...`, `go test ./...`, `make build`, shell syntax checks, and `git diff --check` pass.
+The fixed workspace CLI built and staged `codex` at `sha256:a33d40dd666c63823d3b2eded7af7bf6f59b60f6102eb91b885d9a4885f35cf8` on 2026-10-13.
+The live build passed the ownership checks before creating SquashFS.
+The build removed its temporary builder sandbox.
+The operator requested removal of the sandbox and old image.
+The CLI stopped `weight-tracker`, pulled its Git task, and deleted it.
+The starting and result commit were both `42cb6354524b455f01a36f155a3f2dcd139fc5d5`.
+The CLI removed the old installed `codex` image and installed the corrected staged version.
+No sandboxes remain.
+The next task is a live Codex login and guest-change round trip from the corrected image.
+The updated manual Dockerfile check has not run.
+
 ## SSH host-key identity
 
-Host-key isolation by sandbox instance identifier is complete in the workspace.
+Host-key isolation by sandbox instance identifier is complete.
 The daemon-backed SSH fragment now sets `HostKeyAlias sandbox-instance-ID` for each sandbox alias and guest address.
 The CLI validates the daemon identifier before it changes the fragment.
 Recreated sandboxes receive separate trust even when names or addresses are reused.
@@ -12,8 +97,14 @@ Reset keeps the identifier and still requires verified explicit host-key replace
 Tests cover daemon identifier transfer, invalid identifiers, restart, address changes, name and address reuse, and deletion.
 OpenSSH configuration resolution and known-host lookup checks cover these cases.
 `gofmt`, `go vet ./...`, `go test ./...`, `make build`, and `git diff --check` pass.
-The system CLI has not been upgraded.
-The next task is installation of the updated CLI and first-use host-key confirmation for the current `weight-tracker` instance before deletion.
+The operator reinstalled the CLI on 2026-10-13.
+The regenerated SSH fragment resolved the current `weight-tracker` instance identifier through OpenSSH.
+SSH requested first-use trust for that identifier without rejecting the old address entry.
+The operator approved the displayed fingerprint.
+The automatic Git pull succeeded, and deletion removed `weight-tracker`.
+The starting and result commit were both `42cb6354524b455f01a36f155a3f2dcd139fc5d5`.
+At completion of that deletion, no sandboxes remained, and the `codex` image remained installed.
+The next task is a live Codex login and guest-change round trip.
 
 ## Relative Dockerfile build context
 
@@ -26,9 +117,9 @@ The relative context fix is complete.
 The fixed CLI built and installed the `codex` example image with `--context ./examples/codex` on 2026-10-13.
 The installed version is `sha256:dce89132919c2fc0a9e35f81ab1b44c5f7b83777e62e57d883c67b8026e13e80`.
 The build removed its temporary builder sandbox.
-Deleting `weight-tracker` remains blocked by a changed SSH host key.
 The logs confirm deletion of the old instance and reuse of its address by a new instance.
-The instance-based host-key fix above removes the old address entry from this new instance's trust lookup after the CLI upgrade.
+The instance-based host-key fix above removed the old address entry from this new instance's trust lookup after the CLI upgrade.
+The Git pull and sandbox deletion then succeeded.
 
 ## CLI debug diagnostics
 

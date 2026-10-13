@@ -20,6 +20,7 @@ The project includes or builds with these third-party components:
 | E2B distribution profiles and provisioning code | Apache-2.0 | Selected source was adapted into `cmd/sandboxctl/image/build/distro` and `cmd/sandboxctl/image/build/provision`. The original copyright and license notices remain. |
 | Firecracker and jailer | Apache-2.0 | Official binaries are included in the Arch package. |
 | BuildKit v0.34.0 | Apache-2.0 | The pinned tools are included in the packaged builder image. |
+| `golang.org/x/crypto/ssh` v0.58.0 | BSD-3-Clause | The CLI and daemon use native Go SSH for guest forwarding. The exact module license remains in `third_party/licenses/go/`. |
 | Go modules used by the project binaries | Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT, and MPL-2.0 | The exact license files from the modules in `go list -deps ./...` are in [`../third_party/licenses/go/`](../third_party/licenses/go/). Filenames include the module path and version. |
 | Ubuntu packages in the builder image | Per-package licenses | Package copyright and license files remain in the Ubuntu guest filesystem. |
 

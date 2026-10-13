@@ -3,7 +3,7 @@
 include tests/phase1/phase1.make
 include e2e/e2e.make
 
-SANDBOXCTL_COMMANDS = create delete doctor help host host/install image image/build image/delete image/install image/list init list paths pull reset ssh ssh-config start stop version vmrun
+SANDBOXCTL_COMMANDS = create delete doctor forward help host host/install image image/build image/delete image/install image/list init list paths pull reset ssh ssh-config start stop version vmrun
 
 build:
 	mkdir -p bin

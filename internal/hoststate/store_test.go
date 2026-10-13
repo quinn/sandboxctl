@@ -173,7 +173,7 @@ func TestStoreLoadRejectsUnsupportedSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := (Store{Paths: paths}).Load("dev1")
-	if err == nil || err.Error() != "unsupported instance schema version 99; expected 2" {
+	if err == nil || err.Error() != "unsupported instance schema version 99; expected 3" {
 		t.Fatalf("Load() error = %v", err)
 	}
 }
@@ -323,5 +323,122 @@ func testInstance(id string) Instance {
 		GuestMAC:       "06:00:ac:1e:00:02",
 		SSHUser:        "dev",
 		SSHAlias:       "sandbox-dev1",
+	}
+}
+
+func TestStoreMigratesVersionTwoAndKeepsUnknownFields(t *testing.T) {
+	store := Store{Paths: PathsAt(filepath.Join(t.TempDir(), "state"))}
+	instance := testInstance("0123456789abcdef0123456789abcdef")
+	if err := store.Save(instance); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(store.Paths.Instances, instance.Name, "instance.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err = json.Unmarshal(data, &fields); err != nil {
+		t.Fatal(err)
+	}
+	fields["schema_version"] = json.RawMessage(`2`)
+	fields["future"] = json.RawMessage(`{"keep":true}`)
+	data, _ = json.Marshal(fields)
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	migrated, err := store.Load(instance.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if migrated.SchemaVersion != 3 || string(migrated.Extra["future"]) != `{"keep":true}` || len(migrated.Forwards) != 0 {
+		t.Fatalf("bad migration: %+v", migrated)
+	}
+	migrated.Forwards = []Forward{{GuestPort: 3000, LastHostPort: 8080}}
+	if err = store.Save(migrated); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(instance.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.SchemaVersion != 3 || len(loaded.Forwards) != 1 || len(loaded.Extra) == 0 {
+		t.Fatalf("bad record: %+v", loaded)
+	}
+}
+
+func TestStoreRejectsInvalidForwards(t *testing.T) {
+	for _, items := range [][]Forward{{{GuestPort: 0, LastHostPort: 8080}}, {{GuestPort: 1, LastHostPort: 80}}, {{GuestPort: 1, PreferredHostPort: 80, LastHostPort: 8080}}, {{GuestPort: 1, LastHostPort: 8080}, {GuestPort: 1, LastHostPort: 8081}}} {
+		instance := testInstance("0123456789abcdef0123456789abcdef")
+		instance.Forwards = items
+		if err := (Store{Paths: PathsAt(filepath.Join(t.TempDir(), "state"))}).Save(instance); err == nil {
+			t.Fatalf("accepted %+v", items)
+		}
+	}
+}
+
+func TestStoreForwardKeyIsPrivateAndRejectsSymlinks(t *testing.T) {
+	store := Store{Paths: PathsAt(filepath.Join(t.TempDir(), "state"))}
+	instance := testInstance("0123456789abcdef0123456789abcdef")
+	if err := store.Save(instance); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveForwardKey(instance.Name, []byte("key")); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(store.Paths.Instances, instance.Name, "forward_ed25519")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Fatal("key is not private")
+	}
+	if data, err := store.LoadForwardKey(instance.Name); err != nil || string(data) != "key" {
+		t.Fatalf("key=%s err=%v", data, err)
+	}
+	if err = os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Symlink(filepath.Join(store.Paths.Instances, instance.Name, "instance.json"), path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.LoadForwardKey(instance.Name); err == nil {
+		t.Fatal("accepted a key symlink")
+	}
+}
+
+func TestStoreDeletionRemovesForwardingKeyAndMappings(t *testing.T) {
+	store := Store{Paths: PathsAt(filepath.Join(t.TempDir(), "state"))}
+	instance := testInstance("0123456789abcdef0123456789abcdef")
+	instance.HostUID = os.Geteuid()
+	instance.HostGID = os.Getegid()
+	if instance.HostUID == 0 {
+		instance.HostUID = 1
+	}
+	if instance.HostGID == 0 {
+		instance.HostGID = 1
+	}
+	instance.Forwards = []Forward{{GuestPort: 3000, LastHostPort: 8080}}
+	if err := store.SaveWithPublicKey(instance, testPublicKey()); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveForwardKey(instance.Name, []byte("private key")); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(store.Paths.Instances, instance.Name, "state.ext4")
+	if err := os.WriteFile(path, []byte("state"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if os.Geteuid() == 0 {
+		if err := os.Chown(path, instance.HostUID, instance.HostGID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.RemoveInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(store.Paths.Instances, instance.Name)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("instance state remains: %v", err)
 	}
 }

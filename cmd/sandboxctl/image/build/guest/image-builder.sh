@@ -18,6 +18,7 @@ settings_path=$build_root/settings.json
 provision_context=$context/provision
 user_oci_tar=$build_root/user-image.oci.tar
 user_oci=$build_root/user-image.oci
+rootfs_tar=$build_root/rootfs.tar
 rootfs=$build_root/rootfs
 output=$build_root/output
 buildkit_root=$build_root/buildkit
@@ -70,7 +71,7 @@ if [ "$actual_buildctl_version" != "$buildkit_version" ] || [ "$actual_buildkitd
     exit 1
 fi
 
-rm -rf -- "$user_context" "$user_dockerfile_context" "$provision_context" "$user_oci_tar" "$user_oci" "$rootfs" "$output" "$buildkit_root" "$buildkit_socket_dir"
+rm -rf -- "$user_context" "$user_dockerfile_context" "$provision_context" "$user_oci_tar" "$user_oci" "$rootfs_tar" "$rootfs" "$output" "$buildkit_root" "$buildkit_socket_dir"
 mkdir -m 0700 -- "$output" "$user_context" "$provision_context"
 if [ "$build_mode" = build-base ]; then
     mv -- "$context/Dockerfile" "$user_context/Dockerfile"
@@ -218,7 +219,7 @@ if ! /usr/local/bin/buildctl \
     --local "context=$provision_context" \
     --local "dockerfile=$provision_context" \
     --source-policy-file "$provision_context/source-policy.json" \
-    --output "type=local,dest=$rootfs" \
+    --output "type=tar,dest=$rootfs_tar" \
     >"$build_root/provision.log" 2>&1; then
     echo 'sandboxctl-image-builder: guest provisioning build failed; last 80 log lines follow' >&2
     tail -n 80 "$build_root/provision.log" >&2 || true
@@ -227,6 +228,14 @@ fi
 echo 'sandboxctl-image-builder: sandboxctl guest provisioning completed'
 stop_buildkitd
 trap - EXIT
+
+# The local exporter replaces guest ownership with the buildctl user's identity.
+# Tar export retains numeric guest owners and private file modes.
+mkdir -m 0700 -- "$rootfs"
+if ! /usr/bin/tar --extract --numeric-owner --same-owner --same-permissions --directory "$rootfs" --file "$rootfs_tar"; then
+    echo 'sandboxctl-image-builder: provisioned filesystem extraction failed' >&2
+    exit 1
+fi
 
 for path in \
     "$rootfs/etc/os-release" \
@@ -247,6 +256,14 @@ if ! grep -q '^dev:[^:]*:[1-9][0-9]*:' "$rootfs/etc/passwd"; then
     echo 'sandboxctl-image-builder: guest dev account is missing or invalid' >&2
     exit 1
 fi
+dev_uid=$(chroot "$rootfs" /usr/bin/id -u dev)
+dev_gid=$(chroot "$rootfs" /usr/bin/id -g dev)
+for path in "$rootfs/home/dev" "$rootfs/home/dev/.ssh"; do
+    if [ "$(stat -c '%u:%g' "$path")" != "$dev_uid:$dev_gid" ]; then
+        echo 'sandboxctl-image-builder: guest home or SSH directory ownership is invalid' >&2
+        exit 1
+    fi
+done
 if find "$rootfs" -xdev -name envd -print -quit | grep -q .; then
     echo 'sandboxctl-image-builder: E2B envd files are not allowed' >&2
     exit 1
