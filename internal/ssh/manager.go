@@ -249,11 +249,36 @@ func (m Manager) ExecAlias(name string, remoteCommand []string) error {
 }
 
 func ensureFile(path string, mode fs.FileMode) error {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND, mode)
+	file, err := openPrivateFile(path, syscall.O_CREAT, mode)
 	if err != nil {
-		return fmt.Errorf("create %s: %w", path, err)
+		return err
 	}
 	return file.Close()
+}
+
+// openPrivateFile checks the opened file before it restores private permissions.
+// Use the descriptor for both checks and chmod to prevent path replacement races.
+func openPrivateFile(path string, flags int, mode fs.FileMode) (*os.File, error) {
+	fd, err := syscall.Open(path, flags|syscall.O_RDWR|syscall.O_CLOEXEC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, uint32(mode.Perm()))
+	if err != nil {
+		return nil, fmt.Errorf("open managed file %s: %w", path, err)
+	}
+	file := os.NewFile(uintptr(fd), path)
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, fmt.Errorf("inspect managed file %s: %w", path, err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !info.Mode().IsRegular() || !ok || int(stat.Uid) != os.Geteuid() {
+		file.Close()
+		return nil, fmt.Errorf("managed file %s must be a regular file owned by the operator", path)
+	}
+	if err := file.Chmod(mode); err != nil {
+		file.Close()
+		return nil, fmt.Errorf("set managed file permissions %s: %w", path, err)
+	}
+	return file, nil
 }
 
 func quoteConfigValue(value string) string {

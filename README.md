@@ -360,6 +360,9 @@ The guest key permits only local TCP forwarding to loopback ports.
 It cannot start a shell, run a command, or open reverse forwarding.
 The daemon creates and manages the SSH connection with Go's `golang.org/x/crypto/ssh` package.
 It checks the sandbox instance's trusted host key.
+Native SSH uses OpenSSH's host-key preference order for algorithms supported by Go.
+Algorithms for trusted keys come first.
+The daemon verifies the selected key against its saved pin.
 It listens on the selected host port and forwards each connection through SSH to the guest port.
 The command prints the selected endpoint and returns.
 Forwarding continues after you close the terminal.

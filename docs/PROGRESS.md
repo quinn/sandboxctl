@@ -1,5 +1,48 @@
 # Implementation progress
 
+## SSH host-key algorithm ordering
+
+Native Go SSH host-key selection now follows OpenSSH ordering in the workspace.
+The operator approved OpenSSH ordering with trusted-key algorithms first.
+CLI setup previously forced Ed25519.
+The daemon used Go's default order, which preferred ECDSA and RSA before Ed25519.
+The daemon could therefore select a different host key from the one setup verified and pinned.
+The shared order now filters OpenSSH preferences through Go's supported algorithms.
+Trusted key types are promoted without changing their relative order.
+RSA keys use the corresponding SHA-512 and SHA-256 signature algorithms.
+The daemon derives its first preference from its saved host-key pin.
+CLI setup derives its first preferences from the managed known-hosts file.
+Exact host-key verification remains required.
+A regression test reproduces the original mismatch with Go's default order.
+Multi-key tests verify Ed25519, ECDSA, and RSA pins during registration and restoration.
+Changed keys still fail exact verification.
+CLI preference tests cover unknown hosts, multiple keys, hashed aliases, unrelated instances, and old address entries.
+The supported default order matches the installed OpenSSH client's reported order.
+A real OpenSSH server with Ed25519 and ECDSA host keys verifies selection and restricted forwarding access.
+`gofmt`, `go vet ./...`, `go test ./...`, race checks, `make build`, and `git diff --check` pass.
+The installed daemon still uses the previous selection order.
+No daemon installation or restart was performed for this fix.
+The operator requested commit and push before installation.
+The next task is installation of the updated CLI and daemon.
+
+## Managed known-hosts permissions
+
+The managed known-hosts permission repair is complete in the workspace.
+The rejected operator file belonged to the operator and had mode `0644`.
+The previous setup helper applied mode `0600` only during file creation.
+The native SSH host-key check then rejected the existing file.
+The shared helper now validates the opened regular file and operator ownership before restoring mode `0600` through its descriptor.
+It rejects symbolic links and special files.
+It preserves file identity and trusted-key contents.
+Forwarding verification uses the same helper.
+Changed host keys still require explicit verified replacement.
+The regression tests and required Go checks passed.
+The workspace CLI restored the live file to mode `0600` and registered port 5173 for `weight-tracker`.
+The daemon then reported a host-key mismatch.
+The live HTTP check failed with a connection reset.
+The host-key algorithm correction is complete in the workspace.
+The next task is installation of the fixes.
+
 ## Port forwarding implementation
 
 Daemon-managed forwarding is complete in the workspace.

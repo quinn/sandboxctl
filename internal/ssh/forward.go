@@ -42,6 +42,11 @@ func (m Manager) InstallForwardKey(ctx context.Context, instance *controlpb.Inst
 	}
 	canonical := strings.TrimSpace(string(gossh.MarshalAuthorizedKey(key)))
 	alias := "sandbox-instance-" + instance.GetId()
+	address := net.JoinHostPort(instance.GetGuestIp(), "22")
+	algorithms, err := m.forwardHostKeyAlgorithms(alias, address)
+	if err != nil {
+		return "", fmt.Errorf("read SSH host-key preferences: %w", err)
+	}
 	var verified string
 	callback := func(_ string, address net.Addr, key gossh.PublicKey) error {
 		if err := m.verifyForwardHost(alias, address, key); err != nil {
@@ -53,7 +58,7 @@ func (m Manager) InstallForwardKey(ctx context.Context, instance *controlpb.Inst
 		}
 		return nil
 	}
-	client, err := forward.Dial(ctx, net.JoinHostPort(instance.GetGuestIp(), "22"), &gossh.ClientConfig{User: instance.GetSshUser(), Auth: []gossh.AuthMethod{gossh.PublicKeys(signer)}, HostKeyCallback: callback, HostKeyAlgorithms: []string{gossh.KeyAlgoED25519}, Timeout: 2 * time.Minute})
+	client, err := forward.Dial(ctx, address, &gossh.ClientConfig{User: instance.GetSshUser(), Auth: []gossh.AuthMethod{gossh.PublicKeys(signer)}, HostKeyCallback: callback, HostKeyAlgorithms: algorithms, Timeout: 2 * time.Minute})
 	if err != nil {
 		return "", fmt.Errorf("connect to sandbox for forwarding setup: %w", err)
 	}
@@ -90,20 +95,16 @@ func (w *boundedOutput) Write(data []byte) (int, error) {
 }
 
 func (m Manager) verifyForwardHost(alias string, address net.Addr, key gossh.PublicKey) error {
-	fd, err := syscall.Open(m.Paths.KnownHosts, syscall.O_RDWR|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0600)
+	file, err := openPrivateFile(m.Paths.KnownHosts, 0, 0o600)
 	if err != nil {
 		return err
 	}
-	file := os.NewFile(uintptr(fd), m.Paths.KnownHosts)
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
 		return err
 	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !info.Mode().IsRegular() || !ok || int(stat.Uid) != os.Geteuid() || info.Mode().Perm() != 0600 {
-		return errors.New("managed known-hosts file must be private and owned by the operator")
-	}
+	fd := int(file.Fd())
 	if err = syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return err
 	}

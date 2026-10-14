@@ -215,7 +215,7 @@ type fakeGuest struct {
 	destinations chan string
 }
 
-func startGuest(t *testing.T) *fakeGuest {
+func startGuest(t *testing.T, hostKeys ...ssh.Signer) *fakeGuest {
 	t.Helper()
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
@@ -223,7 +223,15 @@ func startGuest(t *testing.T) *fakeGuest {
 	}
 	guest := &fakeGuest{address: listener.Addr().String(), key: testHostKey(t), destinations: make(chan string, 16)}
 	config := &ssh.ServerConfig{PublicKeyCallback: func(_ ssh.ConnMetadata, _ ssh.PublicKey) (*ssh.Permissions, error) { return nil, nil }}
+	if len(hostKeys) > 0 {
+		guest.key = hostKeys[0]
+	}
 	config.AddHostKey(guest.key)
+	if len(hostKeys) > 1 {
+		for _, key := range hostKeys[1:] {
+			config.AddHostKey(key)
+		}
+	}
 	var mu sync.Mutex
 	active := make(map[net.Conn]bool)
 	t.Cleanup(func() {

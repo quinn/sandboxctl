@@ -1007,6 +1007,11 @@ Use a separate guest key file that bootstrap does not replace.
 Restrict this key to local TCP forwarding to guest loopback ports.
 Reject shell, command, terminal, agent, and X11 access for this key.
 Verify the guest host key before the daemon connects.
+Use OpenSSH's host-key algorithm order for algorithms that the Go library supports.
+Promote algorithms for trusted keys before the remaining algorithms.
+Use the saved host-key pin for daemon preferences.
+Use the managed known-hosts entries for CLI setup preferences.
+Require exact key verification after algorithm selection.
 The registration RPC accepts only typed ports, an expected instance identifier, and a trusted public host key.
 Require `--replace-host-key` to change an existing forwarding host-key pin.
 Do not accept generic guest commands or filesystem paths through this API.

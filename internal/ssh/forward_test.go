@@ -2,7 +2,9 @@ package ssh
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/pem"
 	"fmt"
@@ -108,6 +110,19 @@ func TestRestrictedForwardKeyWithOpenSSH(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ecPrivate, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ecBlock, err := gossh.MarshalPrivateKey(ecPrivate, "test ECDSA host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ecPath := filepath.Join(dir, "ecdsa_host_key")
+	if err = os.WriteFile(ecPath, pem.EncodeToMemory(ecBlock), 0600); err != nil {
+		t.Fatal(err)
+	}
+
 	key := forwardTestSigner(t)
 	authPath := filepath.Join(dir, "authorized_keys")
 	line := `restrict,port-forwarding,command="/usr/bin/false",permitopen="127.0.0.1:*" ` + strings.TrimSpace(string(gossh.MarshalAuthorizedKey(key.PublicKey()))) + "\n"
@@ -121,7 +136,7 @@ func TestRestrictedForwardKeyWithOpenSSH(t *testing.T) {
 	port := reserved.Addr().(*net.TCPAddr).Port
 	reserved.Close()
 	configPath := filepath.Join(dir, "sshd_config")
-	config := fmt.Sprintf("Port %d\nListenAddress 127.0.0.1\nHostKey %s\nPidFile %s\nAuthorizedKeysFile %s\nStrictModes no\nUsePAM no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin yes\nAllowUsers %s\nAllowTcpForwarding local\nLogLevel ERROR\n", port, hostPath, filepath.Join(dir, "pid"), authPath, operator.Username)
+	config := fmt.Sprintf("Port %d\nListenAddress 127.0.0.1\nHostKey %s\nHostKey %s\nPidFile %s\nAuthorizedKeysFile %s\nStrictModes no\nUsePAM no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin yes\nAllowUsers %s\nAllowTcpForwarding local\nLogLevel ERROR\n", port, hostPath, ecPath, filepath.Join(dir, "pid"), authPath, operator.Username)
 	if err = os.WriteFile(configPath, []byte(config), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +156,7 @@ func TestRestrictedForwardKeyWithOpenSSH(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	for ctx.Err() == nil {
-		client, err = forward.Dial(ctx, net.JoinHostPort("127.0.0.1", fmt.Sprint(port)), &gossh.ClientConfig{User: operator.Username, Auth: []gossh.AuthMethod{gossh.PublicKeys(key)}, HostKeyCallback: gossh.FixedHostKey(hostSigner.PublicKey())})
+		client, err = forward.Dial(ctx, net.JoinHostPort("127.0.0.1", fmt.Sprint(port)), &gossh.ClientConfig{User: operator.Username, Auth: []gossh.AuthMethod{gossh.PublicKeys(key)}, HostKeyCallback: gossh.FixedHostKey(hostSigner.PublicKey()), HostKeyAlgorithms: forward.HostKeyAlgorithms(hostSigner.PublicKey())})
 		if err == nil {
 			break
 		}

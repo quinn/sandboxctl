@@ -9,6 +9,10 @@ It binds host loopback ports and uses a separate forwarding key through native G
 The first registration installs the restricted public key in the guest.
 Guest setup uses the operator key from XDG storage.
 The daemon does not read that operator key.
+Native SSH now uses OpenSSH's host-key order with trusted-key algorithms first.
+The daemon uses its saved pin to select the first algorithm.
+CLI setup uses the managed known-hosts entries.
+The installed daemon needs an update for this ordering fix.
 `--list` reports saved mappings and connection errors.
 `--remove GUEST_PORT` closes the listener and its streams.
 Stop closes tunnels.

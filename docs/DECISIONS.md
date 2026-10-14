@@ -25,6 +25,9 @@ does not use this dispatcher.
 The control API continues to use only the Unix socket.
 Use `golang.org/x/crypto/ssh` for setup and forwarding.
 Share one daemon SSH connection for each sandbox.
+Use OpenSSH's host-key preference order among algorithms supported by Go.
+Promote algorithms for trusted host keys.
+Keep exact key verification after negotiation.
 Save mappings and the trusted guest public host key in the instance record.
 Use a separate daemon-owned forwarding key for each stable instance identifier.
 The daemon must not open operator private keys.

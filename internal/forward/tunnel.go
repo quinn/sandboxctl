@@ -139,7 +139,7 @@ func (t *tunnel) setError(err error) {
 
 func (t *tunnel) connectLoop() {
 	for t.ctx.Err() == nil {
-		client, err := t.dial(t.ctx, t.address, &ssh.ClientConfig{User: t.user, Auth: []ssh.AuthMethod{ssh.PublicKeys(t.signer)}, HostKeyCallback: ssh.FixedHostKey(t.hostKey)})
+		client, err := t.dial(t.ctx, t.address, &ssh.ClientConfig{User: t.user, Auth: []ssh.AuthMethod{ssh.PublicKeys(t.signer)}, HostKeyCallback: ssh.FixedHostKey(t.hostKey), HostKeyAlgorithms: HostKeyAlgorithms(t.hostKey)})
 		if err != nil {
 			t.setError(err)
 			if !pause(t.ctx, time.Second) {
