@@ -10,12 +10,31 @@ Guest images must use Debian or Ubuntu.
 
 ## Install and prepare the host
 
+### Install a GitHub release
+
+Download the `sandboxctl-VERSION-1-x86_64.pkg.tar.zst`, `SHA256SUMS`, and `release.json` files from a published GitHub release.
+Put these files in one directory.
+Verify them in that directory:
+
+```sh
+sha256sum -c SHA256SUMS
+sudo pacman -U ./sandboxctl-VERSION-1-x86_64.pkg.tar.zst
+```
+
+Replace `VERSION` with the selected release version.
+The package includes Firecracker, jailer, and the completed builder image.
+Users do not need the image build tools.
+Continue with [host configuration](#configure-the-host) after installation.
+
+### Install from a checkout
+
 Install the local Arch package from this checkout:
 
 ```sh
 make install
 ```
 
+The checkout must have no uncommitted changes.
 The target uses `yay`.
 It downloads the pinned Firecracker release from GitHub.
 The package build reuses the staged builder image when one exists.
@@ -28,6 +47,56 @@ The package includes the image at `/usr/share/sandboxctl/builder`.
 Package installation does not import the image into sandboxd.
 Podman is a package build dependency.
 It is not needed to run `sandboxctl` or build guest images after installation.
+
+### Builder image cache
+
+The package build uses the completed builder bundle in the user's data directory.
+Each bundle contains a manifest, kernel, guest initramfs, and SquashFS filesystem.
+The cache lookup checks that these files are present, nonempty, and not symbolic links.
+Source changes do not invalidate the cache automatically.
+Use `make clean-builder` when changes to the builder recipe, guest bootstrap, or tool versions require a fresh image.
+The next package build creates a new bundle.
+The stored content digest identifies the finished bundle.
+`sandboxctl init` verifies the packaged bundle before it imports the image.
+
+Inspect the staged builder bundles with:
+
+```sh
+make check-builder
+```
+
+See the [package build and installation plan](packaging/local/README.md) for the checkout and GitHub release flows.
+
+### Build a GitHub release
+
+Both local installation and release builds use `packaging/local/PKGBUILD`.
+The release workflow runs on a GitHub-hosted runner in an Arch Linux container.
+Run the **Build GitHub release** workflow from the default branch.
+Set `tag` to an existing `vMAJOR.MINOR.PATCH` tag.
+The workflow checks out that tag and runs the required checks.
+It builds the package as an unprivileged user.
+It uploads the package, `SHA256SUMS`, and `release.json` to a draft release.
+Review the draft before publishing it.
+
+The workflow caches only the completed builder bundles.
+Keep `builder_cache_revision` unchanged to reuse this cache across releases.
+Increase it when you need a fresh builder image.
+The build does not invalidate this cache from source changes.
+
+Build the same release package on an Arch host:
+
+```sh
+git checkout v0.2.0
+make release TAG=v0.2.0
+```
+
+The tag must match the checked-out commit.
+The checkout must have no uncommitted changes.
+The script writes release files to `dist/v0.2.0/`.
+It refuses to overwrite an existing output directory.
+See the [package plan](packaging/local/README.md) for dependencies and the draft upload command.
+
+### Configure the host
 
 Install the host service and network rules:
 

@@ -55,6 +55,33 @@ The first working iteration uses a prepared kernel, root drive, and TAP device.
 The tool copies the root drive into the private instance directory.
 Host networking and guest image construction remain manual for this iteration.
 
+## Package build and builder cache
+
+Use one checkout-based recipe at `packaging/local/PKGBUILD`.
+Remove the separate Arch User Repository (AUR) recipe.
+Local installation builds `sandboxctl-local` with a Git-derived version.
+Release packaging builds `sandboxctl` with the version of the checked-out tag.
+Both profiles include the completed builder bundle.
+Both profiles use the existing builder staging script.
+Keep the builder cache under `$XDG_DATA_HOME/sandboxctl/images/builder/`.
+Use `~/.local/share` when `XDG_DATA_HOME` is not set.
+Reuse an existing bundle when its four required files are present, nonempty, and not symbolic links.
+Keep manual invalidation through `make clean-builder`.
+Source changes do not invalidate this cache automatically.
+Build and cache a new bundle only when no complete bundle is available.
+Package builds copy the selected bundle into their own staging directory.
+Package installation supplies the bundle at `/usr/share/sandboxctl/builder`.
+Explicit host installation configures the host and enables the control socket.
+`sandboxctl init` verifies and imports the packaged builder through sandboxd.
+Run the release workflow on a GitHub-hosted runner with an Arch Linux container.
+Use an unprivileged package build user and rootless Podman with the `vfs` storage driver.
+Dispatch the workflow from the default branch to share the builder cache across releases.
+Use a manual cache revision instead of source hashes.
+Build and verify the package before uploading it to a GitHub draft release.
+Verify that the existing remote tag matches the package source commit.
+Keep publication as a separate maintainer action.
+See [the package plan](../packaging/local/README.md) for the build and user installation sequence.
+
 ## Guest images
 
 Dockerfile input is the next planned image build mode. BuildKit will execute

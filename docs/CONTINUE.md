@@ -1,5 +1,29 @@
 # Continuation
 
+## Package build and installation plan
+
+Read `packaging/local/README.md` for the updated package plan.
+Keep the completed builder bundle cache under the XDG data directory.
+Preserve the existing file-presence lookup and manual `make clean-builder` invalidation.
+Use `packaging/local/PKGBUILD` for local installation and GitHub releases.
+The separate Arch User Repository (AUR) recipe was removed at the operator's request.
+The operator selected a GitHub-hosted runner with an Arch Linux container.
+The manual release workflow builds an existing version tag and creates a draft release.
+The builder cache uses a manual revision shared across default-branch workflow runs.
+Cache lookup and manual invalidation use the existing staging script.
+Release scripts verify package checksums, builder artifacts, and the remote source commit before uploading.
+They refuse to replace files in a published release.
+Tests use temporary cached bundles, package archives, Git repositories, and mocked build and upload tools.
+`make check`, fresh `go test -count=1 ./...`, shell syntax checks, and workflow YAML parsing pass.
+A stamped `make build` reports the selected version through `sandboxctl version`.
+The existing builder bundle remains complete.
+The actual GitHub workflow has not run.
+The GitHub remote is `origin` at `git@github.com:quinn/sandboxctl.git`.
+The original local remote remains available.
+GitHub CLI is installed, but its saved login needs operator authentication.
+The next task is the first draft release after the operator selects a version and completes authentication.
+Release publication and host package installation remain separate maintainer actions.
+
 ## Port forwarding
 
 The workspace implements `sandboxctl forward NAME [HOST_PORT:]GUEST_PORT`.
@@ -12,13 +36,16 @@ The daemon does not read that operator key.
 Native SSH now uses OpenSSH's host-key order with trusted-key algorithms first.
 The daemon uses its saved pin to select the first algorithm.
 CLI setup uses the managed known-hosts entries.
-The installed daemon needs an update for this ordering fix.
+The operator installed the ordering fix from commit `5d69058`.
+The live `weight-tracker` mapping is active at `127.0.0.1:5173`.
+The guest web service returned HTTP status `200` through the listener.
+The interrupted forwarding task is complete.
 `--list` reports saved mappings and connection errors.
 `--remove GUEST_PORT` closes the listener and its streams.
 Stop closes tunnels.
 Start and daemon reconciliation restore mappings for verified running instances.
 Reset preserves mappings and clears the forwarding host-key pin.
-The new CLI and daemon must both be installed before use.
+The updated CLI and daemon are installed.
 Existing images need no rebuild for this feature.
 Verification results are recorded in `docs/PROGRESS.md`.
 

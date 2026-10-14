@@ -1,8 +1,52 @@
 # Implementation progress
 
+## Package build and installation plan
+
+The operator requested one checkout-based package recipe for local and GitHub release builds.
+The separate Arch User Repository (AUR) recipe and plan were removed.
+`packaging/local/PKGBUILD` retains the local `sandboxctl-local` profile.
+Release builds select the `sandboxctl` profile with the existing version tag.
+Package builds embed the package version in the CLI and daemon.
+The recipe includes the builder manifest, kernel, initramfs, and SquashFS in `/usr/share/sandboxctl/builder`.
+The existing XDG cache retains its file-presence lookup and manual invalidation through `make clean-builder`.
+Source changes do not trigger an automatic builder rebuild.
+The builder staging script and local recipe cache logic are unchanged.
+Package installation, explicit host setup, and verified builder import remain separate operations.
+`scripts/build-release.sh` requires a clean checkout at the version tag and runs `make check`.
+It creates a verified package, `SHA256SUMS`, and `release.json` in a new output directory.
+`scripts/publish-release.sh` verifies these files and the remote tag commit before draft upload.
+It refuses to replace files in a published release.
+The operator selected a GitHub-hosted runner with an Arch Linux container.
+The manual workflow builds as an unprivileged user with rootless Podman and the `vfs` storage driver.
+Only the draft upload job receives repository write permission.
+Actions use pinned commit IDs.
+The workflow caches only completed builder bundles with a manual cache revision.
+The package plan documents release creation, user installation, builder version conflicts, and guarded image commands.
+The README, runtime specification, continuation notes, and design decisions document this flow.
+Fixture tests exercise the single package recipe and cache lookup with temporary bundles.
+They verify cache reuse, staging, installed package paths, filenames with spaces, and refusal to package missing, empty, or symbolic-link cache artifacts.
+The tests stop before any download or builder image construction.
+Release tests cover package profiles, version parsing, tag identity, clean checkouts, output refusal, checksums, builder corruption, and draft upload behavior.
+Package and release fixture tests pass.
+`make check` passes formatting, vet, all Go tests, and Protocol Buffer lint.
+Fresh `go test -count=1 ./...`, shell syntax checks, workflow YAML parsing, and `git diff --check` pass.
+`make build SANDBOXCTL_BUILD_VERSION=0.2.0` passes.
+The built CLI reports `0.2.0` through `sandboxctl version`.
+`make check-builder` reports the existing local bundle at `sha256:0642a10332bfafee3407f5b14f959032d17f7c1a5d1e3c5738c9d3e98fb82b07` as complete.
+No builder image rebuild, cache removal, package installation, or host setup was performed.
+The GitHub workflow and a full release package build have not run.
+The operator created `github.com/quinn/sandboxctl`.
+The repository now uses `git@github.com:quinn/sandboxctl.git` as `origin`.
+The existing `local` remote remains available.
+SSH access to the empty GitHub repository passed.
+GitHub CLI 2.100.0 is already installed.
+Its saved login is invalid and needs operator authentication.
+The next task is a workflow run after the operator selects a version and completes GitHub CLI authentication.
+No GitHub release was created or published.
+
 ## SSH host-key algorithm ordering
 
-Native Go SSH host-key selection now follows OpenSSH ordering in the workspace.
+Native Go SSH host-key selection now follows OpenSSH ordering in the installed CLI and daemon.
 The operator approved OpenSSH ordering with trusted-key algorithms first.
 CLI setup previously forced Ed25519.
 The daemon used Go's default order, which preferred ECDSA and RSA before Ed25519.
@@ -20,10 +64,14 @@ CLI preference tests cover unknown hosts, multiple keys, hashed aliases, unrelat
 The supported default order matches the installed OpenSSH client's reported order.
 A real OpenSSH server with Ed25519 and ECDSA host keys verifies selection and restricted forwarding access.
 `gofmt`, `go vet ./...`, `go test ./...`, race checks, `make build`, and `git diff --check` pass.
-The installed daemon still uses the previous selection order.
-No daemon installation or restart was performed for this fix.
-The operator requested commit and push before installation.
-The next task is installation of the updated CLI and daemon.
+The fixes were committed and pushed as `5d69058`.
+The operator reinstalled the CLI and daemon.
+The saved `weight-tracker` mapping was active after reinstallation.
+The installed `sandboxctl forward weight-tracker 5173` command completed successfully.
+The mapping reports `active` at `127.0.0.1:5173`.
+The guest web service returned HTTP status `200` through that listener.
+The forwarding task is complete.
+The next task is the operator's next requested change.
 
 ## Managed known-hosts permissions
 
@@ -40,8 +88,8 @@ The regression tests and required Go checks passed.
 The workspace CLI restored the live file to mode `0600` and registered port 5173 for `weight-tracker`.
 The daemon then reported a host-key mismatch.
 The live HTTP check failed with a connection reset.
-The host-key algorithm correction is complete in the workspace.
-The next task is installation of the fixes.
+The installed host-key algorithm correction passed the live forwarding check.
+The original permission failure and the later host-key mismatch are resolved.
 
 ## Port forwarding implementation
 
@@ -76,9 +124,10 @@ Race checks pass for forwarding, host state, operator SSH, and daemon RPC packag
 Tests cover parser bounds, schema migration, key privacy, port collisions, saved-port reuse, daemon restart, process identity, key changes, mapping limits, write failure, cancellation, removal, and stop cleanup.
 Native SSH integration tests verify shared connections and byte transfer.
 A temporary OpenSSH server verifies the actual restricted-key policy.
-The installed daemon and a live VM have not been used for a full forwarding round trip.
-No host service installation or restart was performed.
-The next task is installation of the updated CLI and daemon when the operator requests it.
+The operator installed the CLI and daemon.
+The live `weight-tracker` guest passed forwarding registration and an HTTP request through host port 5173.
+The saved mapping was active after the SSH fixes were installed.
+The next task is the operator's next requested change.
 
 ## Codex package installation
 
@@ -488,7 +537,8 @@ The current staged test bundle uses the upstream Ubuntu SquashFS without running
 
 The Codex command environment does not expose `/dev/kvm` and blocks `sudo`. The user's host terminal can run VMs and privileged commands. Do not infer host KVM availability from the Codex command environment.
 Buf remote generation requires access to the Buf Schema Registry. `make generate` fails inside the sandbox because that network call is blocked. The generated files are present from a network-enabled run.
-The repository has no license file. The AUR draft uses the GitHub URL inferred from the workspace path. Confirm the public source URL and select a license before publication.
+The earlier license blocker is resolved by `LICENSE` and `third_party/licenses/`.
+The AUR draft was removed when the operator selected GitHub release packaging.
 
 The user installed the package, imported the default image, and created `pkgtest`. Structured logging found and resolved the TAP parser issue: `ip tuntap show` returned the unrelated `tailscale0` line before the requested TAP. SDK debug output identified the Firecracker startup failure: the jailer reports `Failed to exec into Firecracker: No such file or directory`. The host's `/usr/bin/firecracker` is dynamically linked and requires `/lib64/ld-linux-x86-64.so.2`, which is absent from the jail. The official Firecracker jailer documentation requires a statically linked Firecracker binary paired with the same-version jailer. The package now bundles the official static v1.17.0 x86-64 pair. Host install and doctor now reject a dynamic Firecracker binary. The daemon now uses the package-installed paths under `/usr/lib/sandboxctl`.
 

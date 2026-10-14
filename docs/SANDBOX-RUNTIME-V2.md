@@ -102,6 +102,29 @@ binaries from the same pinned release. The jailer requires a statically linked
 Firecracker binary. The package must not depend on a dynamically linked host
 Firecracker package. The package must not enable the socket.
 
+Use one checkout-based package recipe at `packaging/local/PKGBUILD` for local installation and GitHub releases.
+Do not maintain a separate Arch User Repository (AUR) recipe.
+Release builds must use an existing `vMAJOR.MINOR.PATCH` tag at the checked-out commit.
+Require a clean checkout and the required checks before release packaging.
+Build GitHub releases on a GitHub-hosted runner in an Arch Linux container.
+Run package creation as an unprivileged user.
+Include the completed builder bundle in both package profiles.
+Use the existing local builder cache in `$XDG_DATA_HOME/sandboxctl/images/builder/`.
+Use `~/.local/share` when `XDG_DATA_HOME` is not set.
+Reuse a cached bundle when its manifest, kernel, initramfs, and SquashFS files are present, nonempty, and not symbolic links.
+Keep manual cache invalidation through `make clean-builder`.
+Source changes must not invalidate the cache automatically.
+Build a new builder bundle on a cache miss.
+Copy the selected bundle into package staging and install it at `/usr/share/sandboxctl/builder`.
+`sandboxctl init` must verify the packaged manifest and artifacts before importing them through sandboxd.
+GitHub Actions must cache only completed builder bundles with a manually selected cache revision.
+Release files must include the Arch package, `SHA256SUMS`, and `release.json`.
+Record the source commit, package checksum, and builder identity in `release.json`.
+Verify the package and builder before draft upload.
+Require the remote tag to match the recorded source commit.
+Create or update draft releases only.
+Refuse to replace files in a published release.
+
 The host-install command must:
 
 1. Verify that it runs as root.

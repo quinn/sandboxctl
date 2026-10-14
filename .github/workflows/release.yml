@@ -1,0 +1,108 @@
+name: Build GitHub release
+
+# Dispatch on the default branch so each release can reuse the same cache scope.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build, such as v0.2.0
+        required: true
+        type: string
+      builder_cache_revision:
+        description: Keep this number to reuse the builder. Increase it for a fresh image.
+        required: true
+        default: '1'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    container:
+      image: archlinux:base-devel
+      # Rootless Podman needs nested user namespaces to construct the seed image.
+      options: --privileged
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      BUILDER_CACHE_REVISION: ${{ inputs.builder_cache_revision }}
+      XDG_DATA_HOME: /home/build/.local/share
+      XDG_RUNTIME_DIR: /run/user/1001
+      STORAGE_DRIVER: vfs
+    steps:
+      - name: Validate release inputs
+        shell: bash
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [[ "$BUILDER_CACHE_REVISION" =~ ^[1-9][0-9]*$ ]]
+      - name: Prepare Arch build environment
+        shell: bash
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git go buf podman python squashfs-tools openssh nftables iproute2 e2fsprogs cpio curl gzip zstd sudo
+          useradd --create-home --uid 1001 --shell /bin/bash build
+          # SSH fixture tests need an unlocked account. They disable password login.
+          usermod --password '' build
+          printf '%s\n' 'build:100000:65536' > /etc/subuid
+          printf '%s\n' 'build:100000:65536' > /etc/subgid
+          install -d -o build -g build -m 0700 /run/user/1001 /home/build/.local/share
+      - name: Check out exact release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Restore completed builder bundle
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: /home/build/.local/share/sandboxctl/images/builder
+          key: builder-linux-x86_64-${{ inputs.builder_cache_revision }}
+      - name: Build package from checkout
+        shell: bash
+        run: |
+          chown -R build:build "$GITHUB_WORKSPACE" /home/build/.local/share
+          printf '%s\n' 'build ALL=(ALL) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/release-build
+          chmod 0440 /etc/sudoers.d/release-build
+          sudo -u build -H env XDG_DATA_HOME="$XDG_DATA_HOME" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" STORAGE_DRIVER="$STORAGE_DRIVER" ./scripts/build-release.sh "$RELEASE_TAG"
+      - name: Upload release files
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: release-files
+          path: dist/${{ inputs.tag }}/*
+          if-no-files-found: error
+          compression-level: 0
+
+  draft:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Install artifact verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y zstd
+      - name: Check out release scripts
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+      - name: Download verified package files
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: release-files
+          path: release-files
+      - name: Create or update the draft release
+        shell: bash
+        env:
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: ./scripts/publish-release.sh "$RELEASE_TAG" release-files "$RELEASE_REPOSITORY"

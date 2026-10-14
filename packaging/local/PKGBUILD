@@ -1,5 +1,5 @@
 pkgname=sandboxctl-local
-pkgver=0.1.0.r121.g3799042
+pkgver=0.1.0.r122.g5d69058
 pkgrel=1
 pkgdesc='Manage local Firecracker development sandboxes'
 arch=('x86_64')
@@ -10,6 +10,16 @@ depends=('e2fsprogs' 'git' 'iproute2' 'nftables' 'openssh')
 makedepends=('cpio' 'curl' 'git' 'go>=1.27' 'gzip' 'podman' 'python' 'squashfs-tools')
 provides=('sandboxctl')
 conflicts=('sandboxctl' 'sandboxctl-git')
+if [[ -n ${SANDBOXCTL_RELEASE_VERSION:-} ]]; then
+	if [[ ! $SANDBOXCTL_RELEASE_VERSION =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+		printf 'Release version must use MAJOR.MINOR.PATCH.\n' >&2
+		return 1
+	fi
+	pkgname=sandboxctl
+	pkgver=$SANDBOXCTL_RELEASE_VERSION
+	provides=()
+	conflicts=('sandboxctl-local' 'sandboxctl-git')
+fi
 _firecracker_version=1.17.0
 _firecracker_arch=x86_64
 source=(
@@ -54,7 +64,11 @@ copy_builder_bundle() {
 }
 
 pkgver() {
-	local project_root="$startdir/../.."
+	if [[ -n ${SANDBOXCTL_RELEASE_VERSION:-} ]]; then
+		printf '%s\n' "$SANDBOXCTL_RELEASE_VERSION"
+		return
+	fi
+	local project_root=${SANDBOXCTL_PACKAGE_SOURCE:-"$startdir/../.."}
 	local count hash
 	count=$(git -C "$project_root" rev-list --count HEAD)
 	hash=$(git -C "$project_root" rev-parse --short=7 HEAD)
@@ -62,7 +76,7 @@ pkgver() {
 }
 
 prepare() {
-	local project_root="$startdir/../.."
+	local project_root=${SANDBOXCTL_PACKAGE_SOURCE:-"$startdir/../.."}
 	mkdir -p "$srcdir/sandboxctl"
 	git -C "$project_root" ls-files --cached --others --exclude-standard -z > "$srcdir/source-files"
 	tar -C "$project_root" --null --files-from="$srcdir/source-files" -cf - |
@@ -72,7 +86,7 @@ prepare() {
 
 build() {
 	cd "$srcdir/sandboxctl"
-	make build
+	make build SANDBOXCTL_BUILD_VERSION="$pkgver"
 	local package_images="$srcdir/package-data/sandboxctl/images"
 	local staged_bundle data_home data_images
 	data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}

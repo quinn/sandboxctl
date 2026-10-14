@@ -1,17 +1,19 @@
-.PHONY: build install host-install sandboxctl test check generate proto-lint download-builder-tools download-builder-base-assets guest-initramfs stage-builder-image clean-builder clean
+.PHONY: build install release host-install sandboxctl test check generate proto-lint download-builder-tools download-builder-base-assets guest-initramfs stage-builder-image clean-builder clean
 
 include tests/phase1/phase1.make
 include e2e/e2e.make
 
 SANDBOXCTL_COMMANDS = create delete doctor forward help host host/install image image/build image/delete image/install image/list init list paths pull reset ssh ssh-config start stop version vmrun
+SANDBOXCTL_BUILD_VERSION ?= 0.1.0-dev
+SANDBOXCTL_LDFLAGS = -X sandboxctl/internal/buildinfo.Version=$(SANDBOXCTL_BUILD_VERSION)
 
 build:
 	mkdir -p bin
-	go build -o bin/sandboxctl ./cmd/sandboxctl
-	go build -o bin/sandboxd ./cmd/sandboxd
+	go build -ldflags "$(SANDBOXCTL_LDFLAGS)" -o bin/sandboxctl ./cmd/sandboxctl
+	go build -ldflags "$(SANDBOXCTL_LDFLAGS)" -o bin/sandboxd ./cmd/sandboxd
 	for command in $(SANDBOXCTL_COMMANDS); do \
 		binary_name=$$(printf '%s' "$$command" | tr '/' '-'); \
-		go build -o "bin/sandboxctl-$$binary_name" "./cmd/sandboxctl/$$command" || exit $$?; \
+		go build -ldflags "$(SANDBOXCTL_LDFLAGS)" -o "bin/sandboxctl-$$binary_name" "./cmd/sandboxctl/$$command" || exit $$?; \
 	done
 
 install:
@@ -23,6 +25,9 @@ install:
 		exit 1; \
 	fi
 	yay -Bi "$(CURDIR)/packaging/local"
+
+release:
+	./scripts/build-release.sh "$(TAG)"
 
 host-install: build
 	sudo env PATH="$(CURDIR)/bin:$$PATH" "$(CURDIR)/bin/sandboxctl" host install --operator "$$(id -un)"

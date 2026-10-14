@@ -11,6 +11,7 @@ import (
 
 	"sandboxctl/cmd/sandboxd/daemon"
 	"sandboxctl/cmd/sandboxd/network"
+	"sandboxctl/internal/buildinfo"
 	"sandboxctl/internal/forward"
 	"sandboxctl/internal/hoststate"
 	"sandboxctl/internal/runtime"
@@ -65,7 +66,7 @@ func run(arguments []string) error {
 		},
 	}
 	forwards := forward.New(manager.Store, func(name string) bool { return supervisor.RuntimeState(name) == "running" })
-	server := daemon.NewServerWithForwarding("0.1.0-dev", supervisor, manager, paths, forwards)
+	server := daemon.NewServerWithForwarding(buildinfo.Version, supervisor, manager, paths, forwards)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go forwards.Run(ctx)

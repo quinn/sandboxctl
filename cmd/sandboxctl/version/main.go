@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"sandboxctl/internal/buildinfo"
 	"sandboxctl/internal/cmdutil"
 )
 
@@ -16,6 +17,6 @@ func run(arguments []string) error {
 	if len(arguments) != 0 {
 		return errors.New("usage: sandboxctl version")
 	}
-	fmt.Fprintln(os.Stdout, "0.1.0-dev")
+	fmt.Fprintln(os.Stdout, buildinfo.Version)
 	return nil
 }
