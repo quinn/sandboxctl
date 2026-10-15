@@ -38,6 +38,7 @@ jobs:
       XDG_DATA_HOME: /home/build/.local/share
       XDG_RUNTIME_DIR: /run/user/1001
       STORAGE_DRIVER: vfs
+      BUILDAH_ISOLATION: chroot
     steps:
       - name: Validate release inputs
         shell: bash
@@ -52,6 +53,9 @@ jobs:
           setcap cap_setuid=ep /usr/bin/newuidmap
           setcap cap_setgid=ep /usr/bin/newgidmap
           chmod 1777 /var/tmp
+          install -d -m 0755 /etc/containers/containers.conf.d
+          # Builds share the outer CI container's network namespace.
+          printf '[containers]\nnetns = "host"\n' > /etc/containers/containers.conf.d/release.conf
           useradd --create-home --uid 1001 --shell /bin/bash build
           # SSH fixture tests need an unlocked account. They disable password login.
           usermod --password '' build
@@ -61,7 +65,7 @@ jobs:
       - name: Check rootless Podman build support
         shell: bash
         run: |
-          sudo -u build -H env XDG_DATA_HOME="$XDG_DATA_HOME" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" STORAGE_DRIVER="$STORAGE_DRIVER" bash -euo pipefail <<'SH'
+          sudo -u build -H env XDG_DATA_HOME="$XDG_DATA_HOME" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" STORAGE_DRIVER="$STORAGE_DRIVER" BUILDAH_ISOLATION="$BUILDAH_ISOLATION" bash -euo pipefail <<'SH'
           context=$(mktemp -d)
           trap 'rm -rf -- "$context"' EXIT
           podman unshare true
@@ -87,7 +91,7 @@ jobs:
           chown -R build:build "$GITHUB_WORKSPACE" /home/build/.local/share
           printf '%s\n' 'build ALL=(ALL) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/release-build
           chmod 0440 /etc/sudoers.d/release-build
-          sudo -u build -H env XDG_DATA_HOME="$XDG_DATA_HOME" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" STORAGE_DRIVER="$STORAGE_DRIVER" ./scripts/build-release.sh "$RELEASE_TAG"
+          sudo -u build -H env XDG_DATA_HOME="$XDG_DATA_HOME" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" STORAGE_DRIVER="$STORAGE_DRIVER" BUILDAH_ISOLATION="$BUILDAH_ISOLATION" ./scripts/build-release.sh "$RELEASE_TAG"
       - name: Upload release files
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:

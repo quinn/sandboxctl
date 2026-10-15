@@ -138,6 +138,7 @@ Package creation runs as an unprivileged `build` user.
 Podman uses the `vfs` storage driver to avoid nested overlay mounts.
 Buildah uses a separate Docker volume at `/var/tmp` for its context overlay scratch space.
 The workflow checks a rootless build before compiling the package.
+Build commands use Buildah chroot isolation and the outer CI container's network namespace.
 The build job has read access to repository contents.
 Only the draft upload job has write access to repository contents.
 Action versions are pinned to commit IDs.

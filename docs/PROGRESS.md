@@ -72,6 +72,9 @@ The next release task is a build retry with the container setup correction.
 Namespace validation then passed, but Buildah could not mount its context overlay on container-backed scratch storage.
 CI now mounts a Docker volume at `/var/tmp` for build scratch space.
 The preflight check builds a small image without network access before package compilation.
+The next run passed the preflight and pulled the pinned base image.
+The first build command failed because nested rootless network setup could not open the required namespace files.
+CI uses Buildah chroot isolation and shares the outer container's network namespace for build commands.
 
 ## Port forwarding
 
