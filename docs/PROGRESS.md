@@ -4,7 +4,8 @@
 
 The active phase is GitHub release validation.
 Release packaging is implemented.
-The first complete GitHub workflow run remains open.
+The first GitHub workflow run exposed a test fixture permission issue.
+The complete release build remains open.
 The clean supported Arch host acceptance check in section 19 also remains open.
 
 ## Documentation privacy review
@@ -58,8 +59,12 @@ The workflow caches only completed builder bundles with a manual cache revision.
 Fixture tests cover both package profiles, cache reuse, staging, paths with spaces, incomplete bundles, symbolic links, version parsing, tag identity, clean checkouts, output refusal, checksums, builder corruption, and draft uploads.
 Formatting, vet, Go tests, Protocol Buffer lint, shell syntax checks, workflow YAML parsing, and whitespace checks pass.
 A stamped build reports the selected version.
-The actual GitHub workflow and a complete release package build remain unverified.
-The next release task is a workflow run from an existing version tag.
+The first GitHub run passed environment setup and reached the Go checks.
+The private release file mask changed a fixture's executable mode and caused its metadata assertion to fail.
+The fixture now sets its requested mode explicitly.
+A subprocess regression check runs the metadata test with file mask `077`.
+The complete release package build remains unverified.
+The next release task is a build retry with the fixture correction.
 
 ## Port forwarding
 

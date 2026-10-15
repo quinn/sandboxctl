@@ -28,8 +28,10 @@ Use the guarded image commands when replacement is required.
 Package and release fixture tests pass.
 Formatting, vet, Go tests, Protocol Buffer lint, shell syntax checks, and workflow YAML parsing pass.
 A stamped build reports the selected version through `sandboxctl version`.
-The actual GitHub workflow and a complete release package build remain unverified.
-The next release task is to tag `v0.1.0` and run `.github/workflows/release.yaml`.
+The first GitHub run exposed a fixture that depended on the caller's file mask.
+The fixture now sets its intended mode explicitly and has a subprocess regression check.
+The complete release package build remains unverified.
+The next release task is to retry `v0.1.0` with the correction through `.github/workflows/release.yaml`.
 
 ## Documentation privacy
 

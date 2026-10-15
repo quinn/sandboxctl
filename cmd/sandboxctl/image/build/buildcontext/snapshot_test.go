@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -54,6 +55,18 @@ func TestCreateSnapshotsDockerContextWithIgnoreRules(t *testing.T) {
 	}
 	if entries["app"].Mode != 0o755 || entries["app"].Uid != 0 || entries["app"].Gid != 0 || !entries["app"].ModTime.Equal(epoch) {
 		t.Fatalf("archive metadata is not normalized: %#v", entries["app"])
+	}
+}
+
+func TestCreateSnapshotsContextWithPrivateUmask(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Isolate the process-wide mask from other tests.
+	command := exec.Command("/bin/sh", "-c", `umask 077; exec "$1" -test.run '^TestCreateSnapshotsDockerContextWithIgnoreRules$' -test.count=1`, "context-private-mask", executable)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("snapshot with private file mask: %v\n%s", err, output)
 	}
 }
 
@@ -175,6 +188,9 @@ func TestCreateProducesDeterministicArchive(t *testing.T) {
 func writeFile(t *testing.T, path, content string, mode os.FileMode) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, mode); err != nil {
 		t.Fatal(err)
 	}
 }
