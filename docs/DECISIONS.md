@@ -121,18 +121,21 @@ The first-boot service must install the SSH public key. It must also set the gue
 
 ## Network
 
-The first network uses bridge `fcbr0` and subnet `172.30.0.0/24`.
-
-The host address is `172.30.0.1`. Each guest gets a stable address from the instance registry.
+The initial prototype used bridge networking.
+The production design uses routed TAP devices.
+Each guest gets a stable allocation from the address registry.
+The default address pool is `172.30.0.0/16`.
+This pool is a documented product default.
 
 Each guest uses one TAP device. Firecracker connects its network device to this TAP device.
-The first manual test assigns the host address directly to its TAP device.
+The host assigns a gateway address to each TAP device.
 
 The host uses network address translation (NAT) for guest Internet access. The tool must use nftables on Arch Linux.
 
 The local host can connect directly to each guest address. Therefore, Herdr does not need an SSH port-forward rule for the first release.
 
-Remote access to the Firecracker host is a later feature. That feature can use one host port for each sandbox or routed Tailscale addresses.
+Remote access to the Firecracker host is a later feature.
+That feature can use forwarded host ports or a routed overlay network.
 
 ## SSH
 

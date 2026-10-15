@@ -34,11 +34,11 @@ image builder does not generate a startup service from container commands.
 
 ## 3. E2B findings
 
-The retained runtime checkout is `tmp/e2b-runtime`. Its commit is
+The upstream runtime reference commit is
 `47096f195aca4a545a9079b706efb3a18f51cf3f`. Its extraction record is
 [E2B-SOURCE.md](E2B-SOURCE.md).
 
-Inspect these paths in that checkout:
+Inspect these paths in an upstream checkout:
 
 - `packages/orchestrator/template-manager.proto`
 - `packages/orchestrator/pkg/template/build/commands/executor.go`
@@ -53,7 +53,7 @@ Its finalization uses Firecracker snapshots.
 
 The Dockerfile translator lives in the separate E2B SDK repository. The SDK
 source was reviewed on 2026-10-10. These links refer to its current `main`
-branch, not the retained runtime commit.
+branch, not the runtime reference commit.
 
 The translator requires one `FROM`. It rejects multiple stages. It maps
 `RUN`, file copies, user selection, and working directories to template steps.
@@ -300,23 +300,21 @@ Edit those values when the installed test builder changes. The test uses the
 workspace CLI with the installed sandboxd service. It does not require a
 package reinstall when the package builder did not change.
 
-The live test passed on 2026-10-11. It built multiple Dockerfile stages with
+The VM acceptance test passed. It built multiple Dockerfile stages with
 local `COPY`, an executable file, an explicit build argument, an ignored
 file, a non-root final `USER`, `ENV`, `CMD`, and `ENTRYPOINT`. The guest booted
 systemd as PID 1. The test confirmed fixed provisioning, public-key SSH,
 context filtering, and state persistence after stop and restart. It then
-stopped and deleted the test VM. The log is
-`tmp/logs/dockerfile-build-test.log`.
+stopped and deleted the test VM.
 
-The live rejection test passed on 2026-10-11. It rejected a failing `RUN`, an
+The rejection test passed. It rejected a failing `RUN`, an
 unpinned source, a `scratch` result, a guest version mismatch, and an
 oversized Dockerfile. It confirmed that each failed build published no image
-manifest. Run it with `make manual-dockerfile-rejections`. The log is
-`tmp/logs/dockerfile-rejection-test.log`.
+manifest. Run it with `make manual-dockerfile-rejections`.
 
-The live base-image build passed again on 2026-10-11. It built Ubuntu 24.04
+The base-image acceptance test passed. It built Ubuntu 24.04
 from the pinned base and validated the guest version before it published the
-image. The image build log is `tmp/logs/image-build-test.log`.
+image.
 
 Unit tests cover invalid options, duplicate build arguments, context paths,
 ignore rules, unsafe links, file changes, archive limits, source-policy

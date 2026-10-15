@@ -34,13 +34,13 @@ Extra check: run `make generate`, then `make check`.
 
 The Arch package recipe builds and installs the CLI, daemon, command helpers,
 Firecracker and jailer binaries, systemd units, and the packaged builder image.
-The local package is used by `make install`. The AUR recipe describes the
-published package. The systemd files define the socket-activated daemon.
+The checkout-based recipe is used by `make install` and GitHub release builds.
+The systemd files define the socket-activated daemon.
 Host setup itself is performed by `sandboxctl host install`; it creates
 root-owned state and network configuration and enables the socket.
 
-Files and folders: `packaging/local/` for the local Arch package recipe and
-package data, `packaging/aur/` for the AUR recipe and its instructions,
+Files and folders: `packaging/local/` for the Arch package recipe and instructions,
+`.github/workflows/` for release automation,
 `packaging/systemd/` for the daemon service and socket units, and related
 package build scripts under `scripts/`.
 

@@ -4,8 +4,8 @@ Repository: https://github.com/e2b-dev/runtime
 Commit: 47096f195aca4a545a9079b706efb3a18f51cf3f
 License: Apache-2.0
 
-The retained comparison checkout is `tmp/e2b-runtime`. Git ignores that path.
-The checkout is not part of the sandboxctl source tree or release artifacts.
+Use an untracked comparison checkout when reviewing upstream source.
+Do not include that checkout in the sandboxctl source tree or release artifacts.
 The license text is in `third_party/licenses/e2b-apache-2.0.txt`.
 
 ## Extracted source

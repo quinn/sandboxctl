@@ -8,7 +8,7 @@ import (
 
 func TestLoadHostConfigValidatesInstallerSettings(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "host.json")
-	data := `{"schema_version":1,"operator":"quinn","uid_range":{"start":200000,"count":64},"gid_range":{"start":300000,"count":64},"address_pool":"172.30.0.0/16"}`
+	data := `{"schema_version":1,"operator":"operator","uid_range":{"start":200000,"count":64},"gid_range":{"start":300000,"count":64},"address_pool":"172.30.0.0/16"}`
 	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}

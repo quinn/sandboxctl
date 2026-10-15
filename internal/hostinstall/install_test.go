@@ -22,20 +22,20 @@ func TestValidateRanges(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write(passwd, "root:x:0:0:root:/root:/bin/sh\nquinn:x:1000:1000::/home/quinn:/bin/sh\n")
-	write(group, "root:x:0:\nusers:x:1000:quinn\n")
-	write(subuid, "quinn:100000:65536\n")
-	write(subgid, "quinn:100000:65536\n")
+	write(passwd, "root:x:0:0:root:/root:/bin/sh\noperator:x:1000:1000::/home/operator:/bin/sh\n")
+	write(group, "root:x:0:\nusers:x:1000:operator\n")
+	write(subuid, "operator:100000:65536\n")
+	write(subgid, "operator:100000:65536\n")
 	uidRange := cmdutil.IDRange{Start: 200000, Count: 65536}
 	gidRange := cmdutil.IDRange{Start: 200000, Count: 65536}
 	if err := validateRanges(uidRange, gidRange, passwd, group, subuid, subgid); err != nil {
 		t.Fatalf("valid ranges rejected: %v", err)
 	}
-	write(subuid, "quinn:199999:2\n")
+	write(subuid, "operator:199999:2\n")
 	if err := validateRanges(uidRange, gidRange, passwd, group, subuid, subgid); err == nil || !strings.Contains(err.Error(), "UID range conflicts") {
 		t.Fatalf("overlapping subordinate UID range error = %v", err)
 	}
-	write(subuid, "quinn:100000:65536\n")
+	write(subuid, "operator:100000:65536\n")
 	write(group, "root:x:0:\nsandbox:x:200001:\n")
 	if err := validateRanges(uidRange, gidRange, passwd, group, subuid, subgid); err == nil || !strings.Contains(err.Error(), "GID range conflicts") {
 		t.Fatalf("assigned GID range error = %v", err)
@@ -96,14 +96,14 @@ func TestFindRouteConflict(t *testing.T) {
 		route     string
 		wantError bool
 	}{
-		{name: "unrelated route", route: "192.168.1.0/24 dev eth0 proto kernel", wantError: false},
+		{name: "unrelated route", route: "192.0.2.0/24 dev eth0 proto kernel", wantError: false},
 		{name: "same pool", route: "172.30.0.0/16 dev eth0 proto kernel", wantError: true},
 		{name: "nested route", route: "172.30.12.0/24 dev eth0", wantError: true},
 		{name: "host route", route: "172.30.4.9 dev eth0 scope link", wantError: true},
 		{name: "covering route", route: "172.16.0.0/12 dev eth0", wantError: true},
 		{name: "sandbox TAP route", route: "172.30.0.40/30 dev sc00000b proto kernel scope link", wantError: false},
 		{name: "unmanaged interface with sandbox name", route: "172.30.0.40/30 dev sc00000x", wantError: true},
-		{name: "default route", route: "default via 192.168.1.1 dev eth0", wantError: false},
+		{name: "default route", route: "default via 192.0.2.1 dev eth0", wantError: false},
 	}
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {

@@ -8,6 +8,9 @@ The host must run Arch Linux on x86-64.
 It must have a working Kernel-based Virtual Machine (KVM) device at `/dev/kvm`.
 Guest images must use Debian or Ubuntu.
 
+Names in command examples are sample values.
+Network addresses are documented product defaults or loopback examples.
+
 ## Install and prepare the host
 
 ### Install a GitHub release
