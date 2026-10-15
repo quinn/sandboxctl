@@ -30,6 +30,8 @@ Formatting, vet, Go tests, Protocol Buffer lint, shell syntax checks, and workfl
 A stamped build reports the selected version through `sandboxctl version`.
 The first GitHub run exposed a fixture that depended on the caller's file mask.
 The fixture now sets its intended mode explicitly and has a subprocess regression check.
+The retry passed source checks and compilation but failed at rootless Podman user namespace setup.
+CI now restores the mapping helper file capabilities and checks namespace support before building.
 The complete release package build remains unverified.
 The next release task is to retry `v0.1.0` with the correction through `.github/workflows/release.yaml`.
 

@@ -4,7 +4,7 @@
 
 The active phase is GitHub release validation.
 Release packaging is implemented.
-The first GitHub workflow run exposed a test fixture permission issue.
+GitHub workflow validation exposed a test fixture permission issue and missing container helper capabilities.
 The complete release build remains open.
 The clean supported Arch host acceptance check in section 19 also remains open.
 
@@ -64,7 +64,11 @@ The private release file mask changed a fixture's executable mode and caused its
 The fixture now sets its requested mode explicitly.
 A subprocess regression check runs the metadata test with file mask `077`.
 The complete release package build remains unverified.
-The next release task is a build retry with the fixture correction.
+The next run passed all Go checks, Protocol Buffer lint, and CLI compilation.
+Rootless Podman then failed because its user namespace helper could not set capabilities.
+CI setup now restores the mapping helper file capabilities and checks namespace support before the build.
+These environment changes do not change the tagged package source or the builder cache strategy.
+The next release task is a build retry with the container setup correction.
 
 ## Port forwarding
 
