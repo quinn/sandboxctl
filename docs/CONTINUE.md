@@ -2,7 +2,7 @@
 
 ## Active work
 
-The active phase is GitHub release validation.
+The active phase is review of the first draft release.
 Read `packaging/local/README.md` for the package build and installation plan.
 Use `docs/PROGRESS.md` for completed work, checks, and remaining validation.
 Use `docs/SANDBOX-RUNTIME-V2.md` as the authoritative runtime specification.
@@ -28,12 +28,14 @@ Use the guarded image commands when replacement is required.
 Package and release fixture tests pass.
 Formatting, vet, Go tests, Protocol Buffer lint, shell syntax checks, and workflow YAML parsing pass.
 A stamped build reports the selected version through `sandboxctl version`.
-The first GitHub run exposed a fixture that depended on the caller's file mask.
-The fixture now sets its intended mode explicitly and has a subprocess regression check.
-The retry passed source checks and compilation but failed at rootless Podman user namespace setup.
-CI now restores the mapping helper file capabilities and checks namespace support before building.
-The complete release package build remains unverified.
-The next release task is to retry `v0.1.0` with the correction through `.github/workflows/release.yaml`.
+The `v0.1.0` GitHub workflow passed through draft creation.
+The draft contains the Arch package, `SHA256SUMS`, and `release.json`.
+Package and builder verification passed before upload.
+The completed builder cache is saved under the default branch with manual revision `1`.
+CI restores mapping helper capabilities, uses separate Buildah scratch storage, and shares the outer container's network namespace.
+A fixture permission correction has a subprocess regression check for private file masks.
+The workflow is `.github/workflows/release.yaml`.
+The next task is maintainer review of the draft before publication.
 
 ## Documentation privacy
 

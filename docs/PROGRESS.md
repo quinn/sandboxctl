@@ -2,10 +2,9 @@
 
 ## Active phase
 
-The active phase is GitHub release validation.
+The active phase is review of the first draft release.
 Release packaging is implemented.
-GitHub workflow validation exposed a test fixture permission issue and missing container helper capabilities.
-The complete release build remains open.
+The GitHub build and draft creation for `v0.1.0` passed.
 The clean supported Arch host acceptance check in section 19 also remains open.
 
 ## Documentation privacy review
@@ -26,7 +25,7 @@ Publication retains the existing Git history.
 Earlier Git revisions retain the removed text.
 The cleaned documentation and release workflow are pushed to the default branch.
 The release workflow is active.
-The next task is to run the first draft release build for `v0.1.0`.
+The `v0.1.0` draft is ready for maintainer review.
 The release workflow uses `.github/workflows/release.yaml`.
 Project YAML files use the `.yaml` extension.
 
@@ -59,22 +58,20 @@ The workflow caches only completed builder bundles with a manual cache revision.
 Fixture tests cover both package profiles, cache reuse, staging, paths with spaces, incomplete bundles, symbolic links, version parsing, tag identity, clean checkouts, output refusal, checksums, builder corruption, and draft uploads.
 Formatting, vet, Go tests, Protocol Buffer lint, shell syntax checks, workflow YAML parsing, and whitespace checks pass.
 A stamped build reports the selected version.
-The first GitHub run passed environment setup and reached the Go checks.
-The private release file mask changed a fixture's executable mode and caused its metadata assertion to fail.
+GitHub validation exposed a test fixture that depended on the caller's file mask.
 The fixture now sets its requested mode explicitly.
 A subprocess regression check runs the metadata test with file mask `077`.
-The complete release package build remains unverified.
-The next run passed all Go checks, Protocol Buffer lint, and CLI compilation.
-Rootless Podman then failed because its user namespace helper could not set capabilities.
-CI setup now restores the mapping helper file capabilities and checks namespace support before the build.
-These environment changes do not change the tagged package source or the builder cache strategy.
-The next release task is a build retry with the container setup correction.
-Namespace validation then passed, but Buildah could not mount its context overlay on container-backed scratch storage.
+CI setup restores mapping helper file capabilities for rootless user namespaces.
 CI now mounts a Docker volume at `/var/tmp` for build scratch space.
 The preflight check builds a small image without network access before package compilation.
-The next run passed the preflight and pulled the pinned base image.
-The first build command failed because nested rootless network setup could not open the required namespace files.
 CI uses Buildah chroot isolation and shares the outer container's network namespace for build commands.
+These environment changes preserve the tagged package source and builder cache strategy.
+The complete GitHub workflow passed with these corrections.
+The `v0.1.0` draft contains the Arch package, `SHA256SUMS`, and `release.json`.
+Both jobs verified the package and builder before draft upload.
+GitHub saved the completed builder cache under the default branch with manual revision `1`.
+The release remains a draft.
+The next task is maintainer review before publication.
 
 ## Port forwarding
 
