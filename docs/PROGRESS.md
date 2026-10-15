@@ -69,6 +69,9 @@ Rootless Podman then failed because its user namespace helper could not set capa
 CI setup now restores the mapping helper file capabilities and checks namespace support before the build.
 These environment changes do not change the tagged package source or the builder cache strategy.
 The next release task is a build retry with the container setup correction.
+Namespace validation then passed, but Buildah could not mount its context overlay on container-backed scratch storage.
+CI now mounts a Docker volume at `/var/tmp` for build scratch space.
+The preflight check builds a small image without network access before package compilation.
 
 ## Port forwarding
 

@@ -29,6 +29,9 @@ jobs:
       image: archlinux:base-devel
       # Rootless Podman needs nested user namespaces to construct the seed image.
       options: --privileged
+      volumes:
+        # Buildah needs scratch space outside the container's overlay filesystem.
+        - sandboxctl-build-tmp:/var/tmp
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       BUILDER_CACHE_REVISION: ${{ inputs.builder_cache_revision }}
@@ -48,16 +51,25 @@ jobs:
           # Container layers can lose the file capabilities required by these helpers.
           setcap cap_setuid=ep /usr/bin/newuidmap
           setcap cap_setgid=ep /usr/bin/newgidmap
+          chmod 1777 /var/tmp
           useradd --create-home --uid 1001 --shell /bin/bash build
           # SSH fixture tests need an unlocked account. They disable password login.
           usermod --password '' build
           printf '%s\n' 'build:100000:65536' > /etc/subuid
           printf '%s\n' 'build:100000:65536' > /etc/subgid
           install -d -o build -g build -m 0700 /run/user/1001 /home/build/.local/share
-      - name: Check rootless user namespace support
+      - name: Check rootless Podman build support
         shell: bash
         run: |
-          sudo -u build -H env XDG_DATA_HOME="$XDG_DATA_HOME" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" STORAGE_DRIVER="$STORAGE_DRIVER" podman unshare true
+          sudo -u build -H env XDG_DATA_HOME="$XDG_DATA_HOME" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" STORAGE_DRIVER="$STORAGE_DRIVER" bash -euo pipefail <<'SH'
+          context=$(mktemp -d)
+          trap 'rm -rf -- "$context"' EXIT
+          podman unshare true
+          printf 'FROM scratch\nCOPY probe /probe\n' > "$context/Containerfile"
+          printf 'probe\n' > "$context/probe"
+          podman build --pull=never --tag localhost/sandboxctl-ci-probe "$context"
+          podman image rm localhost/sandboxctl-ci-probe
+          SH
       - name: Check out exact release tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
