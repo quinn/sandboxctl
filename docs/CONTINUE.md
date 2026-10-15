@@ -29,7 +29,7 @@ Package and release fixture tests pass.
 Formatting, vet, Go tests, Protocol Buffer lint, shell syntax checks, and workflow YAML parsing pass.
 A stamped build reports the selected version through `sandboxctl version`.
 The actual GitHub workflow and a complete release package build remain unverified.
-The next release task is to select a version tag and run the workflow.
+The next release task is to tag `v0.1.0` and run `.github/workflows/release.yaml`.
 
 ## Documentation privacy
 

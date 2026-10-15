@@ -24,6 +24,7 @@ Use ASD-STE100 principles for all user-facing text.
 - Use generic examples and documented product defaults in project documents.
 - Keep personal identities, local machine inventories, account status, private network details, and personal task names out of project documents.
 - Preserve required upstream license notices and source attribution.
+- Use `.yaml` for YAML files.
 
 Do not change external command names, option names, file names, protocol names, or source identifiers.
 

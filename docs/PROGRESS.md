@@ -25,7 +25,9 @@ Publication retains the existing Git history.
 Earlier Git revisions retain the removed text.
 The cleaned documentation and release workflow are pushed to the default branch.
 The release workflow is active.
-The next task is to select a version tag and run the first draft release build.
+The next task is to run the first draft release build for `v0.1.0`.
+The release workflow uses `.github/workflows/release.yaml`.
+Project YAML files use the `.yaml` extension.
 
 ## Package builds and releases
 
