@@ -2,7 +2,7 @@
 
 ## Active work
 
-The active phase is GitHub release validation and documentation privacy review.
+The active phase is GitHub release validation.
 Read `packaging/local/README.md` for the package build and installation plan.
 Use `docs/PROGRESS.md` for completed work, checks, and remaining validation.
 Use `docs/SANDBOX-RUNTIME-V2.md` as the authoritative runtime specification.
@@ -36,8 +36,9 @@ The next release task is to select a version tag and run the workflow.
 Project documents use generic examples and product defaults.
 Do not record developer identities, personal task names, workstation configuration, account status, or local instance inventories.
 Keep required upstream license notices and source attribution.
+The documentation privacy review is complete.
+Publication retains the existing Git history.
 Earlier Git revisions can retain removed information.
-Review the publication history before pushing the repository.
 
 ## Port forwarding and SSH
 

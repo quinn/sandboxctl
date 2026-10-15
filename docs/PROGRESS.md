@@ -2,7 +2,7 @@
 
 ## Active phase
 
-The active phase is GitHub release validation and documentation privacy review.
+The active phase is GitHub release validation.
 Release packaging is implemented.
 The first complete GitHub workflow run remains open.
 The clean supported Arch host acceptance check in section 19 also remains open.
@@ -20,9 +20,12 @@ The privacy scan covered 59 tracked documentation and license files.
 No known personal identifiers, private keys, or actual host-key fingerprints were found in the reviewed text after cleanup.
 Remaining addresses are product defaults, public DNS servers, or loopback examples.
 `make check` and `git diff --check` pass after cleanup.
+The documentation privacy review is complete.
+Publication retains the existing Git history.
 Earlier Git revisions retain the removed text.
-Publication requires a decision about the existing Git history.
-The next task is to resolve publication history before the GitHub push.
+The cleaned documentation and release workflow are pushed to the default branch.
+The release workflow is active.
+The next task is to select a version tag and run the first draft release build.
 
 ## Package builds and releases
 
@@ -227,7 +230,7 @@ Use `git diff --check` for whitespace validation.
 Use `e2e/README.md` for installed-package and manual VM checks.
 Keep private test outputs outside tracked documents.
 Record acceptance results without personal host inventories or account details.
-Resolve the publication history before pushing the sanitized documentation.
+Retain generic examples and product defaults in future documentation updates.
 Run the first GitHub release workflow after choosing a version tag.
 Review the draft before publication.
 Complete the full guest coding task and clean supported Arch host acceptance checks when suitable test environments are available.
