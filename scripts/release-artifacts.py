@@ -14,6 +14,12 @@ TAG = re.compile(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 COMMIT = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 ARTIFACTS = ("vmlinux", "initramfs.cpio.gz", "root.squashfs")
+PACKAGES = ("sandboxctl", "sandboxctl-builder")
+RUNTIME_FILES = (
+    "usr/bin/sandboxctl", "usr/bin/sandboxd",
+    "usr/lib/sandboxctl/firecracker", "usr/lib/sandboxctl/jailer",
+    "usr/lib/systemd/system/sandboxd.socket", "usr/lib/systemd/system/sandboxd.service",
+)
 
 
 def regular(path):
@@ -40,8 +46,9 @@ def member(package, name, limit=1024 * 1024):
     return result
 
 
-def package_info(package, tag):
+def package_info(package, tag, name):
     info = {}
+    dependencies = []
     for line in member(package, ".PKGINFO").decode().splitlines():
         if " = " in line:
             key, value = line.split(" = ", 1)
@@ -49,8 +56,26 @@ def package_info(package, tag):
                 if key in info:
                     raise ValueError(f"Duplicate package field: {key}")
                 info[key] = value
-    if info != {"pkgname": "sandboxctl", "pkgver": tag[1:] + "-1", "arch": "x86_64"}:
+            elif key == "depend":
+                dependencies.append(value)
+    if info != {"pkgname": name, "pkgver": tag[1:] + "-1", "arch": "x86_64"}:
         raise ValueError("Package name, version, or architecture does not match the release")
+    names = set(subprocess.run(
+        ["tar", "--zstd", "-tf", str(package)], check=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    ).stdout.decode().splitlines())
+    if name == "sandboxctl":
+        if "sandboxctl-builder=" + tag[1:] + "-1" not in dependencies:
+            raise ValueError("Application package must require the matching builder package")
+        if not set(RUNTIME_FILES).issubset(names):
+            raise ValueError("Application package is missing runtime files")
+        if any(path.startswith("usr/share/sandboxctl/builder/") for path in names):
+            raise ValueError("Application package must not contain the builder bundle")
+    elif dependencies or any(path.startswith(("usr/bin/", "usr/lib/sandboxctl/", "usr/lib/systemd/system/")) for path in names):
+        raise ValueError("Builder package must not contain runtime files or dependencies")
+
+
+def builder_info(package):
     image = json.loads(member(package, "usr/share/sandboxctl/builder/manifest.json"))
     if not isinstance(image, dict):
         raise ValueError("Packaged builder manifest must be an object")
@@ -121,47 +146,53 @@ def package_info(package, tag):
     return {"name": image["name"], "version": image["version"]}
 
 
-def expected_package(directory, tag):
-    packages = list(directory.glob("*.pkg.tar.zst"))
-    expected = directory / f"sandboxctl-{tag[1:]}-1-x86_64.pkg.tar.zst"
-    if packages != [expected]:
-        raise ValueError("Release directory must contain exactly one matching package")
-    regular(expected)
+def expected_packages(directory, tag):
+    expected = [directory / f"{name}-{tag[1:]}-1-x86_64.pkg.tar.zst" for name in PACKAGES]
+    if set(directory.glob("*.pkg.tar.zst")) != set(expected):
+        raise ValueError("Release directory must contain exactly the matching application and builder packages")
+    for name, path in zip(PACKAGES, expected):
+        regular(path)
+        package_info(path, tag, name)
     return expected
+
+
+def package_records(packages):
+    return [{"name": name, "file": path.name, "sha256": digest(path)}
+            for name, path in zip(PACKAGES, packages)]
 
 
 def create(directory, tag, commit):
     if not COMMIT.fullmatch(commit):
         raise ValueError("Invalid release source commit")
-    package = expected_package(directory, tag)
-    image = package_info(package, tag)
-    data = {"schema_version": 1, "tag": tag, "version": tag[1:], "source_commit": commit,
-            "package": {"file": package.name, "sha256": digest(package)}, "builder": image}
+    packages = expected_packages(directory, tag)
+    image = builder_info(packages[1])
+    data = {"schema_version": 2, "tag": tag, "version": tag[1:], "source_commit": commit,
+            "packages": package_records(packages), "builder": image}
     record = directory / "release.json"
     with record.open("x") as output:
         json.dump(data, output, indent=2)
         output.write("\n")
     with (directory / "SHA256SUMS").open("x") as output:
-        for path in (package, record):
+        for path in (*packages, record):
             output.write(f"{digest(path)}  {path.name}\n")
 
 
 def verify(directory, tag):
-    package = expected_package(directory, tag)
+    packages = expected_packages(directory, tag)
     record = directory / "release.json"
     regular(record)
     regular(directory / "SHA256SUMS")
     data = json.loads(record.read_text())
     if not isinstance(data, dict):
         raise ValueError("Release metadata must be an object")
-    if data.get("schema_version") != 1 or data.get("tag") != tag or data.get("version") != tag[1:] or not COMMIT.fullmatch(data.get("source_commit", "")):
+    if data.get("schema_version") != 2 or data.get("tag") != tag or data.get("version") != tag[1:] or not COMMIT.fullmatch(data.get("source_commit", "")):
         raise ValueError("Release metadata does not match the requested tag")
-    expected = "".join(f"{digest(path)}  {path.name}\n" for path in (package, record))
+    expected = "".join(f"{digest(path)}  {path.name}\n" for path in (*packages, record))
     if (directory / "SHA256SUMS").read_text() != expected:
         raise ValueError("Release files do not match SHA256SUMS")
-    if data.get("package") != {"file": package.name, "sha256": digest(package)}:
-        raise ValueError("Release package checksum or filename is invalid")
-    if data.get("builder") != package_info(package, tag):
+    if data.get("packages") != package_records(packages):
+        raise ValueError("Release package checksums or filenames are invalid")
+    if data.get("builder") != builder_info(packages[1]):
         raise ValueError("Release builder metadata differs from the package")
 
 

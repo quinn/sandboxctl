@@ -37,11 +37,11 @@ func requireTools(t *testing.T, names ...string) {
 	}
 }
 
-func releasePackage(t *testing.T, directory string, corrupt bool) string {
+func releasePackages(t *testing.T, directory, kind string) string {
 	t.Helper()
 	requireTools(t, "tar", "zstd", "python3")
 	image := manifest.Manifest{SchemaVersion: 1, Name: "builder", Architecture: "x86_64", Firecracker: "1.17.0", KernelVersion: "fixture", Guest: manifest.Guest{Distribution: "ubuntu", Version: "24.04"}, Provenance: "release fixture", KernelArgs: []string{"console=ttyS0", "rdinit=/guest-overlay-init"}, Artifacts: map[string]manifest.Artifact{}}
-	files := map[string][]byte{".PKGINFO": []byte("pkgname = sandboxctl\npkgver = 0.2.0-1\narch = x86_64\n")}
+	files := map[string][]byte{".PKGINFO": []byte("pkgname = sandboxctl-builder\npkgver = 0.2.0-1\narch = x86_64\n")}
 	for _, name := range manifest.ArtifactNames() {
 		data := []byte("fixture " + name)
 		checksum := sha256.Sum256(data)
@@ -57,9 +57,47 @@ func releasePackage(t *testing.T, directory string, corrupt bool) string {
 		t.Fatal(err)
 	}
 	files["usr/share/sandboxctl/builder/manifest.json"] = data
-	if corrupt {
+	if kind == "corrupt-builder" {
 		files["usr/share/sandboxctl/builder/root.squashfs"][0] = 'X'
 	}
+	if kind == "wrong-version" {
+		files[".PKGINFO"] = []byte("pkgname = sandboxctl-builder\npkgver = 0.3.0-1\narch = x86_64\n")
+	}
+	if kind == "wrong-architecture" {
+		files[".PKGINFO"] = []byte("pkgname = sandboxctl-builder\npkgver = 0.2.0-1\narch = aarch64\n")
+	}
+	if kind == "runtime-in-builder" {
+		files["usr/bin/sandboxctl"] = []byte("misplaced executable")
+	}
+	builder := writePackageArchive(t, directory, "sandboxctl-builder", files)
+	files = map[string][]byte{".PKGINFO": []byte("pkgname = sandboxctl\npkgver = 0.2.0-1\narch = x86_64\ndepend = sandboxctl-builder=0.2.0-1\n")}
+	for _, name := range []string{"usr/bin/sandboxctl", "usr/bin/sandboxd", "usr/lib/sandboxctl/firecracker", "usr/lib/sandboxctl/jailer", "usr/lib/systemd/system/sandboxd.socket", "usr/lib/systemd/system/sandboxd.service"} {
+		files[name] = []byte("fixture runtime file")
+	}
+	if kind == "wrong-dependency" {
+		files[".PKGINFO"] = []byte("pkgname = sandboxctl\npkgver = 0.2.0-1\narch = x86_64\ndepend = sandboxctl-builder=0.1.0-1\n")
+	}
+	if kind == "missing-runtime" {
+		delete(files, "usr/bin/sandboxd")
+	}
+	if kind == "bundle-in-application" {
+		files["usr/share/sandboxctl/builder/manifest.json"] = data
+	}
+	application := writePackageArchive(t, directory, "sandboxctl", files)
+	if kind == "missing-application" || kind == "missing-builder" {
+		path := application
+		if kind == "missing-builder" {
+			path = builder
+		}
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return application
+}
+
+func writePackageArchive(t *testing.T, directory, name string, files map[string][]byte) string {
+	t.Helper()
 	var archive bytes.Buffer
 	writer := tar.NewWriter(&archive)
 	for name, content := range files {
@@ -73,7 +111,7 @@ func releasePackage(t *testing.T, directory string, corrupt bool) string {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(directory, "sandboxctl-0.2.0-1-x86_64.pkg.tar.zst")
+	path := filepath.Join(directory, name+"-0.2.0-1-x86_64.pkg.tar.zst")
 	command := exec.Command("zstd", "-q", "-o", path)
 	command.Stdin = &archive
 	if output, err := command.CombinedOutput(); err != nil {
@@ -89,16 +127,16 @@ func artifactCommand(t *testing.T, operation, directory, tag string, extra ...st
 }
 
 func TestReleaseArtifactValidation(t *testing.T) {
-	for _, kind := range []string{"valid", "corrupt-builder", "tampered-package", "tampered-record", "symlink", "extra-package", "wrong-tag", "wrong-commit"} {
+	for _, kind := range []string{"valid", "corrupt-builder", "tampered-package", "tampered-builder", "tampered-record", "symlink", "extra-package", "wrong-tag", "wrong-commit", "missing-application", "missing-builder", "wrong-version", "wrong-architecture", "wrong-dependency", "missing-runtime", "runtime-in-builder", "bundle-in-application", "legacy-record"} {
 		t.Run(kind, func(t *testing.T) {
 			directory := t.TempDir()
-			packagePath := releasePackage(t, directory, kind == "corrupt-builder")
+			packagePath := releasePackages(t, directory, kind)
 			commit := strings.Repeat("a", 40)
 			if kind == "wrong-commit" {
 				commit = "invalid"
 			}
 			output, err := artifactCommand(t, "create", directory, releaseTag, commit)
-			if kind == "corrupt-builder" || kind == "wrong-commit" {
+			if kind == "corrupt-builder" || kind == "wrong-commit" || strings.HasPrefix(kind, "missing-") || kind == "wrong-version" || kind == "wrong-architecture" || kind == "wrong-dependency" || kind == "runtime-in-builder" || kind == "bundle-in-application" {
 				if err == nil {
 					t.Fatalf("accepted %s: %s", kind, output)
 				}
@@ -111,6 +149,10 @@ func TestReleaseArtifactValidation(t *testing.T) {
 			switch kind {
 			case "tampered-package":
 				writeFile(t, packagePath, "invalid", 0600)
+			case "tampered-builder":
+				writeFile(t, filepath.Join(directory, "sandboxctl-builder-0.2.0-1-x86_64.pkg.tar.zst"), "invalid", 0600)
+			case "legacy-record":
+				writeFile(t, filepath.Join(directory, "release.json"), `{"schema_version":1}`, 0600)
 			case "tampered-record":
 				writeFile(t, filepath.Join(directory, "release.json"), "{}", 0600)
 			case "symlink":
@@ -138,11 +180,11 @@ func TestReleasePackageProfile(t *testing.T) {
 	recipe := filepath.Join(repositoryRoot(t), "packaging", "local", "PKGBUILD")
 	for _, version := range []string{"0.2.0", "0.2", "01.2.0", "0.2.0;echo unsafe", "v0.2.0"} {
 		t.Run(version, func(t *testing.T) {
-			command := exec.Command("bash", "-euc", `source "$RECIPE"; printf '%s\n' "$pkgname" "$pkgver"; pkgver; printf '%s\n' "${conflicts[@]}"`)
+			command := exec.Command("bash", "-euc", `source "$RECIPE"; printf '%s\n' "$pkgbase" "${pkgname[@]}" "$pkgver"; pkgver`)
 			command.Env = append(os.Environ(), "RECIPE="+recipe, "SANDBOXCTL_RELEASE_VERSION="+version)
 			output, err := command.CombinedOutput()
 			if version == "0.2.0" {
-				if err != nil || string(output) != "sandboxctl\n0.2.0\n0.2.0\nsandboxctl-local\nsandboxctl-git\n" {
+				if err != nil || string(output) != "sandboxctl\nsandboxctl\nsandboxctl-builder\n0.2.0\n0.2.0\n" {
 					t.Fatalf("release profile: %v\n%s", err, output)
 				}
 			} else if err == nil {
@@ -184,7 +226,7 @@ func TestReleaseBuildScript(t *testing.T) {
 			git("add", ".")
 			git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture")
 			git("tag", releaseTag)
-			packagePath := releasePackage(t, base, false)
+			packagePath := releasePackages(t, base, "valid")
 			writeFile(t, filepath.Join(bin, "make"), `#!/bin/bash
 set -eu
 [[ $CHECK_FAIL != true ]]
@@ -198,7 +240,7 @@ set -euo pipefail
 [[ -d $SANDBOXCTL_PACKAGE_SOURCE/.git ]]
 [[ $SOURCE_DATE_EPOCH =~ ^[0-9]+$ ]]
 source PKGBUILD
-[[ $pkgname == sandboxctl && $pkgver == 0.2.0 ]]
+[[ ${pkgname[*]} == 'sandboxctl sandboxctl-builder' && $pkgver == 0.2.0 ]]
 srcdir="$PWD/src"
 mkdir "$srcdir"
 prepare
@@ -206,6 +248,7 @@ cmp "$SANDBOXCTL_PACKAGE_SOURCE/scripts/build-release.sh" "$srcdir/sandboxctl/sc
 [[ $1 == --config ]]
 source "$2"
 cp "$FIXTURE_PACKAGE" "$PKGDEST/"
+cp "$FIXTURE_BUILDER" "$PKGDEST/"
 `, 0700)
 			tag := releaseTag
 			switch kind {
@@ -221,7 +264,7 @@ cp "$FIXTURE_PACKAGE" "$PKGDEST/"
 				}
 			}
 			command := exec.Command("bash", filepath.Join(repo, "scripts", "build-release.sh"), tag, outputDir)
-			command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "FIXTURE_PACKAGE="+packagePath, "CHECK_SOURCE="+repo, fmt.Sprintf("CHECK_FAIL=%t", kind == "check-fails"), fmt.Sprintf("CHECK_MODIFY=%t", kind == "check-modifies"))
+			command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "FIXTURE_PACKAGE="+packagePath, "FIXTURE_BUILDER="+filepath.Join(base, "sandboxctl-builder-0.2.0-1-x86_64.pkg.tar.zst"), "CHECK_SOURCE="+repo, fmt.Sprintf("CHECK_FAIL=%t", kind == "check-fails"), fmt.Sprintf("CHECK_MODIFY=%t", kind == "check-modifies"))
 			output, err := command.CombinedOutput()
 			if (err == nil) != (kind == "valid") {
 				t.Fatalf("release build %s: %v\n%s", kind, err, output)
@@ -238,10 +281,10 @@ cp "$FIXTURE_PACKAGE" "$PKGDEST/"
 }
 
 func TestReleasePublisher(t *testing.T) {
-	for _, kind := range []string{"new", "annotated", "draft", "published", "wrong-commit", "tampered", "missing-tag"} {
+	for _, kind := range []string{"new", "annotated", "draft", "published", "wrong-commit", "tampered", "tampered-builder", "missing-builder", "missing-tag"} {
 		t.Run(kind, func(t *testing.T) {
 			directory := t.TempDir()
-			packagePath := releasePackage(t, directory, false)
+			packagePath := releasePackages(t, directory, "valid")
 			commit := strings.Repeat("a", 40)
 			if output, err := artifactCommand(t, "create", directory, releaseTag, commit); err != nil {
 				t.Fatalf("create: %v\n%s", err, output)
@@ -271,6 +314,15 @@ esac
 			if kind == "tampered" {
 				writeFile(t, packagePath, "tampered", 0600)
 			}
+			builderPath := filepath.Join(directory, "sandboxctl-builder-0.2.0-1-x86_64.pkg.tar.zst")
+			if kind == "tampered-builder" {
+				writeFile(t, builderPath, "tampered", 0600)
+			}
+			if kind == "missing-builder" {
+				if err := os.Remove(builderPath); err != nil {
+					t.Fatal(err)
+				}
+			}
 			command := exec.Command("bash", filepath.Join(repositoryRoot(t), "scripts", "publish-release.sh"), releaseTag, directory, "example/sandboxctl")
 			command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "GH_TRACE="+trace, "REMOTE_COMMIT="+commit, "ANNOTATION="+strings.Repeat("c", 40), "RELEASE_STATE="+kind)
 			output, err := command.CombinedOutput()
@@ -286,6 +338,9 @@ esac
 				}
 				if !strings.Contains(string(calls), operation) {
 					t.Fatalf("missing draft operation: %s", calls)
+				}
+				if !strings.Contains(string(calls), operation+" "+releaseTag+" "+packagePath+" "+builderPath+" ") {
+					t.Fatalf("upload does not include both packages: %s", calls)
 				}
 			} else if strings.Contains(string(calls), "release create") || strings.Contains(string(calls), "release upload") || (kind == "tampered" && len(calls) > 0) {
 				t.Fatalf("invalid files reached upload: %s", calls)

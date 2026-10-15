@@ -85,7 +85,7 @@ jobs:
         with:
           path: /home/build/.local/share/sandboxctl/images/builder
           key: builder-linux-x86_64-${{ inputs.builder_cache_revision }}
-      - name: Build package from checkout
+      - name: Build split packages from checkout
         shell: bash
         run: |
           chown -R build:build "$GITHUB_WORKSPACE" /home/build/.local/share
@@ -119,7 +119,7 @@ jobs:
         with:
           ref: refs/tags/${{ inputs.tag }}
           persist-credentials: false
-      - name: Download verified package files
+      - name: Download verified split packages
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: release-files

@@ -2,9 +2,9 @@
 
 ## Active phase
 
-The active phase is review of the first draft release.
-Release packaging is implemented.
-The GitHub build and draft creation for `v0.1.0` passed.
+The active phase is split-package implementation and release validation.
+One PKGBUILD now produces separate application and builder packages.
+The existing `v0.1.0` draft uses the earlier single-package layout and must be rebuilt before publication.
 The clean supported Arch host acceptance check in section 19 also remains open.
 
 ## Documentation privacy review
@@ -25,7 +25,7 @@ Publication retains the existing Git history.
 Earlier Git revisions retain the removed text.
 The cleaned documentation and release workflow are pushed to the default branch.
 The release workflow is active.
-The `v0.1.0` draft is ready for maintainer review.
+The draft needs a new build with the split-package layout.
 The release workflow uses `.github/workflows/release.yaml`.
 Project YAML files use the `.yaml` extension.
 
@@ -33,10 +33,14 @@ Project YAML files use the `.yaml` extension.
 
 Use one checkout-based recipe at `packaging/local/PKGBUILD`.
 The separate Arch User Repository (AUR) recipe has been removed.
-Local installation builds `sandboxctl-local` with a Git-derived version.
-Release builds select `sandboxctl` with the existing version tag.
+Local installation builds `sandboxctl-local` and `sandboxctl-builder-local` with a Git-derived version.
+Release builds select `sandboxctl` and `sandboxctl-builder` with the existing version tag.
 Package builds embed the selected version in the CLI and daemon.
-Both profiles include the builder manifest, kernel, initramfs, and SquashFS at `/usr/share/sandboxctl/builder`.
+The application package contains commands, the daemon, service files, Firecracker, and jailer.
+Only the builder package installs the builder manifest, kernel, initramfs, and SquashFS at `/usr/share/sandboxctl/builder`.
+The application requires the matching builder package version and release.
+Each package installs its own license records.
+The shared build step compiles and stages inputs once.
 
 The existing XDG cache retains its file-presence lookup and manual invalidation through `make clean-builder`.
 Source changes do not trigger automatic builder rebuilds.
@@ -45,7 +49,7 @@ Package installation, explicit host setup, and verified builder import remain se
 Image-name conflicts require the existing guarded image commands.
 
 `scripts/build-release.sh` requires a clean checkout at the version tag and runs `make check`.
-It creates a verified package, `SHA256SUMS`, and `release.json` in a new output directory.
+It creates both verified packages, `SHA256SUMS`, and `release.json` in a new output directory.
 `scripts/publish-release.sh` verifies these files and the remote tag commit before draft upload.
 It supports lightweight and annotated tags.
 It refuses to replace files in a published release.
@@ -66,12 +70,20 @@ CI now mounts a Docker volume at `/var/tmp` for build scratch space.
 The preflight check builds a small image without network access before package compilation.
 CI uses Buildah chroot isolation and shares the outer container's network namespace for build commands.
 These environment changes preserve the tagged package source and builder cache strategy.
-The complete GitHub workflow passed with these corrections.
-The `v0.1.0` draft contains the Arch package, `SHA256SUMS`, and `release.json`.
-Both jobs verified the package and builder before draft upload.
+The earlier single-package GitHub workflow passed with these environment corrections.
+The split-package verifier now requires both archives and checks their names, versions, architecture, dependency relationship, and contents.
+Release metadata schema version 2 records both package checksums in a `packages` array.
+The checksum file covers both archives and release metadata.
+The uploader sends both archives when creating or updating a draft.
+Tests reject missing packages, mismatched metadata, mixed contents, corruption in either archive, and additional archives.
+Real `makepkg` tests produce both archives from temporary fixtures and pass the release verifier.
+Local and release source metadata declares the matching dependency and separate package functions.
 GitHub saved the completed builder cache under the default branch with manual revision `1`.
 The release remains a draft.
-The next task is maintainer review before publication.
+`make check`, `make build`, shell syntax checks, and whitespace checks pass for the split implementation.
+The package tests also pass under the release file mask `077`.
+The draft rebuild is in progress.
+The next task is a verified split-package draft before publication.
 
 ## Port forwarding
 
@@ -245,6 +257,6 @@ Use `e2e/README.md` for installed-package and manual VM checks.
 Keep private test outputs outside tracked documents.
 Record acceptance results without personal host inventories or account details.
 Retain generic examples and product defaults in future documentation updates.
-Run the first GitHub release workflow after choosing a version tag.
+Rebuild the draft with the split-package layout.
 Review the draft before publication.
 Complete the full guest coding task and clean supported Arch host acceptance checks when suitable test environments are available.

@@ -1,20 +1,26 @@
 # Arch package builds and GitHub releases
 
-## One package recipe
+## One split package recipe
 
 Use `packaging/local/PKGBUILD` for both local installation and GitHub releases.
 The recipe copies source files from the checkout into package staging.
 It does not clone a second source repository.
 The project does not maintain an Arch User Repository (AUR) package.
 
-| Build | Package name | Version | Installation |
+| Build | Package names | Version | Installation |
 | --- | --- | --- | --- |
-| `make install` | `sandboxctl-local` | Git commit count and abbreviated commit ID | `yay` builds and installs the package |
-| `make release TAG=v0.2.0` | `sandboxctl` | `0.2.0-1` | The user installs the downloaded package with `pacman -U` |
+| `make install` | `sandboxctl-local`, `sandboxctl-builder-local` | Git commit count and abbreviated commit ID | `yay` builds and installs both packages |
+| `make release TAG=v0.2.0` | `sandboxctl`, `sandboxctl-builder` | `0.2.0-1` | The user installs both downloaded packages with one `pacman -U` command |
 
-Both profiles package the same CLI, command helpers, daemon, systemd units, Firecracker, jailer, licenses, and builder bundle.
-The two packages conflict because they install the same files.
-The package manager asks to replace the installed profile when you switch profiles.
+The recipe uses a `pkgname` array and separate `package_<name>()` functions.
+The application package contains the command-line interface (CLI), command helpers, daemon, systemd units, Firecracker, and jailer.
+The builder package contains only the completed builder bundle and its license records.
+Each package installs licenses in its own package directory.
+The application requires the matching builder package version and release.
+Build both packages together.
+Install or upgrade both packages in the same transaction.
+The local and release variants of each package conflict because they install the same files.
+The package manager asks to replace the installed variants when you switch profiles.
 Package builds embed the package version in the CLI and daemon.
 Direct `make build` builds use `0.1.0-dev` unless `SANDBOXCTL_BUILD_VERSION` is set.
 
@@ -46,10 +52,12 @@ This command does not remove installed daemon images.
 On a cache miss, the staging script downloads the pinned inputs and builds the builder filesystem with Podman.
 It saves the completed bundle under its content digest.
 It removes temporary Podman storage after the build.
+The shared build step compiles the application once and selects the builder bundle once.
 The package recipe copies the selected bundle into its own staging directory.
-It installs a copy at `/usr/share/sandboxctl/builder`.
+Only the builder package installs a copy at `/usr/share/sandboxctl/builder`.
 The cache and the installed package contain the same bundle data in separate directories.
-Release artifact verification checks the packaged manifest identity and all three artifact checksums.
+Release artifact verification checks both package identities and the application dependency on the builder package.
+It checks the packaged manifest identity and all three builder artifact checksums.
 `sandboxctl init` verifies the bundle again before import.
 
 ## Local installation
@@ -95,19 +103,22 @@ It runs `make check` before package creation.
 It checks for source changes again after the checks.
 It builds from the checkout with the single package recipe.
 It uses temporary package staging and the existing builder cache.
-It verifies the package name, version, architecture, and builder contents.
+It verifies both package names, versions, architectures, dependencies, and builder contents.
 
 The default output directory is `dist/v0.2.0/`.
 The output contains:
 
 ```text
 sandboxctl-0.2.0-1-x86_64.pkg.tar.zst
+sandboxctl-builder-0.2.0-1-x86_64.pkg.tar.zst
 SHA256SUMS
 release.json
 ```
 
-`release.json` records the tag, source commit, package checksum, and builder identity.
-`SHA256SUMS` covers the package and `release.json`.
+`release.json` uses schema version 2.
+It records the tag, source commit, builder identity, and both package checksums in a `packages` array.
+`SHA256SUMS` covers both packages and `release.json`.
+Verification rejects missing packages, additional archives, mismatched versions, and mixed package contents.
 The script refuses to overwrite an existing output directory.
 A failed build can leave a partial output directory.
 Use another output directory for a retry:
@@ -124,9 +135,9 @@ Run:
 ```
 
 Replace `OWNER/REPO` with the GitHub repository.
-The script verifies the local package and checksums before uploading.
+The script verifies both local packages and checksums before uploading.
 It requires the remote tag to match the recorded source commit.
-It creates a draft release or replaces files in an existing draft.
+It uploads both archives and creates a draft release or replaces files in an existing draft.
 It refuses to replace files in a published release.
 Review and publish the draft through GitHub when it is ready.
 
@@ -160,16 +171,16 @@ Temporary Podman storage, credentials, and sandbox state are not cached.
 
 ## User installation and host setup
 
-Download the package, `SHA256SUMS`, and `release.json` from the selected published release.
+Download both packages, `SHA256SUMS`, and `release.json` from the selected published release.
 Put them in one directory.
 Verify the files and install the package:
 
 ```sh
 sha256sum -c SHA256SUMS
-sudo pacman -U ./sandboxctl-0.2.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./sandboxctl-0.2.0-1-x86_64.pkg.tar.zst ./sandboxctl-builder-0.2.0-1-x86_64.pkg.tar.zst
 ```
 
-Use the filename from the selected release.
+Use both filenames from the selected release.
 Users do not need Go, Podman, or the other image build tools.
 The package does not run host setup during installation.
 Configure the host explicitly:

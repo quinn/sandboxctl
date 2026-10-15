@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a GitHub release package from the checked-out version tag.
+# Build GitHub release packages from the checked-out version tag.
 set -Eeuo pipefail
 umask 077
 

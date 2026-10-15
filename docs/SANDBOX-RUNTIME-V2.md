@@ -93,11 +93,11 @@ The host-install command is the only interactive privilege escalation required f
 
 Host upgrade and host removal can require a later explicit sudo command. Routine VM operations must not require sudo.
 
-The Arch package must install `sandboxctl`, its `sandboxctl-<command>` helper
+The application package must install `sandboxctl`, its `sandboxctl-<command>` helper
 executables, `sandboxd`, `sandboxd.socket`, and `sandboxd.service`. The
 `sandboxctl` front end must find command helpers through `PATH` and replace
 itself with the selected helper. The `sandboxd` executable must remain separate.
-The Arch package must include the official x86-64 Firecracker and jailer
+The application package must include the official x86-64 Firecracker and jailer
 binaries from the same pinned release. The jailer requires a statically linked
 Firecracker binary. The package must not depend on a dynamically linked host
 Firecracker package. The package must not enable the socket.
@@ -108,7 +108,14 @@ Release builds must use an existing `vMAJOR.MINOR.PATCH` tag at the checked-out 
 Require a clean checkout and the required checks before release packaging.
 Build GitHub releases on a GitHub-hosted runner in an Arch Linux container.
 Run package creation as an unprivileged user.
-Include the completed builder bundle in both package profiles.
+Use a split PKGBUILD with a `pkgname` array and separate package functions.
+Release builds must produce `sandboxctl` and `sandboxctl-builder`.
+Local builds must produce `sandboxctl-local` and `sandboxctl-builder-local`.
+The application package must require the exact matching builder package version and release.
+The builder package must contain the completed bundle and its license records.
+It must not contain application executables or service files.
+The application package must not contain the builder bundle.
+Build shared inputs once before creating the split packages.
 Use the existing local builder cache in `$XDG_DATA_HOME/sandboxctl/images/builder/`.
 Use `~/.local/share` when `XDG_DATA_HOME` is not set.
 Reuse a cached bundle when its manifest, kernel, initramfs, and SquashFS files are present, nonempty, and not symbolic links.
@@ -118,9 +125,11 @@ Build a new builder bundle on a cache miss.
 Copy the selected bundle into package staging and install it at `/usr/share/sandboxctl/builder`.
 `sandboxctl init` must verify the packaged manifest and artifacts before importing them through sandboxd.
 GitHub Actions must cache only completed builder bundles with a manually selected cache revision.
-Release files must include the Arch package, `SHA256SUMS`, and `release.json`.
-Record the source commit, package checksum, and builder identity in `release.json`.
-Verify the package and builder before draft upload.
+Release files must include both Arch packages, `SHA256SUMS`, and `release.json`.
+Use release metadata schema version 2 with a `packages` array.
+Record the source commit, each package name and checksum, and the builder identity in `release.json`.
+Verify both packages, their dependency relationship, and the builder before draft upload.
+Reject missing, additional, or mismatched package archives.
 Require the remote tag to match the recorded source commit.
 Create or update draft releases only.
 Refuse to replace files in a published release.

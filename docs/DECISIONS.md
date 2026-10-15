@@ -59,9 +59,13 @@ Host networking and guest image construction remain manual for this iteration.
 
 Use one checkout-based recipe at `packaging/local/PKGBUILD`.
 Remove the separate Arch User Repository (AUR) recipe.
-Local installation builds `sandboxctl-local` with a Git-derived version.
-Release packaging builds `sandboxctl` with the version of the checked-out tag.
-Both profiles include the completed builder bundle.
+Use a split PKGBUILD with separate application and builder package functions.
+Local installation builds `sandboxctl-local` and `sandboxctl-builder-local` with a Git-derived version.
+Release packaging builds `sandboxctl` and `sandboxctl-builder` with the version of the checked-out tag.
+The application package owns commands, the daemon, service files, Firecracker, and jailer.
+The builder package owns the completed builder bundle.
+Each package installs its own license records.
+The application requires the matching builder package version and release.
 Both profiles use the existing builder staging script.
 Keep the builder cache under `$XDG_DATA_HOME/sandboxctl/images/builder/`.
 Use `~/.local/share` when `XDG_DATA_HOME` is not set.
@@ -77,7 +81,8 @@ Run the release workflow on a GitHub-hosted runner with an Arch Linux container.
 Use an unprivileged package build user and rootless Podman with the `vfs` storage driver.
 Dispatch the workflow from the default branch to share the builder cache across releases.
 Use a manual cache revision instead of source hashes.
-Build and verify the package before uploading it to a GitHub draft release.
+Build and verify both packages before uploading them to a GitHub draft release.
+Record both package checksums in the release metadata and checksum file.
 Verify that the existing remote tag matches the package source commit.
 Keep publication as a separate maintainer action.
 See [the package plan](../packaging/local/README.md) for the build and user installation sequence.
@@ -91,7 +96,7 @@ PID 1. Dockerfile `CMD` and `ENTRYPOINT` do not start guest applications.
 See [DOCKERFILE-IMAGE-BUILDS.md](DOCKERFILE-IMAGE-BUILDS.md) for scope and
 implementation order. This input mode is not implemented yet.
 
-The Arch package includes the pinned builder image bundle under
+The builder package includes the pinned builder image bundle under
 `/usr/share/sandboxctl/builder`. `sandboxctl init` verifies the bundle and
 streams it to `sandboxd` for installation in the root-owned image store. The
 image build command reads its default builder name and version from the

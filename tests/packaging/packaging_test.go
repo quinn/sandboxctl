@@ -15,9 +15,11 @@ func TestPackageRecipesReuseCachedBuilder(t *testing.T) {
 	for _, profile := range []string{"local", "release"} {
 		t.Run(profile, func(t *testing.T) {
 			fixture := newFixture(t, "local")
+			application, builder := "sandboxctl-local", "sandboxctl-builder-local"
 			var env []string
 			if profile == "release" {
 				env = []string{"SANDBOXCTL_RELEASE_VERSION=0.2.0"}
+				application, builder = "sandboxctl", "sandboxctl-builder"
 			}
 			output, err := fixture.run(env...)
 			if err != nil {
@@ -36,7 +38,7 @@ func TestPackageRecipesReuseCachedBuilder(t *testing.T) {
 			for _, name := range []string{"manifest.json", "vmlinux", "initramfs.cpio.gz", "root.squashfs"} {
 				source := filepath.Join(fixture.bundle, name)
 				saved := filepath.Join(fixture.source, "package-data", "sandboxctl", "images", "builder", fixture.version, name)
-				installed := filepath.Join(fixture.output, "usr", "share", "sandboxctl", "builder", name)
+				installed := filepath.Join(fixture.output, builder, "usr", "share", "sandboxctl", "builder", name)
 				expected, err := os.ReadFile(source)
 				if err != nil {
 					t.Fatal(err)
@@ -56,8 +58,18 @@ func TestPackageRecipesReuseCachedBuilder(t *testing.T) {
 				}
 			}
 			for _, name := range []string{"sandboxctl", "sandboxd", "sandboxctl-forward"} {
-				if _, err := os.Stat(filepath.Join(fixture.output, "usr", "bin", name)); err != nil {
+				if _, err := os.Stat(filepath.Join(fixture.output, application, "usr", "bin", name)); err != nil {
 					t.Fatal(err)
+				}
+			}
+			for _, name := range []string{application, builder} {
+				if _, err := os.Stat(filepath.Join(fixture.output, name, "usr", "share", "licenses", name, "LICENSE")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, path := range []string{filepath.Join(application, "usr/share/sandboxctl/builder"), filepath.Join(builder, "usr/bin")} {
+				if _, err := os.Stat(filepath.Join(fixture.output, path)); !os.IsNotExist(err) {
+					t.Fatalf("package payloads overlap at %s: %v", path, err)
 				}
 			}
 		})
@@ -113,6 +125,78 @@ func TestPackageRecipesHaveValidShellSyntax(t *testing.T) {
 		if output, err := exec.Command("bash", "-n", path).CombinedOutput(); err != nil {
 			t.Fatalf("%s: %v\n%s", recipe, err, output)
 		}
+	}
+}
+
+func TestSplitPackageSourceMetadata(t *testing.T) {
+	requireTools(t, "makepkg")
+	for _, profile := range []string{"local", "release"} {
+		t.Run(profile, func(t *testing.T) {
+			command := exec.Command("makepkg", "--printsrcinfo")
+			command.Dir = filepath.Join(repositoryRoot(t), "packaging", "local")
+			command.Env = append(os.Environ(), "SANDBOXCTL_RELEASE_VERSION=")
+			application, builder := "sandboxctl-local", "sandboxctl-builder-local"
+			if profile == "release" {
+				command.Env = append(command.Env, "SANDBOXCTL_RELEASE_VERSION=0.2.0")
+				application, builder = "sandboxctl", "sandboxctl-builder"
+			}
+			output, err := command.CombinedOutput()
+			if err != nil {
+				t.Fatalf("package metadata: %v\n%s", err, output)
+			}
+			sections := strings.Split(string(output), "\npkgname = ")
+			if len(sections) != 3 || !strings.HasPrefix(sections[1], application+"\n") || !strings.HasPrefix(sections[2], builder+"\n") {
+				t.Fatalf("expected exactly two split packages:\n%s", output)
+			}
+			if !strings.Contains(sections[1], "depends = "+builder+"=") || !strings.Contains(sections[2], "\tdepends = \n") {
+				t.Fatalf("incorrect split-package dependencies:\n%s", output)
+			}
+		})
+	}
+}
+
+func TestMakepkgCreatesVerifiedSplitArchives(t *testing.T) {
+	requireTools(t, "makepkg", "fakeroot", "tar", "zstd", "python3")
+	if os.Geteuid() == 0 {
+		t.Skip("makepkg requires an unprivileged user")
+	}
+	fixture := newFixture(t, "local")
+	archiveDir := t.TempDir()
+	releasePackages(t, archiveDir, "valid")
+	builderArchive := filepath.Join(archiveDir, "sandboxctl-builder-0.2.0-1-x86_64.pkg.tar.zst")
+	for _, name := range []string{"manifest.json", "vmlinux", "initramfs.cpio.gz", "root.squashfs"} {
+		output, err := exec.Command("tar", "--zstd", "-xOf", builderArchive, "usr/share/sandboxctl/builder/"+name).CombinedOutput()
+		if err != nil {
+			t.Fatalf("builder fixture: %v\n%s", err, output)
+		}
+		writeFile(t, filepath.Join(fixture.bundle, name), string(output), 0600)
+	}
+	recipe, err := os.ReadFile(fixture.recipe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Use prepared fixtures instead of downloading source archives.
+	start := filepath.Dir(fixture.source)
+	writeFile(t, filepath.Join(start, "PKGBUILD"), string(recipe)+"\nsource=()\nsha256sums=()\n", 0600)
+	config, err := os.ReadFile("/etc/makepkg.conf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(start, "makepkg.conf")
+	releaseDir := t.TempDir()
+	// Resolve the output path through the fixture environment.
+	writeFile(t, configPath, string(config)+"\nPKGEXT='.pkg.tar.zst'\nPKGDEST=\"$SANDBOXCTL_PACKAGE_TEST_OUTPUT\"\n", 0600)
+	command := exec.Command("makepkg", "--config", configPath, "--nodeps", "--noextract", "--nocheck")
+	command.Dir = start
+	command.Env = append(os.Environ(), "PATH="+fixture.bin+":"+os.Getenv("PATH"), "XDG_DATA_HOME="+fixture.data, "SANDBOXCTL_RELEASE_VERSION=0.2.0", "SANDBOXCTL_PACKAGE_TEST_OUTPUT="+releaseDir, "SANDBOXCTL_PACKAGE_TEST_TRACE="+fixture.trace)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("makepkg split build: %v\n%s", err, output)
+	}
+	if output, err := artifactCommand(t, "create", releaseDir, releaseTag, strings.Repeat("a", 40)); err != nil {
+		t.Fatalf("real package verification: %v\n%s", err, output)
+	}
+	if output, err := artifactCommand(t, "verify", releaseDir, releaseTag); err != nil {
+		t.Fatalf("real release verification: %v\n%s", err, output)
 	}
 }
 
@@ -183,7 +267,15 @@ func (f packageFixture) run(env ...string) ([]byte, error) {
 srcdir="$SANDBOXCTL_PACKAGE_TEST_SOURCE"
 pkgdir="$SANDBOXCTL_PACKAGE_TEST_OUTPUT"
 build
-package
+packages=("${pkgname[@]}")
+for name in "${packages[@]}"; do
+  (
+    pkgname=$name
+    pkgdir="$SANDBOXCTL_PACKAGE_TEST_OUTPUT/$name"
+    mkdir -p "$pkgdir"
+    "package_$name"
+  )
+done
 `
 	command := exec.Command("bash", "-e", "-u", "-o", "pipefail", "-c", script)
 	command.Env = append(os.Environ(), "PATH="+f.bin+":"+os.Getenv("PATH"), "XDG_DATA_HOME="+f.data, "IMAGE_NAME=builder", "SANDBOXCTL_PACKAGE_TEST_RECIPE="+f.recipe, "SANDBOXCTL_PACKAGE_TEST_SOURCE="+f.source, "SANDBOXCTL_PACKAGE_TEST_OUTPUT="+f.output, "SANDBOXCTL_PACKAGE_TEST_TRACE="+f.trace)

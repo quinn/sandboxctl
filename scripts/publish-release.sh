@@ -40,8 +40,8 @@ if is_draft=$(gh release view "$tag" --repo "$repository" --json isDraft --jq '.
     printf 'The release is already published. Its files cannot be replaced.\n' >&2
     exit 1
   fi
-  gh release upload "$tag" "${packages[0]}" "$artifacts/SHA256SUMS" "$artifacts/release.json" --repo "$repository" --clobber
+  gh release upload "$tag" "${packages[@]}" "$artifacts/SHA256SUMS" "$artifacts/release.json" --repo "$repository" --clobber
 else
-  gh release create "$tag" "${packages[0]}" "$artifacts/SHA256SUMS" "$artifacts/release.json" \
+  gh release create "$tag" "${packages[@]}" "$artifacts/SHA256SUMS" "$artifacts/release.json" \
     --repo "$repository" --verify-tag --draft --title "$tag" --generate-notes
 fi

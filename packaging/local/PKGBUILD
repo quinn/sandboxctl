@@ -1,4 +1,5 @@
-pkgname=sandboxctl-local
+pkgbase=sandboxctl-local
+pkgname=('sandboxctl-local' 'sandboxctl-builder-local')
 pkgver=0.1.0.r122.g5d69058
 pkgrel=1
 pkgdesc='Manage local Firecracker development sandboxes'
@@ -8,17 +9,14 @@ license=('AGPL-3.0-or-later' 'Apache-2.0' 'BSD-2-Clause' 'BSD-3-Clause' 'ISC' 'M
 options=('!strip')
 depends=('e2fsprogs' 'git' 'iproute2' 'nftables' 'openssh')
 makedepends=('cpio' 'curl' 'git' 'go>=1.27' 'gzip' 'podman' 'python' 'squashfs-tools')
-provides=('sandboxctl')
-conflicts=('sandboxctl' 'sandboxctl-git')
 if [[ -n ${SANDBOXCTL_RELEASE_VERSION:-} ]]; then
 	if [[ ! $SANDBOXCTL_RELEASE_VERSION =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
 		printf 'Release version must use MAJOR.MINOR.PATCH.\n' >&2
 		return 1
 	fi
-	pkgname=sandboxctl
+	pkgbase=sandboxctl
+	pkgname=('sandboxctl' 'sandboxctl-builder')
 	pkgver=$SANDBOXCTL_RELEASE_VERSION
-	provides=()
-	conflicts=('sandboxctl-local' 'sandboxctl-git')
 fi
 _firecracker_version=1.17.0
 _firecracker_arch=x86_64
@@ -100,16 +98,37 @@ build() {
 	copy_builder_bundle "$staged_bundle" "$package_images"
 }
 
-package() {
+package_sandboxctl() {
+	depends=('e2fsprogs' 'git' 'iproute2' 'nftables' 'openssh' "sandboxctl-builder=$pkgver-$pkgrel")
+	conflicts=('sandboxctl-local' 'sandboxctl-git')
+	package_application
+}
+
+package_sandboxctl-local() {
+	depends=('e2fsprogs' 'git' 'iproute2' 'nftables' 'openssh' "sandboxctl-builder-local=$pkgver-$pkgrel")
+	provides=("sandboxctl=$pkgver-$pkgrel")
+	conflicts=('sandboxctl' 'sandboxctl-git')
+	package_application
+}
+
+package_sandboxctl-builder() {
+	pkgdesc='Boot image bundle for the sandboxctl guest image builder'
+	depends=()
+	conflicts=('sandboxctl-builder-local')
+	package_builder
+}
+
+package_sandboxctl-builder-local() {
+	pkgdesc='Boot image bundle for the sandboxctl guest image builder'
+	depends=()
+	provides=("sandboxctl-builder=$pkgver-$pkgrel")
+	conflicts=('sandboxctl-builder')
+	package_builder
+}
+
+package_application() {
 	cd "$srcdir/sandboxctl"
 	local firecracker_dir="$srcdir/release-v${_firecracker_version}-${_firecracker_arch}"
-	local builder_bundle builder_manifest
-	builder_bundle=$(find_builder_bundle "$srcdir/package-data/sandboxctl/images")
-	if [[ -z $builder_bundle ]]; then
-		printf 'The builder image bundle was not created during package build.\n' >&2
-		return 1
-	fi
-	builder_manifest="$builder_bundle/manifest.json"
 	install -Dm755 bin/sandboxctl "$pkgdir/usr/bin/sandboxctl"
 	install -Dm755 bin/sandboxd "$pkgdir/usr/bin/sandboxd"
 	install -Dm755 "$firecracker_dir/firecracker-v${_firecracker_version}-${_firecracker_arch}" "$pkgdir/usr/lib/sandboxctl/firecracker"
@@ -119,12 +138,27 @@ package() {
 	done
 	install -Dm644 packaging/systemd/sandboxd.socket "$pkgdir/usr/lib/systemd/system/sandboxd.socket"
 	install -Dm644 packaging/systemd/sandboxd.service "$pkgdir/usr/lib/systemd/system/sandboxd.service"
+	install -Dm644 README.md "$pkgdir/usr/share/doc/sandboxctl/README.md"
+	package_licenses
+}
+
+package_builder() {
+	cd "$srcdir/sandboxctl"
+	local builder_bundle
+	builder_bundle=$(find_builder_bundle "$srcdir/package-data/sandboxctl/images")
+	if [[ -z $builder_bundle ]]; then
+		printf 'The builder image bundle was not created during package build.\n' >&2
+		return 1
+	fi
 	install -d -m755 "$pkgdir/usr/share/sandboxctl/builder"
 	install -m644 "$builder_bundle/manifest.json" "$pkgdir/usr/share/sandboxctl/builder/manifest.json"
 	install -m644 "$builder_bundle/vmlinux" "$pkgdir/usr/share/sandboxctl/builder/vmlinux"
 	install -m644 "$builder_bundle/initramfs.cpio.gz" "$pkgdir/usr/share/sandboxctl/builder/initramfs.cpio.gz"
 	install -m644 "$builder_bundle/root.squashfs" "$pkgdir/usr/share/sandboxctl/builder/root.squashfs"
-	install -Dm644 README.md "$pkgdir/usr/share/doc/sandboxctl/README.md"
+	package_licenses
+}
+
+package_licenses() {
 	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 	install -d "$pkgdir/usr/share/licenses/$pkgname/third_party"
 	cp -a third_party/licenses/. "$pkgdir/usr/share/licenses/$pkgname/third_party/"

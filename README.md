@@ -15,23 +15,27 @@ Network addresses are documented product defaults or loopback examples.
 
 ### Install a GitHub release
 
-Download the `sandboxctl-VERSION-1-x86_64.pkg.tar.zst`, `SHA256SUMS`, and `release.json` files from a published GitHub release.
+Download both `sandboxctl-VERSION-1-x86_64.pkg.tar.zst` and `sandboxctl-builder-VERSION-1-x86_64.pkg.tar.zst` from a published GitHub release.
+Download `SHA256SUMS` and `release.json` from the same release.
 Put these files in one directory.
 Verify them in that directory:
 
 ```sh
 sha256sum -c SHA256SUMS
-sudo pacman -U ./sandboxctl-VERSION-1-x86_64.pkg.tar.zst
+sudo pacman -U ./sandboxctl-VERSION-1-x86_64.pkg.tar.zst ./sandboxctl-builder-VERSION-1-x86_64.pkg.tar.zst
 ```
 
 Replace `VERSION` with the selected release version.
-The package includes Firecracker, jailer, and the completed builder image.
+The application package includes the commands, daemon, Firecracker, and jailer.
+The builder package contains the completed builder image.
+Install both packages in the same transaction.
+The application requires the matching version of the builder package.
 Users do not need the image build tools.
 Continue with [host configuration](#configure-the-host) after installation.
 
 ### Install from a checkout
 
-Install the local Arch package from this checkout:
+Install the local Arch packages from this checkout:
 
 ```sh
 make install
@@ -39,6 +43,7 @@ make install
 
 The checkout must have no uncommitted changes.
 The target uses `yay`.
+It builds and installs `sandboxctl-local` and `sandboxctl-builder-local` from one split PKGBUILD.
 It downloads the pinned Firecracker release from GitHub.
 The package build reuses the staged builder image when one exists.
 Otherwise, it builds the image during package creation.
@@ -46,7 +51,7 @@ The image is in `$XDG_DATA_HOME/sandboxctl/images/builder/`.
 It uses `~/.local/share` when `XDG_DATA_HOME` is not set.
 Run `make clean-builder` to remove this image and force a fresh build.
 This does not remove an installed builder image.
-The package includes the image at `/usr/share/sandboxctl/builder`.
+The builder package includes the image at `/usr/share/sandboxctl/builder`.
 Package installation does not import the image into sandboxd.
 Podman is a package build dependency.
 It is not needed to run `sandboxctl` or build guest images after installation.
@@ -73,12 +78,14 @@ See the [package build and installation plan](packaging/local/README.md) for the
 ### Build a GitHub release
 
 Both local installation and release builds use `packaging/local/PKGBUILD`.
+Each build produces separate application and builder packages.
 The release workflow runs on a GitHub-hosted runner in an Arch Linux container.
 Run the **Build GitHub release** workflow from the default branch.
 Set `tag` to an existing `vMAJOR.MINOR.PATCH` tag.
 The workflow checks out that tag and runs the required checks.
-It builds the package as an unprivileged user.
-It uploads the package, `SHA256SUMS`, and `release.json` to a draft release.
+It builds both packages as an unprivileged user.
+It uploads both package archives, `SHA256SUMS`, and `release.json` to a draft release.
+Release metadata records the checksum of each package and the builder identity.
 Review the draft before publishing it.
 
 The workflow caches only the completed builder bundles.
@@ -86,7 +93,7 @@ Keep `builder_cache_revision` unchanged to reuse this cache across releases.
 Increase it when you need a fresh builder image.
 The build does not invalidate this cache from source changes.
 
-Build the same release package on an Arch host:
+Build the same release packages on an Arch host:
 
 ```sh
 git checkout v0.2.0
@@ -142,7 +149,7 @@ SSH still rejects a changed host key for the same instance.
 
 ## Build and install a guest image
 
-`sandboxctl init` imports the builder image from the Arch package through the privileged service.
+`sandboxctl init` imports the builder image from the builder package through the privileged service.
 It verifies the image files and installs them in the protected image store.
 You do not need to build or select the builder image.
 

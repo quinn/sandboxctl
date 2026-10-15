@@ -32,8 +32,9 @@ Extra check: run `make generate`, then `make check`.
 
 ## Package recipe or packaging files
 
-The Arch package recipe builds and installs the CLI, daemon, command helpers,
-Firecracker and jailer binaries, systemd units, and the packaged builder image.
+The split Arch package recipe builds an application package and a builder package.
+The application package contains the CLI, daemon, command helpers, Firecracker, jailer, and systemd units.
+The builder package contains the completed image bundle.
 The checkout-based recipe is used by `make install` and GitHub release builds.
 The systemd files define the socket-activated daemon.
 Host setup itself is performed by `sandboxctl host install`; it creates
