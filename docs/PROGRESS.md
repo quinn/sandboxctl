@@ -109,7 +109,10 @@ The README links to the example folder and states that its build command require
 Example files are not added to the application package.
 Documentation links, shell syntax, and whitespace checks pass.
 The README contains no Make commands.
-The next task is refreshing the draft's packaged README and reviewing the release before publication.
+The draft refresh passed all build checks and includes the corrected README.
+Both package digests and the release source commit match the uploaded metadata.
+The workflow reused the completed builder cache again.
+The next task is maintainer review before publication.
 
 ## Port forwarding
 

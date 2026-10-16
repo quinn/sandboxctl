@@ -65,7 +65,9 @@ The Codex example remains in the source repository.
 Link to the example folder and state the repository-root requirement.
 Do not add example distribution or new example-management commands.
 Documentation links, shell syntax, and whitespace checks pass.
-Refresh the draft's packaged README before publication.
+The draft refresh passed and includes the corrected README.
+The package digests and source commit match the uploaded metadata.
+The builder cache was reused.
 
 ## Documentation privacy
 
