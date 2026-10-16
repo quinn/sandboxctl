@@ -2,7 +2,7 @@
 
 ## Active work
 
-The active phase is fixed release asset validation before the user-guide cleanup.
+The active phase is release review after the package split and guide cleanup.
 Read `packaging/local/README.md` for the package build and installation plan.
 Use `docs/PROGRESS.md` for completed work, checks, and remaining validation.
 Use `docs/SANDBOX-RUNTIME-V2.md` as the authoritative runtime specification.
@@ -49,9 +49,23 @@ They download both unsigned packages before one local installation transaction.
 Fixed release asset names preserve the tagged version inside each package.
 Package signing remains separate work that requires project key setup.
 Latest-release downloads require a published release.
-Rebuild the draft with fixed release asset filenames.
-Then separate contributor instructions from installed-user instructions.
+The fixed-name draft rebuild passed.
+Only the two fixed-name packages and release metadata remain in the draft.
+The uploaded package digests and tag commit match the metadata.
+The package split and release validation are complete.
 Review the draft before publication.
+
+## User and contributor guides
+
+Keep installed-user instructions in the README.
+Use `CONTRIBUTING.md` for source builds, local installation, and development checks.
+Use `packaging/local/README.md` for package builds, releases, and builder cache management.
+The README must not require a Makefile for routine use.
+The Codex example remains in the source repository.
+Link to the example folder and state the repository-root requirement.
+Do not add example distribution or new example-management commands.
+Documentation links, shell syntax, and whitespace checks pass.
+Refresh the draft's packaged README before publication.
 
 ## Documentation privacy
 

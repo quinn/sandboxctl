@@ -1,5 +1,9 @@
 # Arch package builds and GitHub releases
 
+These build instructions require a source checkout.
+Run build commands from the repository root unless a command states another directory.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) for source builds and development checks.
+
 ## One split package recipe
 
 Use `packaging/local/PKGBUILD` for both local installation and GitHub releases.

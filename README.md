@@ -37,79 +37,6 @@ The application requires the matching version of the builder package.
 Users do not need the image build tools.
 Continue with [host configuration](#configure-the-host) after installation.
 
-### Install from a checkout
-
-Install the local Arch packages from this checkout:
-
-```sh
-make install
-```
-
-The checkout must have no uncommitted changes.
-The target uses `yay`.
-It builds and installs `sandboxctl-local` and `sandboxctl-builder-local` from one split PKGBUILD.
-It downloads the pinned Firecracker release from GitHub.
-The package build reuses the staged builder image when one exists.
-Otherwise, it builds the image during package creation.
-The image is in `$XDG_DATA_HOME/sandboxctl/images/builder/`.
-It uses `~/.local/share` when `XDG_DATA_HOME` is not set.
-Run `make clean-builder` to remove this image and force a fresh build.
-This does not remove an installed builder image.
-The builder package includes the image at `/usr/share/sandboxctl/builder`.
-Package installation does not import the image into sandboxd.
-Podman is a package build dependency.
-It is not needed to run `sandboxctl` or build guest images after installation.
-
-### Builder image cache
-
-The package build uses the completed builder bundle in the user's data directory.
-Each bundle contains a manifest, kernel, guest initramfs, and SquashFS filesystem.
-The cache lookup checks that these files are present, nonempty, and not symbolic links.
-Source changes do not invalidate the cache automatically.
-Use `make clean-builder` when changes to the builder recipe, guest bootstrap, or tool versions require a fresh image.
-The next package build creates a new bundle.
-The stored content digest identifies the finished bundle.
-`sandboxctl init` verifies the packaged bundle before it imports the image.
-
-Inspect the staged builder bundles with:
-
-```sh
-make check-builder
-```
-
-See the [package build and installation plan](packaging/local/README.md) for the checkout and GitHub release flows.
-
-### Build a GitHub release
-
-Both local installation and release builds use `packaging/local/PKGBUILD`.
-Each build produces separate application and builder packages.
-The release workflow runs on a GitHub-hosted runner in an Arch Linux container.
-Run the **Build GitHub release** workflow from the default branch.
-Set `tag` to an existing `vMAJOR.MINOR.PATCH` tag.
-The workflow checks out that tag and runs the required checks.
-It builds both packages as an unprivileged user.
-It uploads both package archives, `SHA256SUMS`, and `release.json` to a draft release.
-Release metadata records the checksum of each package and the builder identity.
-Review the draft before publishing it.
-
-The workflow caches only the completed builder bundles.
-Keep `builder_cache_revision` unchanged to reuse this cache across releases.
-Increase it when you need a fresh builder image.
-The build does not invalidate this cache from source changes.
-
-Build the same release packages on an Arch host:
-
-```sh
-git checkout v0.2.0
-make release TAG=v0.2.0
-```
-
-The tag must match the checked-out commit.
-The checkout must have no uncommitted changes.
-The script writes release files to `dist/v0.2.0/`.
-It refuses to overwrite an existing output directory.
-See the [package plan](packaging/local/README.md) for dependencies and the draft upload command.
-
 ### Configure the host
 
 Install the host service and network rules:
@@ -251,7 +178,10 @@ Install the image before you create a sandbox from it.
 
 ## Build a Codex guest image
 
-Build the Codex example image:
+The [Codex example folder](examples/codex) demonstrates a guest image with a coding agent.
+The example files are in the source repository.
+Download or clone the repository to use this example.
+Run the following build command from the repository root:
 
 ```sh
 sandboxctl image build codex-image \
@@ -269,7 +199,7 @@ The installation-only `CODEX_HOME` setting does not change the guest's login or 
 The image contains no account credentials.
 To update Codex, change `CODEX_VERSION` in the Dockerfile.
 
-Edit `examples/codex/AGENTS.md` to set the base coding rules.
+Edit the example [AGENTS.md](examples/codex/AGENTS.md) to set the base coding rules.
 Provisioning copies it from `/etc/skel/.codex/AGENTS.md` to `/home/dev/.codex/AGENTS.md` when it creates the `dev` account.
 Codex loads these global rules before repository rules.
 See [Codex instruction discovery](https://developers.openai.com/codex/guides/agents-md).
@@ -659,7 +589,20 @@ Delete pulls the results automatically.
 - `sandboxctl paths` prints the user and host data paths.
 - `sandboxctl version` prints the version.
 
-## Development checks
+## Troubleshooting
+
+### Check the host and installed images
+
+```sh
+sandboxctl doctor
+sandboxctl image list
+```
+
+The builder package supplies the builder bundle.
+`sandboxctl init` verifies and imports it into the daemon's image store.
+The package build cache is separate from installed images.
+
+### Debug logs
 
 Command dispatch, start, completion, and failure diagnostics use the debug log level.
 Set `DEBUG=true` to print these diagnostics:
@@ -671,42 +614,10 @@ DEBUG=true sandboxctl list
 These diagnostics are hidden when `DEBUG` is unset or has another value.
 Command output and error messages remain visible.
 
-Run the code checks and build the local commands with:
+## Contributing
 
-```sh
-make check
-make build
-```
-
-The end-to-end (E2E) suite exercises the installed command and daemon.
-Install the Arch package and configure the host first.
-Run the suite as the configured operator:
-
-```sh
-make e2e
-```
-
-The suite does not install packages or use `sudo`.
-It uses a private user-data directory under `tmp/e2e/` and removes test resources after successful checks.
-See [e2e/README.md](e2e/README.md) for requirements and details.
-
-You can also run one manual VM check at a time.
-These targets need KVM access and an installed, configured `sandboxd` service:
-
-- `make manual-bootstrap-test` checks guest bootstrap and SSH.
-- `make manual-builder-test` checks the builder image and its tools.
-- `make manual-image-build` checks the guest image build pipeline and stages its output bundle.
-- `make manual-dockerfile-build` checks a local Dockerfile build, context filtering, build arguments, VM boot, SSH, and state persistence.
-- `make manual-dockerfile-rejections` checks invalid Dockerfile builds, guest metadata, and context size limits.
-  It confirms that failed builds do not publish an image.
-
-These manual targets check sandboxd state and disk operations.
-They need an installed, configured sandboxd service.
-The reset test also starts a guest and needs KVM access:
-
-- `make manual-delete-test` checks stopped-sandbox deletion.
-- `make manual-reset-test` checks state-disk reset.
-  Set `IMAGE` to select an installed image other than `default`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for source builds, local installation, and development checks.
+See the [package guide](packaging/local/README.md) for release builds and builder cache management.
 
 ## Data and safety
 

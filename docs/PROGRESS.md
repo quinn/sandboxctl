@@ -2,7 +2,7 @@
 
 ## Active phase
 
-The active phase is fixed release asset validation before the user-guide cleanup.
+The active phase is release review after the package split and guide cleanup.
 One PKGBUILD now produces separate application and builder packages.
 The `v0.1.0` draft now contains the verified application and builder packages.
 The clean supported Arch host acceptance check in section 19 also remains open.
@@ -92,9 +92,24 @@ The release build refuses missing outputs, symbolic links, and existing asset de
 The release verifier and uploader use the fixed application and builder asset names.
 Formatting, vet, Go tests, Protocol Buffer lint, binary compilation, and shell syntax checks pass.
 Supervisor cleanup fixtures select unused host identities so real sandboxes do not invalidate the tests.
-Uploaded metadata matches the release tag commit and both GitHub package digests.
-The next task is a draft rebuild with fixed asset filenames.
-Then separate contributor instructions from installed-user instructions.
+The fixed-name draft rebuild passed.
+Uploaded metadata matches the release tag commit and both package digests.
+The draft contains only the two fixed-name packages, `SHA256SUMS`, and `release.json`.
+The workflow reused the completed builder cache.
+The package split and release validation are complete.
+
+## User and contributor guides
+
+The README covers installation, host setup, guest images, sandbox operations, and troubleshooting.
+Source installation and development checks now live in `CONTRIBUTING.md`.
+Package builds, releases, and builder cache management remain in `packaging/local/README.md`.
+The README uses installed CLI commands for diagnostics.
+The Codex example remains a demonstration in the source repository.
+The README links to the example folder and states that its build command requires the repository root.
+Example files are not added to the application package.
+Documentation links, shell syntax, and whitespace checks pass.
+The README contains no Make commands.
+The next task is refreshing the draft's packaged README and reviewing the release before publication.
 
 ## Port forwarding
 

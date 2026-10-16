@@ -172,7 +172,7 @@ use the tool. Keep command names and behavior aligned with the implementation
 and authoritative runtime design. `MODULES.md` explains which checks apply to
 each change area.
 
-Files and folders: `README.md`, `MODULES.md`, and Markdown files under `docs/`.
+Files and folders: `README.md`, `CONTRIBUTING.md`, `MODULES.md`, `packaging/local/README.md`, and Markdown files under `docs/`.
 
 Extra check: run `git diff --check` and review the text for correctness and
 clarity.
