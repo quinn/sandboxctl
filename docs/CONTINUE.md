@@ -2,7 +2,7 @@
 
 ## Active work
 
-The active phase is split-package implementation and release validation.
+The active phase is fixed release asset validation before the user-guide cleanup.
 Read `packaging/local/README.md` for the package build and installation plan.
 Use `docs/PROGRESS.md` for completed work, checks, and remaining validation.
 Use `docs/SANDBOX-RUNTIME-V2.md` as the authoritative runtime specification.
@@ -33,8 +33,8 @@ Use the guarded image commands when replacement is required.
 Package and release fixture tests pass.
 Formatting, vet, Go tests, Protocol Buffer lint, shell syntax checks, and workflow YAML parsing pass.
 A stamped build reports the selected version through `sandboxctl version`.
-The previous `v0.1.0` workflow passed with the earlier single-package layout.
-That draft needs a rebuild before publication.
+The `v0.1.0` workflow passed with the split-package layout.
+The draft contains both package archives, checksums, and release metadata.
 The updated verifier requires both split archives and records their checksums in release metadata schema version 2.
 The checksum file covers both archives and the metadata file.
 Real `makepkg` fixture builds and release verification pass for the split layout.
@@ -43,7 +43,15 @@ CI restores mapping helper capabilities, uses separate Buildah scratch storage, 
 A fixture permission correction has a subprocess regression check for private file masks.
 The workflow is `.github/workflows/release.yaml`.
 The full checks and the package tests under file mask `077` pass.
-The split-package draft rebuild is in progress.
+The split-package workflow restored the completed builder cache and skipped builder image construction.
+The installation guides select the latest published release without a version argument.
+They download both unsigned packages before one local installation transaction.
+Fixed release asset names preserve the tagged version inside each package.
+Package signing remains separate work that requires project key setup.
+Latest-release downloads require a published release.
+Rebuild the draft with fixed release asset filenames.
+Then separate contributor instructions from installed-user instructions.
+Review the draft before publication.
 
 ## Documentation privacy
 

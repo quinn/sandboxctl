@@ -60,5 +60,15 @@ SOURCE_DATE_EPOCH=$(git -C "$repo_dir" show -s --format=%ct "$commit")
   cd -- "$stage"
   makepkg --config "$stage/makepkg.conf" --syncdeps --cleanbuild
 )
+# Fixed asset names allow links through GitHub's latest release URL.
+for package in sandboxctl sandboxctl-builder; do
+  archive="$output/$package-$version-1-x86_64.pkg.tar.zst"
+  asset="$output/$package-x86_64.pkg.tar.zst"
+  if [[ ! -f $archive || -L $archive || -e $asset || -L $asset ]]; then
+    printf 'Release package output is missing or invalid: %s\n' "$archive" >&2
+    exit 1
+  fi
+  mv -T -- "$archive" "$asset"
+done
 python3 "$repo_dir/scripts/release-artifacts.py" create "$output" "$tag" "$commit"
 printf 'Release files: %s\n' "$output"

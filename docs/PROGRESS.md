@@ -2,9 +2,9 @@
 
 ## Active phase
 
-The active phase is split-package implementation and release validation.
+The active phase is fixed release asset validation before the user-guide cleanup.
 One PKGBUILD now produces separate application and builder packages.
-The existing `v0.1.0` draft uses the earlier single-package layout and must be rebuilt before publication.
+The `v0.1.0` draft now contains the verified application and builder packages.
 The clean supported Arch host acceptance check in section 19 also remains open.
 
 ## Documentation privacy review
@@ -25,7 +25,7 @@ Publication retains the existing Git history.
 Earlier Git revisions retain the removed text.
 The cleaned documentation and release workflow are pushed to the default branch.
 The release workflow is active.
-The draft needs a new build with the split-package layout.
+The draft build passed with the split-package layout.
 The release workflow uses `.github/workflows/release.yaml`.
 Project YAML files use the `.yaml` extension.
 
@@ -82,8 +82,19 @@ GitHub saved the completed builder cache under the default branch with manual re
 The release remains a draft.
 `make check`, `make build`, shell syntax checks, and whitespace checks pass for the split implementation.
 The package tests also pass under the release file mask `077`.
-The draft rebuild is in progress.
-The next task is a verified split-package draft before publication.
+The split-package workflow passed and uploaded both archives, checksums, and schema version 2 metadata.
+The workflow restored the completed builder cache and skipped builder image construction.
+Both installation guides now select the latest published release without a version argument.
+They download both unsigned packages and use one local installation transaction.
+Package signing requires a separate project key and release secret setup.
+Fixed asset filenames retain the tagged version inside each package.
+The release build refuses missing outputs, symbolic links, and existing asset destinations.
+The release verifier and uploader use the fixed application and builder asset names.
+Formatting, vet, Go tests, Protocol Buffer lint, binary compilation, and shell syntax checks pass.
+Supervisor cleanup fixtures select unused host identities so real sandboxes do not invalidate the tests.
+Uploaded metadata matches the release tag commit and both GitHub package digests.
+The next task is a draft rebuild with fixed asset filenames.
+Then separate contributor instructions from installed-user instructions.
 
 ## Port forwarding
 
@@ -257,6 +268,5 @@ Use `e2e/README.md` for installed-package and manual VM checks.
 Keep private test outputs outside tracked documents.
 Record acceptance results without personal host inventories or account details.
 Retain generic examples and product defaults in future documentation updates.
-Rebuild the draft with the split-package layout.
 Review the draft before publication.
 Complete the full guest coding task and clean supported Arch host acceptance checks when suitable test environments are available.

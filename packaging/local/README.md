@@ -109,12 +109,15 @@ The default output directory is `dist/v0.2.0/`.
 The output contains:
 
 ```text
-sandboxctl-0.2.0-1-x86_64.pkg.tar.zst
-sandboxctl-builder-0.2.0-1-x86_64.pkg.tar.zst
+sandboxctl-x86_64.pkg.tar.zst
+sandboxctl-builder-x86_64.pkg.tar.zst
 SHA256SUMS
 release.json
 ```
 
+Release asset filenames stay the same across versions.
+The build renames the `makepkg` archives before release verification.
+The package metadata retains the tagged version.
 `release.json` uses schema version 2.
 It records the tag, source commit, builder identity, and both package checksums in a `packages` array.
 `SHA256SUMS` covers both packages and `release.json`.
@@ -171,16 +174,22 @@ Temporary Podman storage, credentials, and sandbox state are not cached.
 
 ## User installation and host setup
 
-Download both packages, `SHA256SUMS`, and `release.json` from the selected published release.
-Put them in one directory.
-Verify the files and install the package:
+Download both packages from the latest published release.
+Replace `OWNER/REPO` with the project repository.
+Run these commands in a new directory:
 
 ```sh
-sha256sum -c SHA256SUMS
-sudo pacman -U ./sandboxctl-0.2.0-1-x86_64.pkg.tar.zst ./sandboxctl-builder-0.2.0-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-x86_64.pkg.tar.zst
+curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-builder-x86_64.pkg.tar.zst
+sudo pacman -U ./sandboxctl-x86_64.pkg.tar.zst ./sandboxctl-builder-x86_64.pkg.tar.zst
 ```
 
-Use both filenames from the selected release.
+No release version is required in the commands.
+The links select published releases and exclude drafts.
+Release packages are currently unsigned.
+Local installation uses the host's `LocalFileSigLevel` policy.
+Direct installation from URLs requires signatures trusted by the host's remote-package policy.
+Install both packages in the same transaction.
 Users do not need Go, Podman, or the other image build tools.
 The package does not run host setup during installation.
 Configure the host explicitly:

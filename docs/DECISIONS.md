@@ -83,6 +83,8 @@ Dispatch the workflow from the default branch to share the builder cache across 
 Use a manual cache revision instead of source hashes.
 Build and verify both packages before uploading them to a GitHub draft release.
 Record both package checksums in the release metadata and checksum file.
+Use fixed package asset names so installation links can select the latest published release.
+Keep the release version in each package's metadata.
 Verify that the existing remote tag matches the package source commit.
 Keep publication as a separate maintainer action.
 See [the package plan](../packaging/local/README.md) for the build and user installation sequence.

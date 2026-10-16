@@ -163,7 +163,7 @@ func TestMakepkgCreatesVerifiedSplitArchives(t *testing.T) {
 	fixture := newFixture(t, "local")
 	archiveDir := t.TempDir()
 	releasePackages(t, archiveDir, "valid")
-	builderArchive := filepath.Join(archiveDir, "sandboxctl-builder-0.2.0-1-x86_64.pkg.tar.zst")
+	builderArchive := filepath.Join(archiveDir, "sandboxctl-builder-x86_64.pkg.tar.zst")
 	for _, name := range []string{"manifest.json", "vmlinux", "initramfs.cpio.gz", "root.squashfs"} {
 		output, err := exec.Command("tar", "--zstd", "-xOf", builderArchive, "usr/share/sandboxctl/builder/"+name).CombinedOutput()
 		if err != nil {
@@ -191,6 +191,11 @@ func TestMakepkgCreatesVerifiedSplitArchives(t *testing.T) {
 	command.Env = append(os.Environ(), "PATH="+fixture.bin+":"+os.Getenv("PATH"), "XDG_DATA_HOME="+fixture.data, "SANDBOXCTL_RELEASE_VERSION=0.2.0", "SANDBOXCTL_PACKAGE_TEST_OUTPUT="+releaseDir, "SANDBOXCTL_PACKAGE_TEST_TRACE="+fixture.trace)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("makepkg split build: %v\n%s", err, output)
+	}
+	for _, name := range []string{"sandboxctl", "sandboxctl-builder"} {
+		if err := os.Rename(filepath.Join(releaseDir, name+"-0.2.0-1-x86_64.pkg.tar.zst"), filepath.Join(releaseDir, name+"-x86_64.pkg.tar.zst")); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if output, err := artifactCommand(t, "create", releaseDir, releaseTag, strings.Repeat("a", 40)); err != nil {
 		t.Fatalf("real package verification: %v\n%s", err, output)

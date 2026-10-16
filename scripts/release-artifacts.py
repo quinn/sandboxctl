@@ -147,7 +147,7 @@ def builder_info(package):
 
 
 def expected_packages(directory, tag):
-    expected = [directory / f"{name}-{tag[1:]}-1-x86_64.pkg.tar.zst" for name in PACKAGES]
+    expected = [directory / f"{name}-x86_64.pkg.tar.zst" for name in PACKAGES]
     if set(directory.glob("*.pkg.tar.zst")) != set(expected):
         raise ValueError("Release directory must contain exactly the matching application and builder packages")
     for name, path in zip(PACKAGES, expected):

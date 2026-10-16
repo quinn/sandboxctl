@@ -85,7 +85,7 @@ func (m *testManagedMachine) PID() (int, error) {
 
 func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
-	instance := supervisorTestInstance()
+	instance := idleSupervisorTestInstance(t)
 	if err := saveSupervisorTestInstance(paths, instance); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 		VerifyIdentity: func(int, uint32, uint32) error { return nil },
 		Factory: func(_ context.Context, cfg firecracker.Config, metadata GuestMetadata) (ManagedMachine, error) {
 			factoryCalls++
-			if cfg.JailerCfg == nil || *cfg.JailerCfg.UID != 200001 {
+			if cfg.JailerCfg == nil || *cfg.JailerCfg.UID != instance.HostUID {
 				t.Fatalf("factory received an unjailed configuration: %#v", cfg.JailerCfg)
 			}
 			if cfg.JailerCfg.Stdout == nil || cfg.JailerCfg.Stderr == nil {
@@ -171,7 +171,7 @@ func TestSupervisorStartsIdempotentlyAndStopsGuest(t *testing.T) {
 
 func TestSupervisorDeleteStoppedRequiresCleanRuntimeResources(t *testing.T) {
 	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
-	instance := supervisorTestInstance()
+	instance := idleSupervisorTestInstance(t)
 	if err := saveSupervisorTestInstance(paths, instance); err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestSupervisorResetStoppedBlocksRunningSandbox(t *testing.T) {
 
 func TestSupervisorResetStoppedChecksResourcesAndSerializesOperations(t *testing.T) {
 	paths := hoststate.PathsAt(filepath.Join(t.TempDir(), "state"))
-	instance := supervisorTestInstance()
+	instance := idleSupervisorTestInstance(t)
 	if err := saveSupervisorTestInstance(paths, instance); err != nil {
 		t.Fatal(err)
 	}
@@ -384,6 +384,25 @@ func supervisorTestInstance() hoststate.Instance {
 		StateDiskBytes: 1 << 30, Subnet: "172.30.0.0/30", HostIP: "172.30.0.1", GuestIP: "172.30.0.2",
 		TapDevice: "sc000001", GuestMAC: "06:00:ac:1e:00:02", SSHUser: "dev", SSHAlias: "sandbox-dev1",
 	}
+}
+
+func idleSupervisorTestInstance(t *testing.T) hoststate.Instance {
+	t.Helper()
+	instance := supervisorTestInstance()
+	// Cleanup tests must not select an identity used by a real sandbox.
+	for attempt := 0; attempt < 1024; attempt++ {
+		active, err := process.HasIdentity(uint32(instance.HostUID), uint32(instance.HostGID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !active {
+			return instance
+		}
+		instance.HostUID++
+		instance.HostGID++
+	}
+	t.Fatal("no unused process identity found for the supervisor fixture")
+	return hoststate.Instance{}
 }
 
 func saveSupervisorTestInstance(paths hoststate.Paths, instance hoststate.Instance) error {

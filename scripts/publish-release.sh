@@ -33,8 +33,7 @@ if [[ $object_type != commit || $remote_commit != "$commit" ]]; then
   printf 'The GitHub tag does not match the release source commit.\n' >&2
   exit 1
 fi
-shopt -s nullglob
-packages=("$artifacts"/*.pkg.tar.zst)
+packages=("$artifacts/sandboxctl-x86_64.pkg.tar.zst" "$artifacts/sandboxctl-builder-x86_64.pkg.tar.zst")
 if is_draft=$(gh release view "$tag" --repo "$repository" --json isDraft --jq '.isDraft' 2>/dev/null); then
   if [[ $is_draft != true ]]; then
     printf 'The release is already published. Its files cannot be replaced.\n' >&2

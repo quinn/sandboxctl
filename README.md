@@ -15,17 +15,21 @@ Network addresses are documented product defaults or loopback examples.
 
 ### Install a GitHub release
 
-Download both `sandboxctl-VERSION-1-x86_64.pkg.tar.zst` and `sandboxctl-builder-VERSION-1-x86_64.pkg.tar.zst` from a published GitHub release.
-Download `SHA256SUMS` and `release.json` from the same release.
-Put these files in one directory.
-Verify them in that directory:
+Download both packages from the latest published release.
+Replace `OWNER/REPO` with the project repository.
+Run these commands in a new directory:
 
 ```sh
-sha256sum -c SHA256SUMS
-sudo pacman -U ./sandboxctl-VERSION-1-x86_64.pkg.tar.zst ./sandboxctl-builder-VERSION-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-x86_64.pkg.tar.zst
+curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-builder-x86_64.pkg.tar.zst
+sudo pacman -U ./sandboxctl-x86_64.pkg.tar.zst ./sandboxctl-builder-x86_64.pkg.tar.zst
 ```
 
-Replace `VERSION` with the selected release version.
+No release version is required in the commands.
+The links select published releases and exclude drafts.
+Release packages are currently unsigned.
+Local installation uses the host's `LocalFileSigLevel` policy.
+Direct installation from URLs requires signatures trusted by the host's remote-package policy.
 The application package includes the commands, daemon, Firecracker, and jailer.
 The builder package contains the completed builder image.
 Install both packages in the same transaction.

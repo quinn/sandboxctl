@@ -126,6 +126,8 @@ Copy the selected bundle into package staging and install it at `/usr/share/sand
 `sandboxctl init` must verify the packaged manifest and artifacts before importing them through sandboxd.
 GitHub Actions must cache only completed builder bundles with a manually selected cache revision.
 Release files must include both Arch packages, `SHA256SUMS`, and `release.json`.
+Use fixed release asset names `sandboxctl-x86_64.pkg.tar.zst` and `sandboxctl-builder-x86_64.pkg.tar.zst`.
+Keep the tagged version in the package metadata.
 Use release metadata schema version 2 with a `packages` array.
 Record the source commit, each package name and checksum, and the builder identity in `release.json`.
 Verify both packages, their dependency relationship, and the builder before draft upload.
