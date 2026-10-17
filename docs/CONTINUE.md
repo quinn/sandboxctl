@@ -2,7 +2,7 @@
 
 ## Active work
 
-The active phase is release review after the package split and guide cleanup.
+The active phase is signed-release validation.
 Read `packaging/local/README.md` for the package build and installation plan.
 Use `docs/PROGRESS.md` for completed work, checks, and remaining validation.
 Use `docs/SANDBOX-RUNTIME-V2.md` as the authoritative runtime specification.
@@ -45,9 +45,16 @@ The workflow is `.github/workflows/release.yaml`.
 The full checks and the package tests under file mask `077` pass.
 The split-package workflow restored the completed builder cache and skipped builder image construction.
 The installation guides select the latest published release without a version argument.
-They download both unsigned packages before one local installation transaction.
+They document one-time signing-key trust and one URL-based installation transaction.
 Fixed release asset names preserve the tagged version inside each package.
-Package signing remains separate work that requires project key setup.
+The dedicated project key and signing subkey are created.
+The `releases` GitHub environment is restricted to the default `main` branch.
+Its signing key and passphrase secrets are configured.
+Only the signing job receives these secrets.
+The package build job produces unsigned archives and does not receive signing credentials.
+The signing and draft upload jobs require signatures that match the pinned project public key.
+Signed-package fixtures and the required checks pass.
+Rebuild the draft with signed packages and verify all uploaded files before publication.
 Latest-release downloads require a published release.
 The fixed-name draft rebuild passed.
 Only the two fixed-name packages and release metadata remain in the draft.

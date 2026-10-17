@@ -85,6 +85,14 @@ Build and verify both packages before uploading them to a GitHub draft release.
 Record both package checksums in the release metadata and checksum file.
 Use fixed package asset names so installation links can select the latest published release.
 Keep the release version in each package's metadata.
+Sign both release archives with a dedicated project OpenPGP signing subkey.
+Keep the primary certification key in a private local keyring.
+Pin the public key and primary fingerprint under `packaging/keys/`.
+Run signing in a separate job after package verification.
+Restrict signing secrets to the default branch through the `releases` environment.
+Require verified package signatures before draft upload.
+Users import the public key, verify its fingerprint, and establish local trust once.
+Installation and upgrades then use one `pacman -U` command with the two latest-release URLs.
 Verify that the existing remote tag matches the package source commit.
 Keep publication as a separate maintainer action.
 See [the package plan](../packaging/local/README.md) for the build and user installation sequence.

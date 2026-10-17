@@ -8,7 +8,7 @@ Use the [README](README.md) to install and use the published packages.
 
 Use an Arch Linux x86-64 host.
 Install Go 1.27 or later, Make, and Buf for source builds and checks.
-Package fixture checks also use `makepkg`, fakeroot, Python, tar, and zstd.
+Package fixture checks also use `makepkg`, fakeroot, Python, tar, zstd, and GnuPG.
 The fixtures skip checks that need a missing tool.
 See [MODULES.md](MODULES.md) for files and checks that apply to each change area.
 Read [docs/SANDBOX-RUNTIME-V2.md](docs/SANDBOX-RUNTIME-V2.md) before changing runtime behavior.

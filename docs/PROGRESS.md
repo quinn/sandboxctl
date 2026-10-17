@@ -2,7 +2,7 @@
 
 ## Active phase
 
-The active phase is release review after the package split and guide cleanup.
+The active phase is project package signing and signed-release validation.
 One PKGBUILD now produces separate application and builder packages.
 The `v0.1.0` draft now contains the verified application and builder packages.
 The clean supported Arch host acceptance check in section 19 also remains open.
@@ -30,6 +30,20 @@ The release workflow uses `.github/workflows/release.yaml`.
 Project YAML files use the `.yaml` extension.
 
 ## Package builds and releases
+
+Package signing is in progress.
+A dedicated project certification key and signing subkey have been created.
+Only the public key and fingerprint are stored in the repository.
+The release workflow signs verified packages in a separate job.
+The build job does not receive signing credentials.
+The `releases` GitHub environment is restricted to the default `main` branch.
+Its signing key and passphrase secrets are configured.
+The exported private key contains only the signing subkey.
+The primary private key stays in the private local project keyring.
+Signed-package fixtures, formatting, vet, Go tests, Protocol Buffer lint, and binary compilation pass.
+The fixtures reject wrong keys, wrong passphrases, missing or invalid signatures, swapped signatures, and modified packages with new checksums.
+The uploader requires verified signatures before it contacts GitHub.
+The next task is building and verifying the signed draft.
 
 Use one checkout-based recipe at `packaging/local/PKGBUILD`.
 The separate Arch User Repository (AUR) recipe has been removed.
@@ -85,8 +99,7 @@ The package tests also pass under the release file mask `077`.
 The split-package workflow passed and uploaded both archives, checksums, and schema version 2 metadata.
 The workflow restored the completed builder cache and skipped builder image construction.
 Both installation guides now select the latest published release without a version argument.
-They download both unsigned packages and use one local installation transaction.
-Package signing requires a separate project key and release secret setup.
+They document one-time public-key trust and use one URL-based installation transaction.
 Fixed asset filenames retain the tagged version inside each package.
 The release build refuses missing outputs, symbolic links, and existing asset destinations.
 The release verifier and uploader use the fixed application and builder asset names.

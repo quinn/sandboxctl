@@ -58,7 +58,7 @@ export SOURCE_DATE_EPOCH
 SOURCE_DATE_EPOCH=$(git -C "$repo_dir" show -s --format=%ct "$commit")
 (
   cd -- "$stage"
-  makepkg --config "$stage/makepkg.conf" --syncdeps --cleanbuild
+  makepkg --config "$stage/makepkg.conf" --syncdeps --cleanbuild --nosign
 )
 # Fixed asset names allow links through GitHub's latest release URL.
 for package in sandboxctl sandboxctl-builder; do

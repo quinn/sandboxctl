@@ -48,7 +48,7 @@ jobs:
       - name: Prepare Arch build environment
         shell: bash
         run: |
-          pacman -Syu --noconfirm --needed base-devel git go buf podman python squashfs-tools openssh nftables iproute2 e2fsprogs cpio curl gzip zstd sudo libcap
+          pacman -Syu --noconfirm --needed base-devel git go buf podman python squashfs-tools openssh nftables iproute2 e2fsprogs cpio curl gzip zstd sudo libcap gnupg
           # Container layers can lose the file capabilities required by these helpers.
           setcap cap_setuid=ep /usr/bin/newuidmap
           setcap cap_setgid=ep /usr/bin/newgidmap
@@ -100,8 +100,47 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-  draft:
+  sign:
     needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: releases
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Install signing and verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gnupg zstd
+      - name: Check out release scripts and public key
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+      - name: Download verified split packages
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: release-files
+          path: release-files
+      - name: Sign and verify both packages
+        shell: bash
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_SIGNING_PASSPHRASE: ${{ secrets.RELEASE_SIGNING_PASSPHRASE }}
+        run: |
+          python3 scripts/release-artifacts.py sign release-files "$RELEASE_TAG"
+          python3 scripts/release-artifacts.py verify-signed release-files "$RELEASE_TAG"
+      - name: Upload signed release files
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: signed-release-files
+          path: release-files/*
+          if-no-files-found: error
+          compression-level: 0
+
+  draft:
+    needs: sign
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -113,16 +152,16 @@ jobs:
       - name: Install artifact verification tools
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y zstd
+          sudo apt-get install --no-install-recommends -y gnupg zstd
       - name: Check out release scripts
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: refs/tags/${{ inputs.tag }}
           persist-credentials: false
-      - name: Download verified split packages
+      - name: Download signed split packages
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
-          name: release-files
+          name: signed-release-files
           path: release-files
       - name: Create or update the draft release
         shell: bash

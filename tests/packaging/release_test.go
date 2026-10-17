@@ -74,6 +74,9 @@ func releasePackages(t *testing.T, directory, kind string) string {
 	for _, name := range []string{"usr/bin/sandboxctl", "usr/bin/sandboxd", "usr/lib/sandboxctl/firecracker", "usr/lib/sandboxctl/jailer", "usr/lib/systemd/system/sandboxd.socket", "usr/lib/systemd/system/sandboxd.service"} {
 		files[name] = []byte("fixture runtime file")
 	}
+	if kind == "changed-runtime" {
+		files["usr/bin/sandboxctl"] = []byte("changed runtime file")
+	}
 	if kind == "wrong-dependency" {
 		files[".PKGINFO"] = []byte("pkgname = sandboxctl\npkgver = 0.2.0-1\narch = x86_64\ndepend = sandboxctl-builder=0.1.0-1\n")
 	}
@@ -299,13 +302,20 @@ fi
 }
 
 func TestReleasePublisher(t *testing.T) {
-	for _, kind := range []string{"new", "annotated", "draft", "published", "wrong-commit", "tampered", "tampered-builder", "missing-builder", "missing-tag"} {
+	fixture := newReleaseSigningFixture(t)
+	for _, kind := range []string{"new", "annotated", "draft", "published", "wrong-commit", "tampered", "tampered-builder", "missing-builder", "missing-tag", "unsigned", "invalid-signature"} {
 		t.Run(kind, func(t *testing.T) {
 			directory := t.TempDir()
 			packagePath := releasePackages(t, directory, "valid")
 			commit := strings.Repeat("a", 40)
 			if output, err := artifactCommand(t, "create", directory, releaseTag, commit); err != nil {
 				t.Fatalf("create: %v\n%s", err, output)
+			}
+			if kind != "unsigned" {
+				fixture.sign(t, directory)
+			}
+			if kind == "invalid-signature" {
+				writeFile(t, packagePath+".sig", "invalid signature", 0600)
 			}
 			bin := filepath.Join(t.TempDir(), "tools")
 			trace := filepath.Join(t.TempDir(), "gh-trace")
@@ -341,7 +351,7 @@ esac
 					t.Fatal(err)
 				}
 			}
-			command := exec.Command("bash", filepath.Join(repositoryRoot(t), "scripts", "publish-release.sh"), releaseTag, directory, "example/sandboxctl")
+			command := exec.Command("bash", filepath.Join(fixture.root, "scripts", "publish-release.sh"), releaseTag, directory, "example/sandboxctl")
 			command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "GH_TRACE="+trace, "REMOTE_COMMIT="+commit, "ANNOTATION="+strings.Repeat("c", 40), "RELEASE_STATE="+kind)
 			output, err := command.CombinedOutput()
 			valid := kind == "new" || kind == "draft" || kind == "annotated"
@@ -349,6 +359,9 @@ esac
 				t.Fatalf("publish %s: %v\n%s", kind, err, output)
 			}
 			calls, _ := os.ReadFile(trace)
+			if (kind == "unsigned" || kind == "invalid-signature") && len(calls) != 0 {
+				t.Fatalf("invalid signatures reached GitHub: %s", calls)
+			}
 			if valid {
 				operation := "release create"
 				if kind == "draft" {
@@ -359,6 +372,11 @@ esac
 				}
 				if !strings.Contains(string(calls), operation+" "+releaseTag+" "+packagePath+" "+builderPath+" ") {
 					t.Fatalf("upload does not include both packages: %s", calls)
+				}
+				for _, name := range []string{packagePath + ".sig", builderPath + ".sig", filepath.Join(directory, "sandboxctl-release.asc")} {
+					if !strings.Contains(string(calls), " "+name+" ") {
+						t.Fatalf("upload is missing a signing file: %s", calls)
+					}
 				}
 			} else if strings.Contains(string(calls), "release create") || strings.Contains(string(calls), "release upload") || (kind == "tampered" && len(calls) > 0) {
 				t.Fatalf("invalid files reached upload: %s", calls)

@@ -3,18 +3,23 @@
 
 import hashlib
 import json
+import os
 import pathlib
 import re
 import stat
 import struct
 import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager
 
 TAG = re.compile(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 COMMIT = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 ARTIFACTS = ("vmlinux", "initramfs.cpio.gz", "root.squashfs")
 PACKAGES = ("sandboxctl", "sandboxctl-builder")
+KEY_NAME = "sandboxctl-release.asc"
+KEY_DIRECTORY = pathlib.Path(__file__).resolve().parent.parent / "packaging/keys"
 RUNTIME_FILES = (
     "usr/bin/sandboxctl", "usr/bin/sandboxd",
     "usr/lib/sandboxctl/firecracker", "usr/lib/sandboxctl/jailer",
@@ -196,14 +201,105 @@ def verify(directory, tag):
         raise ValueError("Release builder metadata differs from the package")
 
 
+def small_file(path):
+    regular(path)
+    if path.stat().st_size > 1024 * 1024:
+        raise ValueError(f"Release signing file is too large: {path.name}")
+    return path.read_bytes()
+
+
+@contextmanager
+def keyring():
+    with tempfile.TemporaryDirectory(prefix="sandboxctl-signing-") as name:
+        home = pathlib.Path(name)
+        try:
+            yield home
+        finally:
+            subprocess.run(["gpgconf", "--homedir", name, "--kill", "gpg-agent"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+
+def gpg(home, *arguments, input=None):
+    return subprocess.run(
+        ["gpg", "--no-options", "--homedir", str(home), "--batch",
+         "--no-auto-key-retrieve", "--no-auto-key-import", *arguments],
+        input=input, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    ).stdout
+
+
+def public_key(home):
+    fingerprint = small_file(KEY_DIRECTORY / "sandboxctl-release.fingerprint").decode().strip()
+    if not re.fullmatch(r"[0-9A-F]{40}", fingerprint):
+        raise ValueError("The project signing fingerprint is invalid")
+    public = small_file(KEY_DIRECTORY / KEY_NAME)
+    gpg(home, "--import", input=public)
+    records = gpg(home, "--with-colons", "--fingerprint", "--list-keys").decode().splitlines()
+    fingerprints = [line.split(":")[9] for line in records if line.startswith("fpr:")]
+    if sum(line.startswith("pub:") for line in records) != 1 or not fingerprints or fingerprints[0] != fingerprint:
+        raise ValueError("The project public key does not match its pinned fingerprint")
+    return public, fingerprint
+
+
+def verify_signatures(directory, signatures):
+    expected = {signatures / f"{name}-x86_64.pkg.tar.zst.sig" for name in PACKAGES}
+    if set(signatures.glob("*.sig")) != expected:
+        raise ValueError("Release files must include exactly two package signatures")
+    with keyring() as home:
+        public, fingerprint = public_key(home)
+        if small_file(signatures / KEY_NAME) != public:
+            raise ValueError("The release public key differs from the project public key")
+        for signature in sorted(expected):
+            small_file(signature)
+            package = directory / signature.name.removesuffix(".sig")
+            status = gpg(home, "--status-fd", "1", "--verify", str(signature), str(package))
+            valid = [line.split() for line in status.decode().splitlines() if line.startswith("[GNUPG:] VALIDSIG ")]
+            if len(valid) != 1 or fingerprint not in (valid[0][2], valid[0][-1]):
+                raise ValueError(f"Package signature does not use the project key: {package.name}")
+
+
+def verify_signed(directory, tag):
+    os.environ.pop("RELEASE_SIGNING_KEY", None)
+    os.environ.pop("RELEASE_SIGNING_PASSPHRASE", None)
+    verify(directory, tag)
+    verify_signatures(directory, directory)
+
+
+def sign(directory, tag):
+    secret = os.environ.pop("RELEASE_SIGNING_KEY", "")
+    passphrase = os.environ.pop("RELEASE_SIGNING_PASSPHRASE", "")
+    verify(directory, tag)
+    if not secret or len(secret) > 1024 * 1024:
+        raise ValueError("Set RELEASE_SIGNING_KEY to the armored project signing subkey")
+    names = [f"{name}-x86_64.pkg.tar.zst.sig" for name in PACKAGES] + [KEY_NAME]
+    if any((directory / name).exists() or (directory / name).is_symlink() for name in names):
+        raise ValueError("Release signing files already exist")
+    with keyring() as home, tempfile.TemporaryDirectory(prefix=".signing-", dir=directory) as name:
+        staging = pathlib.Path(name)
+        public, fingerprint = public_key(home)
+        gpg(home, "--import", input=secret.encode())
+        for package in PACKAGES:
+            archive = directory / f"{package}-x86_64.pkg.tar.zst"
+            gpg(home, "--pinentry-mode", "loopback", "--passphrase-fd", "0",
+                "--local-user", fingerprint, "--output", str(staging / (archive.name + ".sig")),
+                "--detach-sign", str(archive), input=(passphrase + "\n").encode())
+        (staging / KEY_NAME).write_bytes(public)
+        for name in names:
+            (staging / name).chmod(0o600)
+        verify_signatures(directory, staging)
+        for name in names:
+            # Refuse a destination created after the initial existence check.
+            os.link(staging / name, directory / name)
+
+
 def main():
-    if len(sys.argv) < 4 or sys.argv[1] not in ("create", "verify") or not TAG.fullmatch(sys.argv[3]):
-        raise ValueError("Usage: release-artifacts.py create DIRECTORY TAG COMMIT | verify DIRECTORY TAG")
+    operations = {"verify": verify, "sign": sign, "verify-signed": verify_signed}
+    if len(sys.argv) < 4 or sys.argv[1] not in ("create", *operations) or not TAG.fullmatch(sys.argv[3]):
+        raise ValueError("Usage: release-artifacts.py create DIRECTORY TAG COMMIT | verify|sign|verify-signed DIRECTORY TAG")
     operation, directory, tag = sys.argv[1], pathlib.Path(sys.argv[2]).resolve(), sys.argv[3]
     if operation == "create" and len(sys.argv) == 5:
         create(directory, tag, sys.argv[4])
-    elif operation == "verify" and len(sys.argv) == 4:
-        verify(directory, tag)
+    elif operation in operations and len(sys.argv) == 4:
+        operations[operation](directory, tag)
     else:
         raise ValueError("Invalid release artifact arguments")
 

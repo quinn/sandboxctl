@@ -85,7 +85,7 @@ The package installation does not enable the daemon socket or import the builder
 Install the package and check tools first:
 
 ```sh
-sudo pacman -S --needed base-devel git go buf podman python squashfs-tools openssh nftables iproute2 e2fsprogs cpio curl gzip zstd
+sudo pacman -S --needed base-devel git go buf podman python squashfs-tools openssh nftables iproute2 e2fsprogs cpio curl gzip zstd gnupg
 ```
 
 Configure rootless Podman for the build user.
@@ -134,7 +134,50 @@ Use another output directory for a retry:
 ./scripts/build-release.sh v0.2.0 /path/to/new-output
 ```
 
-To upload verified files to a draft release, install the GitHub CLI and authenticate it.
+## Package signing
+
+The package build produces unsigned archives.
+Signing runs after package and builder verification.
+The project public key and primary fingerprint are pinned under `packaging/keys/`.
+The public key identifies the project and contains no personal account identity.
+The certification key stays in a private local keyring.
+Only the signing subkey is exported to the release signing environment.
+The current key expires after two years.
+Renew the key before expiry and publish the updated public key.
+A replacement primary key requires a documented fingerprint change and new user trust.
+
+Set `RELEASE_SIGNING_KEY` to the armored signing subkey.
+Set `RELEASE_SIGNING_PASSPHRASE` to its passphrase.
+Sign and verify the completed archives with GNU Privacy Guard (GnuPG):
+
+```sh
+python3 scripts/release-artifacts.py sign dist/v0.2.0 v0.2.0
+python3 scripts/release-artifacts.py verify-signed dist/v0.2.0 v0.2.0
+```
+
+The signing process uses a temporary private keyring.
+It passes the passphrase through standard input.
+It removes the private key environment variables before starting child commands.
+It closes the temporary signing agent and removes the keyring after use.
+It publishes signing files only after both signatures verify against the pinned project public key.
+It refuses to replace existing signing files.
+A failed signing attempt can leave partial output if publication of a signing file fails.
+Use a new artifact directory for a retry.
+
+Signing adds these files:
+
+```text
+sandboxctl-x86_64.pkg.tar.zst.sig
+sandboxctl-builder-x86_64.pkg.tar.zst.sig
+sandboxctl-release.asc
+```
+
+`SHA256SUMS` still covers both package archives and `release.json`.
+Signature verification authenticates each archive against the pinned project key.
+Verification rejects missing, invalid, swapped, unexpected, and symbolic-link signatures.
+It rejects a release public key that differs from the pinned project key.
+
+To upload signed files to a draft release, install the GitHub CLI and authenticate it.
 Run:
 
 ```sh
@@ -142,9 +185,10 @@ Run:
 ```
 
 Replace `OWNER/REPO` with the GitHub repository.
-The script verifies both local packages and checksums before uploading.
+The script verifies both local packages, checksums, and package signatures before uploading.
 It requires the remote tag to match the recorded source commit.
-It uploads both archives and creates a draft release or replaces files in an existing draft.
+It uploads both archives, both signatures, the project public key, and release metadata.
+It creates a draft release or replaces files in an existing draft.
 It refuses to replace files in a published release.
 Review and publish the draft through GitHub when it is ready.
 
@@ -158,13 +202,20 @@ Buildah uses a separate Docker volume at `/var/tmp` for its context overlay scra
 The workflow checks a rootless build before compiling the package.
 Build commands use Buildah chroot isolation and the outer CI container's network namespace.
 The build job has read access to repository contents.
+The signing job runs after the build job.
+It uses the `releases` GitHub environment.
+Restrict that environment to the default `main` branch.
+Store `RELEASE_SIGNING_KEY` and `RELEASE_SIGNING_PASSPHRASE` as environment secrets.
+Only the signing step receives these secrets.
+The build job does not receive a signing key.
+The signing job verifies packages before signing and verifies both signatures afterward.
 Only the draft upload job has write access to repository contents.
 Action versions are pinned to commit IDs.
 
 Run the workflow manually from the default branch.
 Set `tag` to an existing version tag that contains the release scripts.
-The build and upload jobs check out the exact tag.
-The workflow creates a draft after all checks and package verification pass.
+The build, signing, and upload jobs check out the exact tag.
+The workflow creates a draft after all checks, package verification, and signature verification pass.
 It does not create a tag or publish the release.
 
 The workflow saves only the completed builder bundles through the Actions cache.
@@ -178,21 +229,34 @@ Temporary Podman storage, credentials, and sandbox state are not cached.
 
 ## User installation and host setup
 
-Download both packages from the latest published release.
 Replace `OWNER/REPO` with the project repository.
-Run these commands in a new directory:
+
+Import the project signing key once:
 
 ```sh
-curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-x86_64.pkg.tar.zst
-curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-builder-x86_64.pkg.tar.zst
-sudo pacman -U ./sandboxctl-x86_64.pkg.tar.zst ./sandboxctl-builder-x86_64.pkg.tar.zst
+curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-release.asc
+sudo pacman-key --add ./sandboxctl-release.asc
+sudo pacman-key --finger 0C238727A2833F79959610A3C85E0879A4F87FB5
+```
+
+Check that the displayed fingerprint is `0C238727A2833F79959610A3C85E0879A4F87FB5`.
+Then trust that key locally:
+
+```sh
+sudo pacman-key --lsign-key 0C238727A2833F79959610A3C85E0879A4F87FB5
+```
+
+Install or upgrade both packages with one command:
+
+```sh
+sudo pacman -U \
+  https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-x86_64.pkg.tar.zst \
+  https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-builder-x86_64.pkg.tar.zst
 ```
 
 No release version is required in the commands.
 The links select published releases and exclude drafts.
-Release packages are currently unsigned.
-Local installation uses the host's `LocalFileSigLevel` policy.
-Direct installation from URLs requires signatures trusted by the host's remote-package policy.
+Pacman downloads the matching signatures and verifies both packages with the trusted project key.
 Install both packages in the same transaction.
 Users do not need Go, Podman, or the other image build tools.
 The package does not run host setup during installation.

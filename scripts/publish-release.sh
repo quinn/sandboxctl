@@ -14,7 +14,7 @@ command -v gh >/dev/null 2>&1 || {
   printf 'Required command not found: gh\n' >&2
   exit 1
 }
-python3 "$repo_dir/scripts/release-artifacts.py" verify "$artifacts" "$tag"
+python3 "$repo_dir/scripts/release-artifacts.py" verify-signed "$artifacts" "$tag"
 commit=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_commit"])' "$artifacts/release.json")
 # The existing remote tag must identify the commit that produced the package.
 object=$(gh api "repos/$repository/git/ref/tags/$tag" --jq '[.object.type, .object.sha] | @tsv')
@@ -34,13 +34,14 @@ if [[ $object_type != commit || $remote_commit != "$commit" ]]; then
   exit 1
 fi
 packages=("$artifacts/sandboxctl-x86_64.pkg.tar.zst" "$artifacts/sandboxctl-builder-x86_64.pkg.tar.zst")
+signatures=("${packages[0]}.sig" "${packages[1]}.sig" "$artifacts/sandboxctl-release.asc")
 if is_draft=$(gh release view "$tag" --repo "$repository" --json isDraft --jq '.isDraft' 2>/dev/null); then
   if [[ $is_draft != true ]]; then
     printf 'The release is already published. Its files cannot be replaced.\n' >&2
     exit 1
   fi
-  gh release upload "$tag" "${packages[@]}" "$artifacts/SHA256SUMS" "$artifacts/release.json" --repo "$repository" --clobber
+  gh release upload "$tag" "${packages[@]}" "${signatures[@]}" "$artifacts/SHA256SUMS" "$artifacts/release.json" --repo "$repository" --clobber
 else
-  gh release create "$tag" "${packages[@]}" "$artifacts/SHA256SUMS" "$artifacts/release.json" \
+  gh release create "$tag" "${packages[@]}" "${signatures[@]}" "$artifacts/SHA256SUMS" "$artifacts/release.json" \
     --repo "$repository" --verify-tag --draft --title "$tag" --generate-notes
 fi

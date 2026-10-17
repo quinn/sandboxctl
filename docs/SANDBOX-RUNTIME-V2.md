@@ -131,6 +131,14 @@ Keep the tagged version in the package metadata.
 Use release metadata schema version 2 with a `packages` array.
 Record the source commit, each package name and checksum, and the builder identity in `release.json`.
 Verify both packages, their dependency relationship, and the builder before draft upload.
+Sign both completed package archives with a dedicated project OpenPGP signing key.
+Pin the project public key and primary fingerprint in the repository.
+Verify both detached signatures against that key before draft upload.
+Include the two `.sig` files and the public key in the release.
+Use a separate signing job after the build checks.
+Keep signing secrets in a GitHub environment restricted to the default branch.
+Do not give signing credentials to the package build job.
+Document one-time public-key import, fingerprint verification, and local trust before direct URL installation.
 Reject missing, additional, or mismatched package archives.
 Require the remote tag to match the recorded source commit.
 Create or update draft releases only.

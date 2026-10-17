@@ -15,21 +15,34 @@ Network addresses are documented product defaults or loopback examples.
 
 ### Install a GitHub release
 
-Download both packages from the latest published release.
 Replace `OWNER/REPO` with the project repository.
-Run these commands in a new directory:
+
+Import the project signing key once:
 
 ```sh
-curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-x86_64.pkg.tar.zst
-curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-builder-x86_64.pkg.tar.zst
-sudo pacman -U ./sandboxctl-x86_64.pkg.tar.zst ./sandboxctl-builder-x86_64.pkg.tar.zst
+curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-release.asc
+sudo pacman-key --add ./sandboxctl-release.asc
+sudo pacman-key --finger 0C238727A2833F79959610A3C85E0879A4F87FB5
+```
+
+Check that the displayed fingerprint is `0C238727A2833F79959610A3C85E0879A4F87FB5`.
+Then trust that key locally:
+
+```sh
+sudo pacman-key --lsign-key 0C238727A2833F79959610A3C85E0879A4F87FB5
+```
+
+Install or upgrade both packages with one command:
+
+```sh
+sudo pacman -U \
+  https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-x86_64.pkg.tar.zst \
+  https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-builder-x86_64.pkg.tar.zst
 ```
 
 No release version is required in the commands.
 The links select published releases and exclude drafts.
-Release packages are currently unsigned.
-Local installation uses the host's `LocalFileSigLevel` policy.
-Direct installation from URLs requires signatures trusted by the host's remote-package policy.
+Pacman downloads the matching signatures and verifies both packages with the trusted project key.
 The application package includes the commands, daemon, Firecracker, and jailer.
 The builder package contains the completed builder image.
 Install both packages in the same transaction.
