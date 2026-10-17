@@ -143,13 +143,9 @@ The command asks for confirmation.
 Use `--yes` to skip the prompt in a script.
 The command refuses to delete an image that a saved sandbox uses.
 Delete those sandboxes first.
-Each image name has one installed version.
-The command finds that version for you.
 It removes the installed image from the protected host store.
 It does not remove a staged bundle in the XDG data directory.
 
-The image build needs host network rules from host installation.
-The builder VM also needs network access to the image registry and package servers.
 The build checks that the guest's distribution ID and version match the requested values before it publishes the image.
 
 Build a custom image from a local Dockerfile and context:
@@ -379,7 +375,7 @@ Guest ports range from 1 to 65535.
 
 The CLI sends the mapping to `sandboxd` through its Unix socket.
 The first registration installs a separate daemon forwarding public key in the guest.
-The CLI uses your operator key through native Go SSH for this setup.
+The CLI uses your operator key for this setup.
 It asks for confirmation when the instance host key has not been trusted.
 The daemon keeps its private forwarding key in the sandbox's root-owned directory.
 The guest key permits only local TCP forwarding to loopback ports.
@@ -632,6 +628,30 @@ Command output and error messages remain visible.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for source builds, local installation, and development checks.
 See the [package guide](packaging/local/README.md) for release builds and builder cache management.
 
+## Use with Herdr
+
+Herdr can connect to a sandbox through its generated OpenSSH alias.
+First add the `Include` line from `sandboxctl ssh-config` to `~/.ssh/config`.
+Create and start the sandbox.
+Then attach from your host:
+
+```sh
+herdr --remote sandbox-dev1
+```
+
+Replace `sandbox-dev1` with the alias for your sandbox.
+Herdr uses the normal OpenSSH configuration and authentication for this connection.
+You can save the host in Herdr with a label:
+
+```sh
+herdr machine add sandbox-dev1 --label dev1
+```
+
+Herdr may ask to install its server in the guest when you add the machine.
+Approve that step in Herdr.
+`sandboxctl` does not install Herdr or change its settings.
+See the [Herdr guide for connecting machines](https://herdr.dev/docs/connecting-machines/) for details.
+
 ## Data and safety
 
 The operator's SSH keys and generated SSH files stay in the user's config, data, and state directories.
@@ -656,27 +676,3 @@ See [docs/DOCKERFILE-IMAGE-BUILDS.md](docs/DOCKERFILE-IMAGE-BUILDS.md) for Docke
 Original sandboxctl code is licensed under the GNU Affero General Public License, version 3 or any later version (AGPL-3.0-or-later).
 Third-party code keeps its own license.
 See [docs/LICENSING.md](docs/LICENSING.md) and `third_party/licenses/` for details and license texts.
-
-## Use with Herdr
-
-Herdr can connect to a sandbox through its generated OpenSSH alias.
-First add the `Include` line from `sandboxctl ssh-config` to `~/.ssh/config`.
-Create and start the sandbox.
-Then attach from your host:
-
-```sh
-herdr --remote sandbox-dev1
-```
-
-Replace `sandbox-dev1` with the alias for your sandbox.
-Herdr uses the normal OpenSSH configuration and authentication for this connection.
-You can save the host in Herdr with a label:
-
-```sh
-herdr machine add sandbox-dev1 --label dev1
-```
-
-Herdr may ask to install its server in the guest when you add the machine.
-Approve that step in Herdr.
-`sandboxctl` does not install Herdr or change its settings.
-See the [Herdr guide for connecting machines](https://herdr.dev/docs/connecting-machines/) for details.
