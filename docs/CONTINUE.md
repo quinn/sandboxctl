@@ -2,7 +2,7 @@
 
 ## Active work
 
-The active phase is signed-release validation.
+The active phase is maintainer review of the verified signed release.
 Read `packaging/local/README.md` for the package build and installation plan.
 Use `docs/PROGRESS.md` for completed work, checks, and remaining validation.
 Use `docs/SANDBOX-RUNTIME-V2.md` as the authoritative runtime specification.
@@ -54,7 +54,12 @@ Only the signing job receives these secrets.
 The package build job produces unsigned archives and does not receive signing credentials.
 The signing and draft upload jobs require signatures that match the pinned project public key.
 Signed-package fixtures and the required checks pass.
-Rebuild the draft with signed packages and verify all uploaded files before publication.
+The build, signing, and draft upload jobs passed.
+Independent checks of the downloaded packages, builder artifacts, checksums, and signatures passed.
+The public key and source commit match the pinned key and release tag.
+The draft includes both packages, both signatures, the public key, and release metadata.
+The existing builder cache was reused.
+Review the unpublished draft before publication.
 Latest-release downloads require a published release.
 The fixed-name draft rebuild passed.
 Only the two fixed-name packages and release metadata remain in the draft.

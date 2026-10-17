@@ -2,7 +2,7 @@
 
 ## Active phase
 
-The active phase is project package signing and signed-release validation.
+The active phase is maintainer review of the verified signed release.
 One PKGBUILD now produces separate application and builder packages.
 The `v0.1.0` draft now contains the verified application and builder packages.
 The clean supported Arch host acceptance check in section 19 also remains open.
@@ -31,7 +31,7 @@ Project YAML files use the `.yaml` extension.
 
 ## Package builds and releases
 
-Package signing is in progress.
+Package signing is implemented and validated.
 A dedicated project certification key and signing subkey have been created.
 Only the public key and fingerprint are stored in the repository.
 The release workflow signs verified packages in a separate job.
@@ -43,7 +43,13 @@ The primary private key stays in the private local project keyring.
 Signed-package fixtures, formatting, vet, Go tests, Protocol Buffer lint, and binary compilation pass.
 The fixtures reject wrong keys, wrong passphrases, missing or invalid signatures, swapped signatures, and modified packages with new checksums.
 The uploader requires verified signatures before it contacts GitHub.
-The next task is building and verifying the signed draft.
+The GitHub build, signing, and draft upload jobs passed.
+The draft includes both package archives, both detached signatures, the public key, and release metadata.
+Independent verification of the downloaded archives passed package, builder, checksum, signature, and pinned-key checks.
+The recorded source commit matches the release tag.
+The workflow reused the completed builder cache.
+The release remains an unpublished draft.
+The next task is maintainer review before publication.
 
 Use one checkout-based recipe at `packaging/local/PKGBUILD`.
 The separate Arch User Repository (AUR) recipe has been removed.

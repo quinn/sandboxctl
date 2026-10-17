@@ -142,8 +142,9 @@ The project public key and primary fingerprint are pinned under `packaging/keys/
 The public key identifies the project and contains no personal account identity.
 The certification key stays in a private local keyring.
 Only the signing subkey is exported to the release signing environment.
-The current key expires after two years.
+The current key expires on `2028-10-15`.
 Renew the key before expiry and publish the updated public key.
+Users must import the updated public key after renewal.
 A replacement primary key requires a documented fingerprint change and new user trust.
 
 Set `RELEASE_SIGNING_KEY` to the armored signing subkey.
