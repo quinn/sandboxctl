@@ -40,8 +40,6 @@ sudo pacman -U \
   https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-builder-x86_64.pkg.tar.zst
 ```
 
-No release version is required in the commands.
-The links select published releases and exclude drafts.
 Pacman downloads the matching signatures and verifies both packages with the trusted project key.
 The application package includes the commands, daemon, Firecracker, and jailer.
 The builder package contains the completed builder image.
