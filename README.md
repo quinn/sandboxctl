@@ -15,12 +15,10 @@ Network addresses are documented product defaults or loopback examples.
 
 ### Install a GitHub release
 
-Replace `OWNER/REPO` with the project repository.
-
 Import the project signing key once:
 
 ```sh
-curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-release.asc
+curl -fLO https://github.com/quinn/sandboxctl/releases/latest/download/sandboxctl-release.asc
 sudo pacman-key --add ./sandboxctl-release.asc
 sudo pacman-key --finger 0C238727A2833F79959610A3C85E0879A4F87FB5
 ```
@@ -36,8 +34,8 @@ Install or upgrade both packages with one command:
 
 ```sh
 sudo pacman -U \
-  https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-x86_64.pkg.tar.zst \
-  https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-builder-x86_64.pkg.tar.zst
+  https://github.com/quinn/sandboxctl/releases/latest/download/sandboxctl-x86_64.pkg.tar.zst \
+  https://github.com/quinn/sandboxctl/releases/latest/download/sandboxctl-builder-x86_64.pkg.tar.zst
 ```
 
 Pacman downloads the matching signatures and verifies both packages with the trusted project key.

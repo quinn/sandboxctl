@@ -182,10 +182,9 @@ To upload signed files to a draft release, install the GitHub CLI and authentica
 Run:
 
 ```sh
-./scripts/publish-release.sh v0.2.0 dist/v0.2.0 OWNER/REPO
+./scripts/publish-release.sh v0.2.0 dist/v0.2.0 quinn/sandboxctl
 ```
 
-Replace `OWNER/REPO` with the GitHub repository.
 The script verifies both local packages, checksums, and package signatures before uploading.
 It requires the remote tag to match the recorded source commit.
 It uploads both archives, both signatures, the project public key, and release metadata.
@@ -230,12 +229,10 @@ Temporary Podman storage, credentials, and sandbox state are not cached.
 
 ## User installation and host setup
 
-Replace `OWNER/REPO` with the project repository.
-
 Import the project signing key once:
 
 ```sh
-curl -fLO https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-release.asc
+curl -fLO https://github.com/quinn/sandboxctl/releases/latest/download/sandboxctl-release.asc
 sudo pacman-key --add ./sandboxctl-release.asc
 sudo pacman-key --finger 0C238727A2833F79959610A3C85E0879A4F87FB5
 ```
@@ -251,8 +248,8 @@ Install or upgrade both packages with one command:
 
 ```sh
 sudo pacman -U \
-  https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-x86_64.pkg.tar.zst \
-  https://github.com/OWNER/REPO/releases/latest/download/sandboxctl-builder-x86_64.pkg.tar.zst
+  https://github.com/quinn/sandboxctl/releases/latest/download/sandboxctl-x86_64.pkg.tar.zst \
+  https://github.com/quinn/sandboxctl/releases/latest/download/sandboxctl-builder-x86_64.pkg.tar.zst
 ```
 
 No release version is required in the commands.

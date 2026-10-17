@@ -119,6 +119,8 @@ The package split and release validation are complete.
 
 ## User and contributor guides
 
+Installation and release-upload examples use the public project repository directly.
+Repository placeholders and replacement instructions have been removed from both guides.
 The README covers installation, host setup, guest images, sandbox operations, and troubleshooting.
 Source installation and development checks now live in `CONTRIBUTING.md`.
 Package builds, releases, and builder cache management remain in `packaging/local/README.md`.
